@@ -1,0 +1,1123 @@
+clear
+on error
+close all
+set talk off
+set safe off
+set procedure to
+set echo off
+set date to british
+set autosave on
+set decimals to 3
+user=space(10)
+mchoice=0
+tamt=0.00
+schg=0
+billtime=space(15)
+micode=space(5)
+billno=0
+continue=0
+mFleetCardNo=Space(16)
+billdate=dmax()
+curworkarea="0"
+BillEntry=.T.
+
+message=space(75)
+FVNO=SPACE(7)
+LVNO=SPACE(6)
+
+on key label f5
+on key label f4
+on key label f3
+on key label f2
+on key label esc
+
+mbill=substr(cmonth(billdate),1,3)+"Bil"+SUBSTR(ALLTRIM(STR(YEAR(billdate))),3,2)+".dbf"
+If FILE(mbill)=.F.
+	X=confmsg(Cmonth(billdate)+ " Bill file Not Exists! Do You Wish to Create?", "File Confirmation")
+	if x=1
+		do usedbf with "bill"
+		copy struc to &mbill
+	else
+		close all
+		return to mainmenu
+	endif 
+Endif
+
+select count(distinct bill_no) as pbilcnt from prevbills into cursor curprevbilcnt 
+prevbillcnt=pbilcnt
+
+do usedbf with "item"
+
+if reccount()=0
+	wait window "No items Found - Please enter Item Details"
+	close all
+	clear
+	on key label f4
+	on key label f3
+	return to mainmenu
+endif
+
+*MScode=gtmageic("PETROL")
+*HSDcode=gtmageic("DIESEL")
+	
+if month(billdate)>=4 and month(billdate)<=12
+	bsfil="BILSEK"+right(alltrim(str(year(billdate))),2)+".dbf"
+else
+	bsfil="BILSEK"+right(alltrim(str(year(billdate)-1)),2)+".dbf"
+endif
+
+if month(billdate)>=4 and month(billdate)<=12
+	magefil="MAGE"+right(alltrim(str(year(billdate))),2)+".dbf"
+else
+	magefil="MAGE"+right(alltrim(str(year(billdate)-1)),2)+".dbf"
+endif
+
+if file(bsfil)=.F.
+	do usedbf with "billseek"
+	copy struc to &bsfil
+endif
+
+if file(magefil)=.F.
+	on error goto dbferror("MILEAGE")
+	do usedbf with "mileage"
+	copy struc to &magefil
+endif
+
+	user=user_req()
+
+	SELECT icode FROM MAGEPROD INTO array MAGEprods
+	
+	select a
+	on error goto dbferror(mbill)
+	do usedbf with mbill
+	on error
+	
+	select b
+	do usedbf with "item"
+	index on icode to itemidx
+
+	mstock=substr(cmonth(billdate),1,3)+"Stk"+SUBSTR(ALLTRIM(STR(YEAR(billdate))),3,2)
+	select c
+	do usedbf with mstock
+	
+	select d
+	do usedbf with "billtemp"
+	zap
+	
+	select e
+	do usedbf with "billno"
+
+	select f
+	do usedbf with "customer"
+	index on cust_code to idx
+
+	select g
+	do usedbf with "veh_det"
+	index on veh_no to ivdx
+
+	select i
+	do usedbf with bsfil
+	
+	select j
+	do usedbf with magefil
+
+	select 11
+	do usedbf with "usertab"
+	index on USER_ID to indcinint
+	
+	SELECT 12
+	do usedbf with "PREVBILLS"
+	
+do while continue=0
+	on key label f4 do uncontinue
+	on key label f3 do showprevbills
+	cstatus=1
+	mFleetCardNo=Space(16)
+	select d
+	curworkarea="d"
+	zap
+	select a
+	curworkarea="a"
+
+	scatter memvar blank
+	m.bill_date=billdate
+	define window groupw from 1,2 to 24,78 double float
+	activate window groupw
+	@ 1,0 to 1,76 
+	@ 0,25 say "Bill Details - Bill Entry"
+	@ 5,50 SAY "PRESS F4 KEY TO EXIT"
+	@ 2,35 to 4,73 double
+	if kerosene=.T.
+		@ 3,36 GET cstatus FUNCTION '*RH \!Cash;\<Credit;\<Kerosene' size 1,8,3
+	else
+		@ 3,40 GET cstatus FUNCTION '*RH \!Cash;\<Credit' size 2,8,10
+	Endif
+	read
+	
+	do case cstatus
+		case cstatus=1
+			m.cstatus="C"
+		case cstatus=2
+			m.cstatus="R"
+			select f
+			curworkarea="f"
+
+			if reccount()=0
+				close all
+				wait window "No Customers Exist"
+				deactivate window groupw
+				on key label f4
+				on key label f3
+				return to mainmenu
+			endif
+		case cstatus=3
+			m.cstatus="K"
+	endcase
+
+	m.status=m.cstatus
+	m.bill_no=auto(m.status)
+	
+	@ 2,3 say "Bill Number : "+alltrim(str(m.bill_no))
+	@ 4,3 say "Bill Date   : "+dtoc(m.bill_date)
+	@ 6,3 say "Cashier     : "+user
+	m.USER_ID=user
+	Sretail="Y"
+	
+	if m.cstatus="K"
+		on key label f2 do cpop
+		do while .t.
+			@ 6,35 say "SHOP CODE  : "get m.cust_code
+			read
+			select f
+			curworkarea="f"
+			
+			seek m.cust_code
+			if found()
+				@ 8,3 say "SHOP NAME   :"+f->name
+				exit
+			else
+				wait window "Customer Not found - Press F2 to choose Customer"
+			endif
+			m.veh_no="KER-SALES"
+		enddo
+	else
+		cc=0
+		on key label f5 cc=1
+		*----------3456789012345
+		@ 8,3 say "Vehicle No. :"get fvno valid len(alltrim(fvno))>0 and len(alltrim(fvno))<=7 error "Invalid Input Max Length 1-7 Characters"
+		@ 8,24 say "-"
+		@ 8,25 GET lvno valid len(alltrim(lvno))>0 and len(alltrim(lvno))<=5 error "Invalid Input Max Length 1-5 characters"
+		Read
+		m.veh_no=alltrim(fvno)+"-"+alltrim(lvno)
+		fvno="       "
+		lvno="      "
+
+		if FleetCardEntry=.T.
+			select g
+			curworkarea="g"
+			seek m.veh_no
+			if found()
+				mFleetCardNo=FleetCard
+			endif
+			@ 8,43 say "Fleet Card :"GET mFleetCardNo
+			READ
+		endif
+	endif
+	on key label f5
+	on key label f2
+	
+	@ 10,3 say "Retail :" get Sretail
+	read
+	
+	if upper(Sretail)="N"
+		m.retail=0
+	else
+		m.retail=1	
+	endif
+	
+	@ 11,3 to 21,50 double
+	@ 12,5 say "ICode  Description       Qty        Amount" color w+
+	@ 13,4 to 13,49
+	y=1
+	X=14
+	wish='Y'
+	totamt=0
+	do while wish!='N'
+		micode="     "
+		wish='N'
+		do while .t.
+			@ x,1 say alltrim(str(y))+"."
+			if m.cstatus!="K"
+				micode="     "
+				on key label f2 micode=ipop()
+				@ x,6 get micode valid len(alltrim(micode))>2 ERROR "INVALID INPUT - Press F2 to Choose Item"
+				read
+				select b
+				curworkarea="b"
+				index on icode to indcode
+			else
+				micode="K01"
+				on key label f2 micode=ipop()
+				@ x,6 get micode valid len(alltrim(micode))>2 ERROR "INVALID INPUT - Press F2 to Choose Item"
+				read
+				Select b
+				curworkarea="b"
+				index on icode to indcode
+			endif
+			micode=upper(alltrim(micode))
+			seek micode
+	
+			if found()
+				m.icode=micode
+				@ x,6 say micode+"  "
+				@ x,12 say idesc
+				on key label f2
+				exit
+			else
+				wait window "Item Not found - Press F2 to choose Item"
+				loop
+			endif
+		enddo
+
+		do while .t.
+			set intensity off
+			tqty=0
+			qty=SPACE(7)
+			mamt=SPACE(9)
+			select c
+			curworkarea="c"
+
+			locate for icode=micode and sdate=bill_date
+			wait window "Stock In Hand :"+str(c->balance) nowait
+			@ x,26 get qty
+			*valid val(tqty)>0 error "Invalid Entry"
+			read
+			bool=1
+			if VAL(qty)=0
+				bool=0
+				@ x,39 get mamt VALID VAL(MAMT)>0
+				read
+				if m.retail=0
+					*m.amt=b->ipricew*m.qty
+					tqty=val(mamt)/b->ipricew
+				else
+					tqty=val(mamt)/b->ipricer
+				endif
+				m.amt=round(val(mamt),2)
+			endif
+            
+			if bool=1
+				m.qty=val(qty)
+			else
+				m.qty=tqty
+			endif
+
+			*?M.QTY
+			set intensity on
+			@ x,20 say qty
+			select c
+			curworkarea="c"
+			index on icode to msicode
+			locate for icode=micode .and. sdate=bill_date
+			if m.qty<=balance
+				exit
+			else
+				message="Stock Unavailable, Present Stock = "+ alltrim(str(balance))
+				wait window message
+				@ X,20 SAY "                            "
+				loop
+			endif
+		enddo
+
+		if m.retail=0
+			m.amt=b->ipricew*m.qty
+			m.rate=b->ipricew
+		else
+			m.amt=b->ipricer*m.qty
+			m.rate=b->ipricer
+		endif
+
+	     **VAT Implementation*****
+		if m.retail=0
+			m.rateBtx=b->ipricewbtx
+			m.uTax_Amt=b->ipricewtax
+		else
+			m.rateBtx=b->ipricerbtx
+			m.uTax_Amt=b->ipricertax				
+		endif
+		m.tax_per=b->Tax_per
+		m.Tax_Amt=m.qty*m.UTax_Amt
+		
+		m.amt=round(m.amt,2)
+		totamt=totamt+m.amt
+		@ x,39 say m.amt picture '9999999.99'
+		@ 21,34 say totamt color G+/R
+		@ 20,8 say "One More Product (Y/N) :"get wish valid(wish='Y' .or. wish='N')
+		read
+		wish=upper(wish)
+		if wish='Y'
+			select d
+			curworkarea="d"
+			append blank
+			gather memvar
+			x=x+1
+			Y=Y+1
+			if x=20
+				@ 14,5 to 20,47 clear
+				@ 14,1 to 20,2 clear
+				x=14
+			endif
+			@ 20,5 to 20,42 clear
+		else
+			select d
+			curworkarea="d"
+			append blank
+			gather memvar
+			@ 20,5 to 20,40 clear
+		endif
+	enddo
+	
+	if m.cstatus="C" and cc=1
+		@10,3 say "CustomerCode:"get m.cust_code
+		read
+	endif
+
+	chkmageitem="N"
+	select d
+	curworkarea="d"
+	go top
+	do while not eof()
+		for z=1 to Alen(MAGEprods)
+			if Icode=MAGEprods(z)
+				chkmageitem="Y"
+				QtySale=Qty
+				FiliCode=m.ICode
+				exit do
+			endif
+		EndFor
+		skip
+	enddo
+	
+	if m.cstatus="R"
+		select g
+		curworkarea="g"
+		seek m.veh_no
+		if found()
+			m.cust_code=cust_code
+			mFleetCardNo=FleetCard
+		endif
+		on key label f2 do cpop
+		contwithlimit=.T.
+		loopexit=.f.
+		on key label esc do forexit
+		do while .t. 
+			@10,3 say "CustomerCode:"get m.cust_code
+			read
+			select f
+			curworkarea="f"
+			seek m.cust_code
+			if found()
+				@10,3 say "Customer    : "+f->name
+				schg=ser_chg
+				*wait window alltrim(str(schg))
+				if f->due_amt+totamt>f->cr_lmt .and. f->cr_lmt<>0
+					cont=confcr()
+					if cont=2
+						*do uncontinue
+						contwithlimit=.F.
+						exit do
+					endif
+				endif
+				exit
+			else
+				if loopexit=.t.
+					exit do
+				endif
+				wait window "Customer Not found - Press F2 KEY to choose Customer"
+			endif
+		enddo
+		on key label esc
+
+		if contwithlimit=.F.
+			loop
+		Endif
+
+		@ 10,43 say "OrderNo.   :"get m.ono 
+		read
+	endif
+
+	select g
+	curworkarea="g"
+	seek m.veh_no
+	if found()
+		if cust_code!=m.cust_code
+			replace cust_code with m.cust_code
+		endif
+		if FleetCardEntry=.T.
+			*WAIT WINDOW mFleetCardNo
+			replace FleetCard with mFleetCardNo		
+		endif 
+	else
+		append blank
+		replace veh_no with m.veh_no
+		replace cust_code with m.cust_code
+		if FleetCardEntry=.T. and len(alltrim(mFleetCardNo))<>0
+			replace FleetCard with mFleetCardNo
+		endif
+	endif
+
+	PMage=.F.		
+	if chkmageitem="Y" 
+		m.mage="N"
+		@ 6,57 Say "Mile Age :"get m.mage
+		read
+		if upper(m.mage)="Y"
+			select j
+			curworkarea="j"
+			go bottom
+			do While Not BOF()
+				if alltrim(m.Veh_No)=alltrim(Veh_No)
+			 		PMage=.T.
+					exit
+				endif
+			 skip -1
+			enddo
+			if PMage=.T.
+				m.OR=CR
+				m.CR=0.0
+			else
+				m.OR=0.0
+				m.CR=0.0
+			endif
+			@ 8,32 say "KM Reading(OP,CL) :"get m.OR picture '9999999.9'
+			read
+			@ 8,62 get m.CR picture '9999999.9' valid m.Cr>m.Or Error "Closing Reading Should be Greater" 
+			read
+			M.Mileage=Round((m.CR-M.OR)/QtySale,2)
+			@ 6,57 Say "Mile Age :"
+			@ 6,68 say m.Mileage picture "999.99"
+		endif
+	endif
+	
+	billtime=time()
+	@ 11,51 to 21,75 double
+	if m.cstatus="R"
+		on key label f2
+		@ 12,54 GET mchoice FUNCTION '*v \!Save & Continue;Save  & \<NoPrint;\<Save   &   Exit;C\?ancel;\<Print Intimation' size 1,1,1 color scheme 1 
+		read cycle
+		on key label f4
+	else
+		*on error
+		@ 13,54 GET mchoice FUNCTION '*v \!Save & Continue;Save  & \<NoPrint;\<Save   &   Exit;    C\?ancel    ' size 1,1,1 color scheme 1
+		read cycle
+	endif
+	
+	Print=1
+	*[Save & No Print]
+	if mchoice=2
+		mchoice=1
+ 		Print=0  
+ 	endif
+	
+	do case mchoice
+		*[Save & continue]
+		case mchoice=1 
+			select f
+			curworkarea="f"
+			locate for cust_code=m.cust_code
+			replace due_amt with due_amt+totamt
+			select d
+			curworkarea="d"
+			replace veh_no with m.veh_no ALL
+			replace cust_code with m.cust_code ALL
+			replace ono with m.ono ALL
+			replace btime with billtime all
+			replace all ser_chg with schg*amt/100
+			replace mage with m.mage all
+	
+			select i
+			curworkarea="i"
+			locate for month=month(billdate) and status=m.status
+			if found()=.f.
+				go bottom
+				append blank
+				replace month with month(billdate)
+				replace minbillno with m.bill_no
+				replace maxbillno with m.bill_no
+				replace status with m.status
+			else
+				replace maxbillno with m.bill_no
+			endif
+
+			if upper(m.mage)="Y"
+				select j
+				curworkarea="j"
+				go botto
+				append blank
+				gather memvar
+			endif
+
+			*XXX - XP Print Hang
+			*PRINT=5
+			
+			IF PRINTSTATUS()=.T. .AND. PRINT=1
+				do prnbildi
+			ENDIF
+		
+			select d
+			curworkarea="d"
+			go top
+			do while .not. eof()
+				micode=icode
+				m.qty=qty
+				select c
+				curworkarea="c"
+				locate for icode=micode .and. sdate=bill_date
+				replace balance with (balance-m.qty)
+				replace sales with (sales+m.qty)
+				select d
+				curworkarea="d"
+				skip
+			enddo
+
+			select a
+			curworkarea="a"
+			append from billtemp
+			
+			select 12
+			curworkarea="12"
+			append from billtemp
+			if prevbillcnt>2
+				go top
+				bno=bill_no
+				do while .t.
+					if bno=bill_no
+						delete
+					else
+						exit
+					endif
+					skip
+				enddo
+				pack
+			endif
+			prevbillcnt=prevbillcnt+1
+
+			if upper(m.mage)="Y"
+				select j
+				curworkarea="j"
+				go botto
+				m.icode=filicode
+				append blank
+				gather memvar
+			endif
+			
+			*on error do erhnd WITH ERROR(), MESSAGE()
+			continue=0
+	
+	    *[Save & Exit]
+		case mchoice=3
+			continue=1
+			ON KEY LABEL F3
+			*on error do erhnd
+			do unproceed
+
+	    *[Cancel]			
+		case mchoice=4
+			do reauto with m.status
+			continue=0
+	
+   	    *[Print Intimation]
+		case mchoice=5
+			select f
+			curworkarea="f"
+			locate for cust_code=m.cust_code
+			replace due_amt with due_amt+totamt
+			select d
+			curworkarea="d"
+			replace veh_no with m.veh_no ALL
+			replace cust_code with m.cust_code ALL
+			replace ono with m.ono ALL
+			replace btime with billtime all
+			replace all ser_chg with schg*amt/100
+			replace mage with m.mage all
+
+			select i
+			curworkarea="i"
+			locate for month=month(billdate) and status=m.status
+			if found()=.f.
+				go bottom
+				append blank
+				replace month with month(billdate)
+				replace minbillno with m.bill_no
+				replace maxbillno with m.bill_no
+				replace status with m.status
+			else
+				replace maxbillno with m.bill_no
+			endif
+
+			if upper(m.mage)="Y"
+				select j
+				curworkarea="j"
+				go botto
+				append blank
+				gather memvar
+			endif
+			
+			IF PRINTSTATUS()=.T.
+				do prnbildi 
+				do intim
+			ENDIF
+
+			select d
+			curworkarea="d"
+			go top
+			do while .not. eof()
+				micode=icode
+				m.qty=qty
+				select c
+				go top
+				locate for icode=micode .and. sdate=bill_date
+				replace balance with (balance-m.qty)
+				replace sales with (sales+m.qty)
+				select d
+				skip
+			enddo
+			select a
+			curworkarea="a"
+			use &mbill
+			append from billtemp
+			continue=0
+	endcase
+	select d
+	flush()
+enddo
+
+procedure proceed
+flush()
+do billen
+
+Procedure unproceed
+select f
+locate for cust_code=m.cust_code
+replace due_amt with due_amt+totamt
+select d
+replace veh_no with m.veh_no ALL
+replace cust_code with m.cust_code ALL
+replace ono with m.ono ALL
+replace btime with billtime all
+replace all ser_chg with schg*amt/100
+
+select i
+locate for month=month(billdate) and status=m.status
+if found()=.f.
+	go bottom
+	append blank
+	replace month with month(billdate)
+	replace minbillno with m.bill_no
+	replace maxbillno with m.bill_no
+	replace status with m.status
+else
+	replace maxbillno with m.bill_no
+endif
+
+IF PRINTSTATUS()=.T.
+	do PRNBILDI
+ENDIF
+
+select d
+use billtemp
+go top
+select c
+use &mstock
+index on icode to msicode
+do while .not. eof()
+	select d
+	micode=icode
+	m.qty=qty
+	select c
+	locate for icode=micode .and. sdate=bill_date
+	replace balance with (balance-m.qty)
+	replace sales with (sales+m.qty)
+	select d
+	skip
+enddo
+
+
+select a
+use &mbill
+append from billtemp
+close all
+
+do backup
+
+on key label f4
+on key label f3
+
+deactivate window groupw
+return to mainmenu
+
+
+procedure uncontinue
+on key label f4
+on key label f3
+do reauto with m.status
+close all
+deactivate window groupw
+
+if wvisible("codewind")=.T.
+	deactivate window codewind
+endif
+
+clear
+
+do backup
+
+deactivate window groupw
+on key label f4
+on key label f3
+return to mainmenu
+
+procedure cpop
+if wvisible("codewind")=.f.
+define window codewind from 2,35 to 22,72 TITLE "CUSTOMERS"
+activate window codewind
+define popup ccode in window codewind from 0,0 prompt FIELD f->cust_code+" - "+f->name
+@ 0,1 get M.CUST_CODE POPUP CCODE
+read
+release window codewind
+@ 10,3 TO 10,70 CLEAR
+@ 10,3 say "Customer Code        :"
+m.cust_code=alltrim(substr(m.cust_code,1,5))
+endif
+
+function ipop
+if wvisible("codewind")=.f.
+define window codewind from 2,35 to 22,75 TITLE "PRODUCTS"
+activate window codewind
+item_code=space(33)
+define popup icode in window codewind from 0,0 prompt FIELD b->IDESC+" - "+b->ICODE
+@ 0,1 get item_code POPUP ICODE
+read
+release window codewind
+return right(item_code,3)
+endif
+
+function confcr
+choice=0
+define window msg from 9,20 to 20,60 double float
+activate window msg
+@ 0,13 say "CONFIRMATION"
+@ 1,0 to 1,40 
+@ 2,5 say "Customer Purchases are Exceeding"
+@ 3,5 say "Credit Limit."
+@ 5,5 SAY "Current Balance :Rs. "+ALLTRIM(str(f->due_amt+totamt))+".00"
+@ 6,5 SAY "Credit Limit    :Rs. "+ALLTRIM(STR(f->cr_lmt))+".00"
+@ 8,7 SAY "Are You Sure To Continue?"
+@ 9,10 get choice function '*h \<Yes;\<No' size 1,8,2
+read cycle
+deactivate window msg
+return choice
+
+
+function auto
+parameter cstatus
+bno=0
+cnt=1
+select e
+go top
+locate for type=cstatus
+bno=billno+1
+replace billno with bno
+return bno
+
+
+function reauto
+parameter cstatus
+bno=0
+cnt=1
+select e
+go top
+locate for type=cstatus
+bno=billno-1
+replace billno with bno
+
+function intim
+select d
+go bottom
+BNO=BILL_NO
+CSTATUS=STATUS
+RET=RETAIL
+MAGEYN=MAGE
+set device to printer
+@ 0,0 say "|         INTIMATION BILL          |"
+@ 1,0 say "|                                  |"
+set device to screen
+DO PRNBILDI
+
+
+
+
+function SHOWPREVBILLSXXX
+select 12
+define window wPrevious from 7,5 to 22,75 panel;
+title "Bill No.€€Bill Date€€Veh.No€€€€€€€€Amount€Customer€€€€€€€€€Csh/CR" color scheme 5
+*------234567890123456789012345678901234567890123456789012345678901234567
+*               1         2         3        4         5         6     
+*      999999                          999999.99
+activate window Wprevious
+go top
+prvx=0
+prvtamt=0
+prvbno=0
+do while not Eof()
+	prvrecno=0
+	if prvbno<>bill_no 
+		prvbno=bill_no
+		@ prvx,2 say bill_no picture '999999'
+		@ prvx,12 say bill_date
+		@ prvx,23 say Veh_No
+		prvy=prvx
+		prvccode=Cust_Code
+		if Cust_Code<>"" 
+			select f
+			go top
+			seek prvCCode
+			if found()
+				@prvx,44 say Name
+			endif
+		endif
+		select 12
+		if status="C"
+			@ prvx,61 say "Cash"
+		else
+			if status="R"
+				@ prvx,61 say "Credit"
+			else
+				@ prvx,61 say "Kerosene"
+			endif
+		endif
+		prvx=prvX+1
+*                            1         2         3         4         5         6     
+*                                             99999.9 99999.99 999999.99
+*------------------012345678901234567890123456789012345678901234567890123456789012345678901234
+		@ prvx,0 say "S.No  Icode   Item             Qty     Rate     Value" color b+/w
+		prvx=prvx+1
+	endif
+	prvrecno=prvrecno+1
+	@ prvx,0 say prvrecno picture '999'
+	@ prvx,6 say Icode
+	prvItCode=ICode
+	select b
+	go top
+	seek prvItCode
+	if found()
+		@ prvx,14 say IDesc
+	endif
+	select 12
+	@ prvx,27 say qty picture '99999.9'
+	@ prvx,35 say rate picture '99999.99'
+	@ prvx,44 say AMt picture '999999.99'
+	prvx=prvx+1
+
+	prvtamt=prvtamt+amt
+	skip
+	if eof() or prvbno<>bill_no
+		@ prvy,34 say prvtamt picture '999999.99'
+		@ prvx,0 say repl("_",69)
+		prvX=prvX+1
+	endif
+Enddo
+select &curworkarea
+wait window "Press any key to continue"
+deactivate window Wprevious
+return
+
+
+function SHOWPREVBILLS
+on key label f3 
+select 12
+define window wPrevious from 1,1 to 24,78 title "History-3"
+*title "Bill No.€€Bill Date€€Veh.No€€€€€€€€Amount€Customer€€€€€€€€€Csh/CR" color scheme 5
+*------234567890123456789012345678901234567890123456789012345678901234567
+*               1         2         3        4         5         6     
+*      999999                          999999.99
+*activate window Wprevious
+set device to printer
+set print to prev.txt
+go top
+prvx=0
+prvtamt=0
+prvbno=0
+prvrecno=0
+do while not Eof()
+	if prvbno<>bill_no 
+		*@ prvx,0 say repl("Õ",65)
+		prvbno=bill_no
+		@ prvx,0 say "BillNo :"+alltrim(str(bill_no))
+		@ prvx,15 say "Veh No :"+Veh_No
+		@ prvx,38 say "Date :"+dtoc(bill_date)
+		if status="C"
+			@ prvx,59 say "Cash"
+		else
+			if status="R"
+				@ prvx,59 say "Credit" 
+			else
+				@ prvx,59 say "Kerosene"
+			endif
+		endif
+		prvx=prvX+1
+		*@ prvx,0 say repl("-",65)
+		prvx=prvX+1
+
+*------               01234567890123456789012345678901234567890123456789012345678901234567
+*                               1         2         3         4         5         6     
+		@ prvx,0 say "S.No  Icode Item                       Qty     Rate     Value" color b+/w
+*                                                        99999.9 99999.99 999999.99           
+		prvx=prvX+1
+		*@ prvx,0 say repl("-",65)
+	endif
+	prvrecno=prvrecno+1
+	@ prvx,0 say prvrecno picture '999'
+	@ prvx,7 say Icode
+	prvItCode=ICode
+	select b
+	go top
+	seek prvItCode
+	if found()
+		@ prvx,12 say alltrim(IDesc)
+	endif
+	select 12
+	@ prvx,35 say qty picture '99999.9'
+	@ prvx,43 say rate picture '99999.99'
+	@ prvx,52 say AMt picture '999999.99'
+	prvtamt=prvtamt+amt
+	skip
+	if eof() or prvbno<>bill_no
+		prvccode=Cust_Code
+		if Cust_Code<>"" 
+			select f
+			go top
+			seek prvCCode
+			if found()
+				@prvx,2 say Name
+			endif
+		endif
+		@ prvx,52 say "____________"
+		prvx=prvx+1
+		@ prvx,35 say "Bill Amount :"
+		@ prvx,52 say prvtamt picture '999999.99'
+		prvrecno=0
+		prvtamt=0
+		prvx=prvx+1
+		@ prvx,52 say "~~~~~~~~~~~~"
+	endif
+Enddo
+*@ prvx,0 say repl("Õ",65)
+
+set print to
+set device to screen
+modi comm prev.txt noedit window wPrevious
+select &curworkarea
+deactivate window Wprevious
+on key label f3 do showprevbills
+return
+
+*wait window "Press any key to continue"
+*deactivate window Wprevious
+
+Procedure forexit
+loopexit=.t.
+Keyboard '{Enter}'
+
+function dbferror
+Parameter dbf_file
+wait window Alltrim(dbf_file)+" file Corrupted! Please restore from Backup"
+deactivate window groupw
+on error
+on key label f4
+on key label f3
+return to mainmenu
+
+function usedbf
+parameter dbfile
+on error goto dbferror(dbfile)
+use &dbfile
+on error
+return
+
+
+Procedure backup
+bdate=dmax()
+fbill=substr(cmonth(bdate),1,3)+"Bil"+SUBSTR(ALLTRIM(STR(YEAR(bdate))),3,2)+".dbf"
+fstock=substr(cmonth(bdate),1,3)+"Stk"+SUBSTR(ALLTRIM(STR(YEAR(bdate))),3,2)+".dbf"
+fpurc="Purch"+SUBSTR(ALLTRIM(STR(YEAR(bdate))),3,2)+".dbf"
+bsfil="BILSEK"+right(alltrim(str(year(bdate))),2)+".dbf"
+magefil="MAGE"+right(alltrim(str(year(bdate))),2)+".dbf"
+
+dfbill=".\backup\"+fbill
+dfstock=".\backup\"+fstock
+dfpurc=".\backup\"+fpurc
+dbsfil=".\backup\"+bsfil
+dmagefil=".\backup\"+magefil
+
+close all
+do usedbf with "Item.dbf"
+use
+copy file item.dbf to \petbill\workarea\backup\item.dbf
+*wait window "Item.dbf"
+
+do usedbf with "Usertab.dbf"
+use
+copy file usertab.dbf to \petbill\workarea\backup\usertab.dbf
+*wait window "usertab.dbf"
+
+do usedbf with fstock
+use
+copy file &fstock.dbf to &dfstock
+*wait window fstock
+
+do usedbf with fbill
+use
+copy file &fbill to &dfbill
+*wait window fbill
+
+do usedbf with bsfil
+use
+copy file &bsfil to &dbsfil
+*wait window fbill
+
+do usedbf with magefil
+use
+copy file &magefil to &dmagefil
+*wait window fbill
+
+do usedbf with "members.dbf"
+use
+copy file members.dbf to \petbill\workarea\backup\members.dbf 
+*wait window "members.dbf"
+
+do usedbf with "customer.dbf"
+use
+copy file customer.dbf to \petbill\workarea\backup\customer.dbf 
+*wait window "customer.dbf"
+
+do usedbf with "veh_det.dbf"
+use
+copy file veh_det.dbf to \petbill\workarea\backup\veh_det.dbf
+*wait window "veh_det.dbf"
+
+do usedbf with "group.dbf"
+use
+copy file group.dbf to \petbill\workarea\backup\group.dbf
+*wait window "group.dbf"
+
+do usedbf with "billno.dbf"
+use
+copy file billno.dbf to \petbill\workarea\backup\billno.dbf
+*wait window "billno.dbf"
+
+do usedbf with "datestat.dbf"
+use
+copy file datestat.dbf to \petbill\workarea\backup\datestat.dbf
+*wait window "datestat.dbf"
+

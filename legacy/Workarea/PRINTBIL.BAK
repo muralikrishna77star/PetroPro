@@ -1,0 +1,265 @@
+parameter billno, billstatus, retail, mageY
+clear gets
+
+if PrnTstMode=.T.
+	set printer to x.txt
+endif
+set device to screen
+set currency to "Rs."
+clear
+close all
+do assgnhdr
+set safe off
+set talk off
+bn=billno
+cstatus=billstatus
+tamt=0
+bamt=0
+txamt=0
+billtype=space(15)
+do case
+	case cstatus="C"
+		billtype="CASH SALES"
+	case cstatus="R"
+		billtype="CREDIT SALES"
+	case cstatus="K"
+		billtype="KEROSENE SALES"
+endcase
+_PADVANCE="LINEFEEDS"
+_PLENGTH=1
+
+set device to printer
+x=5
+select a
+use billtemp
+flds=fcount()
+
+select b
+use item
+index on icode to idxcode
+select c
+USE USERTAB
+select d
+use customer
+index on cust_code to iccode
+
+select a
+go top
+locate for bill_no=bn .and. status=cstatus
+vehno=veh_no
+orderno=ono
+if found() .and. upper(mageY)="Y"
+	if month(bill_date)>=4 and month(bill_date)<=12
+		magefil="MAGE"+right(alltrim(str(year(bill_date))),2)+".dbf"
+	else
+		magefil="MAGE"+right(alltrim(str(year(bill_date)-1)),2)+".dbf"
+	endif
+	if File(magefil)=.T.
+		select e
+		use &magefil
+	endif
+endif
+
+
+select d
+seek a->cust_code
+add=(print)
+select c
+index on USER_ID to indcinint
+locate for USER_ID=a->USER_ID
+cname=name
+x=0
+@ x,0 say "|                                  |"
+select a
+if cstatus="R"
+	x=x+1
+	@ x,0 say "| "+alltrim(billtype)
+	@ x,22 say "ORD NO. "+alltrim(str(orderno))
+else
+	x=x+1
+	@ x,0 say "| "+alltrim(billtype)
+	@ x,20 Say "Time :"+btime
+endif
+x=x+1
+@ x,35 say "|"
+@ x,0 say "| Bill No. "+alltrim(str(bn))
+@ x,20 say "DT :"+dtoc(bill_date)
+@ x,35 say "|"
+x=x+1
+@ x,0 say "|----------------------------------|"
+************1234567890123456789012345678901234
+x=x+1
+@ x,0 say "|----Item------Rate----Qty----Amt--|"
+x=x+1
+@ x,0 say "|--Bas.Amt-----Vat% --T.Amt---Amt--|"
+X=5
+do while bill_no=bn .and. status=cstatus
+	x=x+1
+	select b
+	locate for icode=a->icode
+	@ x,0 say "|"
+	@ x,2 say alltrim(b->idesc)
+	@ x,11 say a->rate picture '9999.99'
+	@ x,19 say a->qty picture '9999.99'
+	@ x,27 say a->amt picture '99999.99'
+	tamt=tamt+(a->amt)
+	@ x,35 say "|"	
+	if flds>15
+	  if a->tax_amt>0 
+	  	  x=x+1
+		  bamt=bamt+(a->ratebtx*a->qty)
+		  txamt=txamt+a->tax_amt
+	 	  @ x,0 say "|"		  
+		  @ x,2 say a->ratebtx*a->qty picture '99999.99'	  	
+		  @ x,13 say a->tax_per picture '99.99'	  	
+		  @ x,18 say a->tax_Amt picture '99999.99'	  	
+		  @ x,35 say "|"		  
+	  else
+	      bamt=bamt+a->amt
+	  endif		  
+	endif
+	select a
+	if eof()=.T.
+		x=x+1
+		exit
+	endif
+	skip
+enddo
+x=x+1
+*             99999.99   9999.99
+*                    2         3         4 
+******     012345678901234567890123456789012345
+@ x,0 say "|----Amount--Tax.Amt-------Amount--|"
+x=x+1
+@ x,3 say bamt picture '99999.99'
+@ x,12 say txamt picture '9999.99'
+prnstr="Rs."+CHR(14)+chr(15)+Strdec(tamt)+CHR(14)+chr(15)+chr(18)
+@ x,0 say "|                                  |"
+@ x,20 say prnstr function "$"
+x=x+1
+@ x,0 say "|----------------------------------|"
+x=x+1
+if cstatus="R"
+	@ x,0 say "| "+alltrim(add)
+	@ x,35 say "|"
+	x=x+1
+endif
+if cstatus="K"
+	@ x,0 say "|SHOP NO:"+alltrim(vehno)
+else
+	@ x,0 say "|VNO:"+alltrim(vehno)
+endif
+@ x,20 say "Cashier:"+alltrim(cname)
+@ x,35 say"|"
+z=0
+select a
+if upper(MageY)="Y" 
+	if file(Magefil)=.T.
+		select e
+		go bottom
+		do while not Bof()
+			if bill_no=billno and status=billstatus
+				x=x+1
+				@ x,0 say "|MileAge :"+alltrim(str(Mileage,6,2))
+				@ x,35 say"|"
+				x=x+1
+				@ X,0 say "|KMR : "+alltrim(str(or,9,1))+"-"+alltrim(str(cr,9,1))+"="+alltrim(str(cr-or,9,1))
+				@ x,35 say"|"
+				exit
+			endif
+			skip -1
+		enddo	
+	endif
+endif
+z=z+1	
+@ x+z,0 say "|----------------------------------|"
+x=x+1
+@ x+z,0 say "|      THANK YOU VISIT AGAIN       |"
+x=x+1
+@ x+z,0 say "|                                  | "
+x=x+1
+@ x+z,0 say "|                                  | "
+x=x+1
+@ x+z,0 say "!----------------------------------!"
+if cstatus="K"
+	@ x+z,0 say "  WHOLESALE LICENSE  NO. 12/75.76"
+	@ x+z,0 say "            "
+endif
+
+CLOSE ALL
+
+
+
+
+*if cstatus="R"
+*@ x+y,0 say "*      Interest will be charged at *"
+*y=y+1
+*@ x+y,0 say "* 18% from the date of bill.Subject*"
+*y=y+1
+*@ x+y,0 say "* to the Madras Jurisdification    *"
+*y=y+1
+*@ x+y,0 say "*----------------------------------*"
+*y=y+1
+*endif
+set printer on
+fest=0
+if day(date())=1 .and. month(date())=1
+fest=1
+	*TEXT
+	@ 1,0 say "  "
+	@ 2,0 say "  "
+	@ 3,0 say "  "
+	@ 4,0 say "  "
+	@ 5,0 say "  "
+	@ 6,0 say "!----------------------------------!"
+	@ 7,0 say Header1
+	@ 8,0 say "|----------------------------------|"
+	@ 9,0 say Header2
+	@10,0 say Header3
+	@11,0 say Header4
+	@12,0 say Header5
+	@13,0 say "|----------------------------------|" 
+	*ENDTEXT
+endif
+IF (day(date())=14 .or. day(date())=15 .or. day(date())=16) .and. month(date())=1
+	fest=1
+	*TEXT
+	@ 1,0 say "  "
+	@ 2,0 say "  "
+	@ 3,0 say "  "
+	@ 4,0 say "  "
+	@ 5,0 say "  "
+	@ 6,0 say "!----------------------------------!"
+	@ 7,0 say Header1
+	@ 8,0 say "|----------------------------------|"
+	@ 9,0 say Header2
+	@10,0 say Header3
+	@11,0 say Header4
+	@12,0 say Header5
+	@13,0 say "|----------------------------------|" 
+	*ENDTEXT
+ENDIF
+if fest=0
+	*TEXT
+	@ 1,0 say "  "
+	@ 2,0 say "  "
+	@ 3,0 say "  "
+	@ 4,0 say "  "
+	@ 5,0 say "  "
+	@ 6,0 say "!----------------------------------!"
+	@ 7,0 say Header1
+	@ 8,0 say "|----------------------------------|"
+	@ 9,0 say Header2
+	@10,0 say Header3
+	@11,0 say Header4
+	@12,0 say Header5
+	@13,0 say "|----------------------------------|" 
+	*ENDTEXT
+ENDIF
+clear
+if PrnTstMode=.T.
+	set printer to
+	modi comm x.txt
+endif
+set print off
+set device to screen

@@ -1,0 +1,68 @@
+==================================================================
+ DAILY CHAT PROMPTS LOG
+==================================================================
+
+ Purpose:
+   Keep a running record of the chat prompts you use each day so you
+   can pick up where you left off the next morning.
+
+ How to use:
+   1. Auto-export (recommended): run the exporter to pull your real
+      Copilot chat prompts into this file under a dated header.
+
+        - PowerShell:  ./daily-prompts/export-prompts.ps1
+        - Or Python :  python ./daily-prompts/export_prompts.py
+
+      Options:
+        ./daily-prompts/export-prompts.ps1 -Date 2026-07-11   # a specific day
+        ./daily-prompts/export-prompts.ps1 -Days 3            # last 3 days
+
+      Re-running for the same day is safe: it refreshes that day's
+      block instead of duplicating it.
+
+   2. Manual: add your own notes/prompts under today's date header
+      using the template block below.
+
+ Tip: Start each new day by reading the most recent date block to
+      recall where you stopped and which prompt to continue with.
+
+==================================================================
+ TEMPLATE (copy for manual entries)
+==================================================================
+ ----- YYYY-MM-DD -----
+ [HH:MM] prompt or note
+ NEXT STEP: what to start with tomorrow
+------------------------------------------------------------------
+
+
+==================================================================
+ LOG
+==================================================================
+
+----- 2026-07-12 -----  (Sunday)
+  (no prompts recorded)
+----- end 2026-07-12 -----
+
+----- 2026-07-18 -----  (Saturday)
+  (manual entry — Claude Code session, not the Copilot auto-exporter; no per-message
+  timestamps available, logged in order)
+[--:--] PetroPro
+  > tell me next steps and where we are now
+[--:--] PetroPro
+  > Proceed with filling the gaps
+    (-> Session 10: rate-change retract, receipt PDF, operational settings screen,
+    packages/shared-types — see AI_Handoff.md)
+[--:--] PetroPro
+  > whats next
+[--:--] PetroPro
+  > Do not migrate all the data, just keep last 3 months of data for me show case the
+    application to clients
+    (-> follow-up: keep the original historical dates, not shifted to look current)
+    (-> Session 11: apps/api/src/dbf/importTransactions.ts, npm run import:demo-transactions
+    — see AI_Handoff.md)
+[--:--] PetroPro
+  > Save the prompt for history
+  NEXT STEP: Todo.md's "Real remaining gaps" — full historical transactional migration, the
+  output-validation harness, browser E2E tests, and Docker/CI real-world verification are the
+  open items; pick one or ask for a status recap.
+----- end 2026-07-18 -----

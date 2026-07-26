@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -f data/petropro.db)",
+      "Bash(rm -rf data/backups)",
+      "Bash(rm -f /tmp/petropro-test-*.db)",
+      "Bash(rm -rf /tmp/backups)",
+      "Bash(curl -s -o /dev/null -w \"catalog status:%{http_code}\\\\n\" http://localhost:3100/catalog --max-time 8)",
+      "Bash(curl -s -o /dev/null -w \"users page status:%{http_code}\\\\n\" http://localhost:3100/users --max-time 8)"
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+function monname
+parameter monno
+name=space(15)
+do case
+	case monno=1
+		name= "January"
+	case monno=2
+		name= "February"
+	case monno=3
+		name= "March"
+	case monno=4
+		name= "April"
+	case monno=5
+		name= "May"
+	case monno=6
+		name= "June"
+	case monno=7
+		name= "July"
+	case monno=8
+		name= "August"
+	case monno=9
+		name= "September"
+	case monno=10
+		name= "October"
+	case monno=11
+		name= "November"
+	case monno=12
+		name= "December"
+endcase
+return name

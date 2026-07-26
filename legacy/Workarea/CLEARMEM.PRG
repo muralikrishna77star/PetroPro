@@ -1,0 +1,5 @@
+!DEL *.TMP
+!DEL *.FXP
+!DEL *.IDX
+!DEL *.BAK
+!DEL *.CDX

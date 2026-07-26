@@ -1,0 +1,16 @@
+BillNo :3156   Veh No :AP36W-9666     Date :15/06/2019     Credit
+
+S.No  Icode Item                       Qty     Rate     Value
+  1    A01  DIESEL                   103.5    67.62   7000.00                                                    ____________
+                                   Bill Amount :      7000.00
+                                                    ~~~~~~~~~~~~BillNo :3157   Veh No :TS30T-1638     Date :15/06/2019     Credit
+
+S.No  Icode Item                       Qty     Rate     Value
+  1    A01  DIESEL                   272.4    67.62  18419.69                                                    ____________
+                                   Bill Amount :     18419.69
+                                                    ~~~~~~~~~~~~BillNo :3158   Veh No :TN18AX-9099    Date :15/06/2019     Credit
+
+S.No  Icode Item                       Qty     Rate     Value
+  1    A01  DIESEL                    34.1    67.62   2311.93                                                    ____________
+                                   Bill Amount :      2311.93
+                                                    ~~~~~~~~~~~~

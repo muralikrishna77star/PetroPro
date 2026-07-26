@@ -1,0 +1,24 @@
+{
+  "name": "petropro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PetroPro — The Complete Petrol Station Management Platform (modernized from legacy FoxPro 2.6)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run build --workspace packages/shared-types",
+    "dev": "npm run dev --workspace apps/api & npm run dev --workspace apps/web",
+    "dev:api": "npm run dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspace packages/shared-types && npm run build --workspace apps/api && npm run build --workspace apps/web",
+    "seed": "npm run seed --workspace apps/api",
+    "test": "npm run test --workspace apps/api",
+    "lint": "npm run lint --workspace apps/web",
+    "typecheck": "npm run build --workspace packages/shared-types && tsc -p apps/api/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

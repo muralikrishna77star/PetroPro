@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* PetroPro Enterprise Design System — dark-first palette (per the Design Bible), with a
+   light variant on the same semantic tokens. Dark is the true default (:root, no class
+   needed); opting into light adds `.light` to <html> (see components/ThemeToggle.tsx). */
+:root {
+  --pp-bg: #0b1220;
+  --pp-bg-elevated: #0f1729;
+  --pp-sidebar: #111827;
+  --pp-card: #1a2333;
+  --pp-card-hover: #212c40;
+  --pp-primary: #2563eb;
+  --pp-primary-fg: #ffffff;
+  --pp-secondary: #06b6d4;
+  --pp-success: #16a34a;
+  --pp-warning: #f59e0b;
+  --pp-error: #dc2626;
+  --pp-fg: #e5e7eb;
+  --pp-fg-muted: #94a3b8;
+  --pp-border: #1f2937;
+}
+
+:root.light {
+  --pp-bg: #f8fafc;
+  --pp-bg-elevated: #ffffff;
+  --pp-sidebar: #ffffff;
+  --pp-card: #ffffff;
+  --pp-card-hover: #f1f5f9;
+  --pp-primary-fg: #ffffff;
+  --pp-fg: #0f172a;
+  --pp-fg-muted: #64748b;
+  --pp-border: #e2e8f0;
+}
+
+/* "Bold everywhere" color style (see components/ColorStyleProvider.tsx +
+   lib/colorStyle.ts) — richer, more saturated status colors on top of whichever
+   dark/light palette is active. */
+[data-style="bold"] {
+  --pp-success: #22c55e;
+  --pp-warning: #fb923c;
+  --pp-error: #ef4444;
+  --pp-secondary: #22d3ee;
+}
+
+@theme inline {
+  --color-bg: var(--pp-bg);
+  --color-bg-elevated: var(--pp-bg-elevated);
+  --color-sidebar: var(--pp-sidebar);
+  --color-card: var(--pp-card);
+  --color-card-hover: var(--pp-card-hover);
+  --color-primary: var(--pp-primary);
+  --color-primary-fg: var(--pp-primary-fg);
+  --color-secondary: var(--pp-secondary);
+  --color-success: var(--pp-success);
+  --color-warning: var(--pp-warning);
+  --color-error: var(--pp-error);
+  --color-fg: var(--pp-fg);
+  --color-fg-muted: var(--pp-fg-muted);
+  --color-border: var(--pp-border);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
+  --font-mono: var(--font-roboto-mono);
+}
+
+body {
+  background: var(--pp-bg);
+  color: var(--pp-fg);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}

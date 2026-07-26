@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      # Change this in any real deployment — it signs every JWT.
+      JWT_SECRET: change-me-in-production
+    volumes:
+      - petropro-data:/repo/data
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked in at build time (see apps/web/Dockerfile) — the default matches accessing both
+        # services' published ports from the host machine's browser.
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  petropro-data:

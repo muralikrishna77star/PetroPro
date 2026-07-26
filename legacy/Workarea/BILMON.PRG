@@ -1,0 +1,44 @@
+FUNCTION BILMON
+PARAMETER MNO, YNO
+
+YRNO=SUBSTR(ALLTRIM(STR(YNO)), 3,2)
+X=MNO
+DO CASE
+CASE X=1
+MON="Jan"+"Bil"+YRNO
+
+CASE X=2
+MON="Feb"+"Bil"+YRNO
+
+CASE X=3
+MON="Mar"+"Bil"+YRNO
+
+CASE X=4
+MON="Apr"+"Bil"+YRNO
+
+CASE X=5
+MON="May"+"Bil"+YRNO
+
+CASE X=6
+MON="Jun"+"Bil"+YRNO
+
+CASE X=7
+MON="Jul"+"Bil"+YRNO
+
+CASE X=8
+MON="Aug"+"Bil"+YRNO
+
+CASE X=9
+MON="Sep"+"Bil"+YRNO
+
+CASE X=10
+MON="Oct"+"Bil"+YRNO
+
+CASE X=11
+MON="Nov"+"Bil"+YRNO
+
+CASE X=12
+MON="Dec"+"Bil"+YRNO
+ENDCASE
+
+RETURN MON
