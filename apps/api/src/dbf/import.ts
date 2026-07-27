@@ -103,6 +103,7 @@ function importCustomers(): ImportSummary {
       service_charge: num(row, "SER_CHG"),
       tin_no: str(row, "TINNO") || null,
       gst_no: str(row, "GSTNO") || null,
+      email: null,
     });
     summary.imported++;
   }

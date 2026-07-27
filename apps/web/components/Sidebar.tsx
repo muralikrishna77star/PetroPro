@@ -64,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/reports", label: "Sales / Bill Reports", roles: ["super_admin", "owner"] },
       { href: "/reports", label: "GST / Tax Reports", roles: ["super_admin", "owner"] },
+      { href: "/reports", label: "Stock Reports", roles: ["super_admin", "owner"] },
     ],
   },
   {

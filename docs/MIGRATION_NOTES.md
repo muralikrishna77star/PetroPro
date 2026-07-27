@@ -36,6 +36,8 @@ vehicle no., user id) and existing rows are skipped, not duplicated or overwritt
 - **A fixed 3-month demo window is imported separately** — see "Demo transaction window" below.
   This is a scoped, one-off complement to `import.ts`, not a step toward the full historical
   migration above.
+- **A full fiscal year (2025-04-01 → business date) is imported separately too** — see "FY2025-26
+  full-year migration" below. Also a scoped complement, not a general historical importer.
 
 ## Demo transaction window (`import:demo-transactions`)
 
@@ -89,6 +91,73 @@ reflects a real point-in-time balance from years after this window, and retroact
 repo. A credit customer's "Due" figure on `/customers` and their `/reports/customers/:code/ledger`
 balance for just this window will not reconcile — expected, given only a snapshot + one 3-month
 slice of history exist, not the years of activity between them.
+
+## FY2025-26 full-year migration (`import:fy2025`)
+
+```powershell
+cd apps/api
+npm run import:legacy -- /path/to/dbfs    # master data first — see below
+npm run import:fy2025 -- /path/to/dbfs
+```
+
+Migrates **2025-04-01 through the legacy system's own "business date"**
+(`DATESTAT.DBF`'s `DATEHLD` field in the target folder, read dynamically — not hardcoded, so a
+later re-run against an updated folder/DATESTAT picks up new months automatically). Source: real
+data supplied at `WorkareaTill29Mar2026\` (`DATEHLD` = 2026-03-29 there). Unlike the 3-month demo
+window above, this spans up to 12 monthly bill/stock files and is **idempotent per month**
+(checked against each month's actual `BILL_DATE` range in `bills`), not one all-or-nothing guard
+— safe to re-run repeatedly, e.g. as new months land in the source folder.
+
+**Run `import:legacy` (master data) against the same folder first.** Credit bills resolve
+`customer_code` by checking the customer already exists; skip this step and every credit bill in
+the window silently imports as `cash` instead.
+
+**Filenames use a plain calendar-year suffix for bills/stock — confirmed by reading actual
+`BILL_DATE`/`SDATE` values, not assumed.** `JANBIL26.DBF` really is January 2026, `FEBBIL25.DBF`
+really is February 2025 — no fiscal-year offset, unlike `BILSEK`/`MAGE` below. The importer
+builds `<MON><YY>BIL/STK<YY>.DBF` filenames by walking the window month-by-month rather than
+hardcoding a file list, so it naturally builds `NOVBIL25.DBF`.
+
+**`ANOVBIL25.DBF` is a stale partial duplicate of `NOVBIL25.DBF`, not a distinct file to import.**
+Same first row, but only 2,777 of `NOVBIL25.DBF`'s 4,735 rows — a mid-month snapshot left in the
+folder. The importer never references it (the generated filename is always `NOVBIL25.DBF`); if a
+future source folder has a similarly-prefixed variant for another month, check row counts/content
+against the plain-named file before trusting it.
+
+**Mileage matching needed a second index table (`BILSEK25.DBF`) the 3-month demo window never
+needed.** `MAGE25.DBF` (`BILL_NO, STATUS, VEH_NO, ICODE, OR, CR, MILEAGE`) has no date field.
+Initial assumption — that `BILL_NO` resets every month like it appeared to in the 2019 window —
+was wrong and would have risked matching a mileage row to the wrong month's bill. The real
+structure, confirmed by reading `BILSEK25.DBF` (`MONTH, MINBILLNO, MAXBILLNO, STATUS` — 46 rows):
+`BILL_NO` is a **year-wide counter split into two independent sequences by `STATUS`** (`'C'` and
+`'R'`), and `BILSEK25.DBF` is the legacy system's own lookup index mapping a `(STATUS, BILL_NO)`
+pair to exactly one calendar month (e.g. `MONTH=4, STATUS='C', MINBILLNO=1, MAXBILLNO=3061` →
+April's `'C'`-sequence bills). One `BILSEK25.DBF` covers the whole fiscal year — its `MONTH`
+values 1/2/3 mean Jan/Feb/Mar **2026**, at the tail of the FY, not the start. No `BILSEK26.DBF`
+exists or is needed. `importFY2025.ts` routes each `MAGE25.DBF` row to its month via this table,
+then matches `(BILL_NO, STATUS, VEH_NO, ICODE)` against that month's already-imported bill
+candidates — the same composite-key approach `importTransactions.ts` uses, just correctly scoped
+to one month first instead of assuming a single month. Rows with a null `MONTH` in `BILSEK25.DBF`
+are a separate running-total table, not per-month ranges — skipped.
+Result on the real dataset: 11,716 of 11,824 mileage rows matched (99.1%) — the rest are accepted
+as normal data noise (see "Data quality" below), not investigated further.
+
+**`STATUS` (`'C'`/`'R'`) on bill rows is *not* payment type — a real trap.** A sample row had
+`STATUS='C'` with a blank `CUST_CODE`; `BILSEK`'s `'C'`/`'R'` split sizes don't line up with
+credit-vs-cash bill counts either. It's almost certainly which of the two `BILSEK` counters
+assigned that `BILL_NO`. `payment_type` is still derived the existing way (customer_code present
+→ credit); `STATUS` is only used as part of the mileage-matching key above.
+
+**Purchases/receipts are nearly empty in this window** — `PURCH25.DBF`/`PURCH26.DBF`: 0 rows.
+`RECPT25.DBF`: exactly 1 row. Imported anyway (cheap), same "not a bug" precedent as the demo
+window's zero-receipts finding. `RECPT25.DBF`'s `AMOUNT`/`SC_AMT`/`CSR_INIT` fields are inserted
+directly (not via `receiptsRepo`, whose `ReceiptInput` requires a non-null `cashier_id` — the one
+real row's `CSR_INIT` is blank).
+
+**A known limitation of the per-month idempotency guard**: mileage candidates are only built for
+months freshly imported *in the current run* — a month already imported by a prior run won't get
+mileage (re-)matched on a later run even if `MAGE25.DBF` changes. Fine for a one-off migration
+run start-to-finish, worth revisiting if this ever becomes a recurring incremental job.
 
 ## Passwords are NOT migrated
 

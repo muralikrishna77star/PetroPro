@@ -34,3 +34,25 @@ test("adjustDueAmount / setDueAmount", () => {
   customersRepo.setDueAmount("C003", 100);
   assert.equal(customersRepo.get("C003")?.due_amount, 100);
 });
+
+test("setPasswordHash / getByEmail round-trip for the customer Order Entry login", () => {
+  customersRepo.create({ code: "C004", name: "Order Entry Customer", email: "c004@example.com" } as never);
+  customersRepo.setPasswordHash("C004", "hashed-value");
+
+  const byEmail = customersRepo.getByEmail("c004@example.com");
+  assert.equal(byEmail?.code, "C004");
+  assert.equal(byEmail?.password_hash, "hashed-value");
+});
+
+test("get()/list() never expose password_hash — only getWithAuth()/getByEmail() do", () => {
+  customersRepo.create({ code: "C005", name: "No Leak Test", email: "c005@example.com" } as never);
+  customersRepo.setPasswordHash("C005", "super-secret-hash");
+
+  const viaGet = customersRepo.get("C005") as unknown as Record<string, unknown>;
+  assert.equal(viaGet.password_hash, undefined);
+
+  const viaList = customersRepo.list().find((c) => c.code === "C005") as unknown as Record<string, unknown>;
+  assert.equal(viaList.password_hash, undefined);
+
+  assert.equal(customersRepo.getWithAuth("C005")?.password_hash, "super-secret-hash");
+});

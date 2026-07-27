@@ -26,16 +26,19 @@ export const mileageRepo = {
   },
 
   /** Records an odometer reading against a bill; computes km-per-unit mileage against the
-   *  vehicle's previous reading, if any (legacy MAGE: OR/CR odometer pair -> MILEAGE). */
+   *  vehicle's previous reading (legacy MAGE: OR/CR odometer pair -> MILEAGE). Callers that
+   *  capture both readings in one go (a tank-fill entry in billing) pass `odometerOpening`
+   *  explicitly; otherwise it falls back to the vehicle's last recorded closing reading. */
   record(input: {
     billNo: number;
     vehicleNo: string;
     itemCode: string;
+    odometerOpening?: number;
     odometerCurr: number;
     qty: number;
   }): MileageLogEntry {
-    const previous = mileageRepo.lastForVehicle(input.vehicleNo);
-    const odometerPrev = previous?.odometer_curr ?? null;
+    const odometerPrev =
+      input.odometerOpening ?? mileageRepo.lastForVehicle(input.vehicleNo)?.odometer_curr ?? null;
     const mileage =
       odometerPrev !== null && input.qty > 0 ? (input.odometerCurr - odometerPrev) / input.qty : null;
 

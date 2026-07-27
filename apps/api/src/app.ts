@@ -22,6 +22,9 @@ import finYearRoutes from "./routes/finYear.js";
 import backupRoutes from "./routes/backup.js";
 import dataResetRoutes from "./routes/dataReset.js";
 import userRoutes from "./routes/users.js";
+import orderRoutes from "./routes/orders.js";
+import customerAuthRoutes from "./routes/customerAuth.js";
+import customerOrderRoutes from "./routes/customerOrders.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -52,6 +55,9 @@ export async function buildApp() {
   await app.register(backupRoutes);
   await app.register(dataResetRoutes);
   await app.register(userRoutes);
+  await app.register(orderRoutes);
+  await app.register(customerAuthRoutes);
+  await app.register(customerOrderRoutes);
 
   return app;
 }

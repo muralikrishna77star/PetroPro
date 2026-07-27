@@ -10,6 +10,7 @@
     "seed": "tsx src/db/seed.ts",
     "import:legacy": "tsx src/dbf/import.ts",
     "import:demo-transactions": "tsx src/dbf/importTransactions.ts",
+    "import:fy2025": "tsx src/dbf/importFY2025.ts",
     "migrate:roles": "tsx src/db/migrateRoles.ts",
     "test": "node --import tsx --test src/**/*.test.ts"
   },

@@ -12,25 +12,46 @@ export interface Customer {
   service_charge: number;
   tin_no: string | null;
   gst_no: string | null;
+  email: string | null;
 }
+
+export type CustomerWithAuth = Customer & { password_hash: string | null };
 
 export type CustomerInput = Omit<Customer, "due_amount"> & { due_amount?: number };
 
+/** Explicit column list (never `SELECT *`) so `password_hash` never rides along on a plain
+ *  `get()`/`list()` and leaks into a JSON response the way `usersRepo` guards against too. */
+const CUSTOMER_COLUMNS =
+  "code, joined_on, name, address, print_name, phone, due_amount, credit_limit, service_charge, tin_no, gst_no, email";
+
 export const customersRepo = {
   list(): Customer[] {
-    return db.prepare("SELECT * FROM customers ORDER BY code").all() as unknown as Customer[];
+    return db
+      .prepare(`SELECT ${CUSTOMER_COLUMNS} FROM customers ORDER BY code`)
+      .all() as unknown as Customer[];
   },
 
   get(code: string): Customer | undefined {
-    return db.prepare("SELECT * FROM customers WHERE code = ?").get(code) as Customer | undefined;
+    return db
+      .prepare(`SELECT ${CUSTOMER_COLUMNS} FROM customers WHERE code = ?`)
+      .get(code) as Customer | undefined;
+  },
+
+  /** Includes `password_hash` — only for the customer login route, never returned as-is over the API. */
+  getWithAuth(code: string): CustomerWithAuth | undefined {
+    return db.prepare("SELECT * FROM customers WHERE code = ?").get(code) as CustomerWithAuth | undefined;
+  },
+
+  getByEmail(email: string): CustomerWithAuth | undefined {
+    return db.prepare("SELECT * FROM customers WHERE email = ?").get(email) as CustomerWithAuth | undefined;
   },
 
   create(input: CustomerInput): Customer {
     db.prepare(
       `INSERT INTO customers (
         code, joined_on, name, address, print_name, phone, due_amount, credit_limit,
-        service_charge, tin_no, gst_no
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        service_charge, tin_no, gst_no, email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.code,
       input.joined_on ?? null,
@@ -43,6 +64,7 @@ export const customersRepo = {
       input.service_charge ?? 0,
       input.tin_no ?? null,
       input.gst_no ?? null,
+      input.email ?? null,
     );
     return customersRepo.get(input.code) as Customer;
   },
@@ -51,7 +73,7 @@ export const customersRepo = {
     db.prepare(
       `UPDATE customers SET
         joined_on = ?, name = ?, address = ?, print_name = ?, phone = ?, credit_limit = ?,
-        service_charge = ?, tin_no = ?, gst_no = ?
+        service_charge = ?, tin_no = ?, gst_no = ?, email = ?
       WHERE code = ?`,
     ).run(
       input.joined_on ?? null,
@@ -63,9 +85,14 @@ export const customersRepo = {
       input.service_charge ?? 0,
       input.tin_no ?? null,
       input.gst_no ?? null,
+      input.email ?? null,
       code,
     );
     return customersRepo.get(code);
+  },
+
+  setPasswordHash(code: string, passwordHash: string): void {
+    db.prepare("UPDATE customers SET password_hash = ? WHERE code = ?").run(passwordHash, code);
   },
 
   adjustDueAmount(code: string, delta: number): void {

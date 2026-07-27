@@ -11,6 +11,7 @@ const { createWalkInBill, cancelBill, settlePendingTransaction } = await import(
 const { pendingTransactionsRepo } = await import("../repositories/pendingTransactions.js");
 const { billsRepo } = await import("../repositories/bills.js");
 const { pumpsRepo } = await import("../repositories/pumps.js");
+const { ordersRepo } = await import("../repositories/orders.js");
 
 itemsRepo.create({
   code: "OIL",
@@ -23,6 +24,9 @@ itemsRepo.create({
 usersRepo.create({ user_id: "cashier1", name: "Cashier", password_hash: "x", role: "operator" });
 usersRepo.create({ user_id: "attendant1", name: "Attendant", password_hash: "x", role: "field_operator" });
 customersRepo.create({ code: "CUST1", name: "Test Customer", credit_limit: 1000, service_charge: 0 } as never);
+// Unlimited credit (credit_limit 0) — kept separate from CUST1 so the order-fulfillment tests
+// below aren't tripped up by CUST1's accumulated due_amount from the credit-limit tests above.
+customersRepo.create({ code: "CUST2", name: "Order Test Customer" } as never);
 pumpsRepo.create({ code: "P1", name: "Pump 1" });
 pumpsRepo.create({ code: "P2", name: "Pump 2" });
 
@@ -204,4 +208,80 @@ test("settlePendingTransaction carries the pump code from the pending entry onto
     paymentType: "cash",
   });
   assert.equal(result.bill.pump_code, "P2");
+});
+
+test("createWalkInBill fulfills a pending order across two separate bills, reaching completed", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 5, rate_at_order: 399 }],
+  });
+  const lineId = order.lines[0].id;
+
+  createWalkInBill({
+    cashierId: "cashier1",
+    paymentType: "credit",
+    customerCode: "CUST2",
+    fulfillOrderNo: order.order_no,
+    lines: [{ item_code: "OIL", qty: 2, orderLineId: lineId }],
+  });
+  assert.equal(ordersRepo.get(order.order_no)?.status, "partially_served");
+  assert.equal(ordersRepo.getLine(lineId)?.qty_served, 2);
+
+  createWalkInBill({
+    cashierId: "cashier1",
+    paymentType: "credit",
+    customerCode: "CUST2",
+    fulfillOrderNo: order.order_no,
+    lines: [{ item_code: "OIL", qty: 3, orderLineId: lineId }],
+  });
+  assert.equal(ordersRepo.get(order.order_no)?.status, "completed");
+  assert.equal(ordersRepo.getLine(lineId)?.qty_served, 5);
+});
+
+test("createWalkInBill rejects a line that would overfill its order line, and posts no bill", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 2, rate_at_order: 399 }],
+  });
+  const lineId = order.lines[0].id;
+  const billsBefore = db.prepare("SELECT COUNT(*) AS n FROM bills").get() as { n: number };
+
+  assert.throws(
+    () =>
+      createWalkInBill({
+        cashierId: "cashier1",
+        paymentType: "credit",
+        customerCode: "CUST2",
+        fulfillOrderNo: order.order_no,
+        lines: [{ item_code: "OIL", qty: 5, orderLineId: lineId }],
+      }),
+    /exceed/i,
+  );
+
+  const billsAfter = db.prepare("SELECT COUNT(*) AS n FROM bills").get() as { n: number };
+  assert.equal(billsAfter.n, billsBefore.n);
+  assert.equal(ordersRepo.getLine(lineId)?.qty_served, 0);
+});
+
+test("createWalkInBill rejects an order line that doesn't belong to the claimed order", () => {
+  const orderA = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 5, rate_at_order: 399 }],
+  });
+  const orderB = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 5, rate_at_order: 399 }],
+  });
+
+  assert.throws(
+    () =>
+      createWalkInBill({
+        cashierId: "cashier1",
+        paymentType: "credit",
+        customerCode: "CUST2",
+        fulfillOrderNo: orderB.order_no,
+        lines: [{ item_code: "OIL", qty: 1, orderLineId: orderA.lines[0].id }],
+      }),
+    /does not belong/i,
+  );
 });

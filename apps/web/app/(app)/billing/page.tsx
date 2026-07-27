@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api, ApiError, downloadAuthed, type Bill, type Customer, type Item, type Pump, type SettleResponse, type Tenant } from "@/lib/api";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  api,
+  ApiError,
+  downloadAuthed,
+  type Bill,
+  type Customer,
+  type Item,
+  type Order,
+  type OrderLine,
+  type Pump,
+  type SettleResponse,
+  type Tenant,
+} from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
@@ -19,6 +31,17 @@ const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
 
 const QTY_DECIMALS = 3;
 
+/** Dark title bar for a field grouping within a Card (Sale Type / Vehicle Details / Pump
+ *  Details / Mileage Check) — deliberately not theme-reactive so the label always reads as a
+ *  fixed-contrast heading regardless of light/dark mode. */
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="mb-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
+      {children}
+    </div>
+  );
+}
+
 export default function BillingPage() {
   const session = useRequireSession(["super_admin", "owner", "operator"]);
   const [items, setItems] = useState<Item[]>([]);
@@ -35,6 +58,12 @@ export default function BillingPage() {
   const [lineItemCode, setLineItemCode] = useState("");
   const [lineQty, setLineQty] = useState("");
   const [lineAmount, setLineAmount] = useState("");
+  const [lineTrackMileage, setLineTrackMileage] = useState(false);
+  const [lineOdoOpening, setLineOdoOpening] = useState("");
+  const [lineOdoClosing, setLineOdoClosing] = useState("");
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [selectedOrderNo, setSelectedOrderNo] = useState<number | null>(null);
+  const [pendingOrderLineTag, setPendingOrderLineTag] = useState<number | null>(null);
   const [lines, setLines] = useState<BillingDraftLine[]>([]);
   const [invoice, setInvoice] = useState<SettleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,9 +144,16 @@ export default function BillingPage() {
     if (!known || !session) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting derived UI state (not credit / no match yet), not a subscription
       setCustomerInfo(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting derived UI state, not a subscription
+      setPendingOrders([]);
+      setSelectedOrderNo(null);
       return;
     }
     api.getCustomer(session.token, known.code).then(setCustomerInfo).catch(() => setCustomerInfo(null));
+    api
+      .listCustomerOrders(session.token, known.code)
+      .then(setPendingOrders)
+      .catch(() => setPendingOrders([]));
   }, [session, paymentType, customerCode, customers]);
 
   function selectPaymentType(next: PaymentType) {
@@ -156,13 +192,41 @@ export default function BillingPage() {
     } else if (lineAmount) {
       setLineQty(rate > 0 ? (Number(lineAmount) / rate).toFixed(QTY_DECIMALS) : "");
     }
+    setLineTrackMileage(false);
+    setLineOdoOpening("");
+    setLineOdoClosing("");
+    setPendingOrderLineTag(null);
+  }
+
+  // Pre-fills the entry row from a pending order line (capped to what's left) and tags the
+  // *next* addLine() call with it — the same one-shot "tag on add" mechanic as mileage above.
+  function selectPendingLine(line: OrderLine) {
+    const pending = Math.max(line.qty_ordered - line.qty_served, 0);
+    setLineItemCode(line.item_code);
+    setLineQty(String(pending));
+    const rate = rateFor(line.item_code);
+    setLineAmount(rate > 0 ? (pending * rate).toFixed(2) : "");
+    setPendingOrderLineTag(line.id);
   }
 
   function addLine() {
     if (!lineItemCode || !lineQty || Number(lineQty) <= 0) return;
-    setLines((prev) => [...prev, { item_code: lineItemCode, qty: Number(lineQty) }]);
-    setLineQty("");
-    setLineAmount("");
+    if (lineTrackMileage) {
+      if (lines.some((l) => l.odometerOpening !== undefined)) return;
+      if (!lineOdoOpening || !lineOdoClosing || Number(lineOdoClosing) <= Number(lineOdoOpening)) return;
+    }
+    setLines((prev) => [
+      ...prev,
+      {
+        item_code: lineItemCode,
+        qty: Number(lineQty),
+        ...(lineTrackMileage
+          ? { odometerOpening: Number(lineOdoOpening), odometerClosing: Number(lineOdoClosing) }
+          : {}),
+        ...(pendingOrderLineTag !== null ? { orderLineId: pendingOrderLineTag } : {}),
+      },
+    ]);
+    resetEntryRow();
   }
 
   function removeLine(index: number) {
@@ -177,11 +241,17 @@ export default function BillingPage() {
     setVehicleNo("");
     setOrderNo("");
     setUpiConfirmed(false);
+    setPendingOrders([]);
+    setSelectedOrderNo(null);
   }
 
   function resetEntryRow() {
     setLineQty("");
     setLineAmount("");
+    setLineTrackMileage(false);
+    setLineOdoOpening("");
+    setLineOdoClosing("");
+    setPendingOrderLineTag(null);
   }
 
   function handleCancelEntry() {
@@ -199,6 +269,18 @@ export default function BillingPage() {
     (paymentType !== "credit" || customerCode.trim().length > 0) &&
     (paymentType !== "upi" || upiConfirmed);
   const selectedItemName = items.find((i) => i.code === lineItemCode)?.name ?? "";
+  const selectedItemTracksMileage = items.find((i) => i.code === lineItemCode)?.track_mileage === 1;
+  // Legacy MAGE only ever tracked one odometer pair per bill (one tank, one fill) — so once a
+  // line carries mileage, the option is withdrawn for every other line in this sale.
+  const mileageLineIndex = lines.findIndex((l) => l.odometerOpening !== undefined);
+  const hasMileageLine = mileageLineIndex !== -1;
+  const mileageLine = hasMileageLine ? lines[mileageLineIndex] : undefined;
+  const mileageLineItemName = mileageLine ? items.find((i) => i.code === mileageLine.item_code)?.name ?? mileageLine.item_code : "";
+  // A lone pending order auto-selects itself; with more than one, the biller picks via the radio
+  // buttons in the Pending Order section below.
+  const selectedPendingOrder =
+    pendingOrders.find((o) => o.order_no === selectedOrderNo) ??
+    (pendingOrders.length === 1 ? pendingOrders[0] : undefined);
 
   async function submitBill(autoPrint: boolean) {
     if (!session || !canSubmit) return;
@@ -210,8 +292,15 @@ export default function BillingPage() {
         customerCode: paymentType === "credit" ? customerCode : undefined,
         vehicleNo: vehicleNo || undefined,
         orderNo: paymentType === "credit" && orderNo ? orderNo : undefined,
+        fulfillOrderNo: paymentType === "credit" ? selectedPendingOrder?.order_no : undefined,
         pumpCode: pumpCode || undefined,
-        lines,
+        lines: lines.map((l) => ({
+          item_code: l.item_code,
+          qty: l.qty,
+          odometer: l.odometerClosing,
+          odometerOpening: l.odometerOpening,
+          orderLineId: l.orderLineId,
+        })),
       });
       setInvoice(result);
       resetForm();
@@ -305,86 +394,157 @@ export default function BillingPage() {
         <DraftsQueueTable drafts={drafts} items={items} onResume={handleResumeDraft} onDelete={handleDeleteDraft} />
 
         {/* Master: bill header — fields shown depend on the payment type chosen */}
-        <Card color="orange">
-          <div className="mb-4 flex gap-1 rounded-lg border border-border p-1 ">
-            {(["cash", "upi", "card", "credit"] as PaymentType[]).map((type) => (
-              <button
-                key={type}
-                onClick={() => selectPaymentType(type)}
-                className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
-                  paymentType === type
-                    ? "bg-primary text-white"
-                    : "text-fg-muted hover:bg-card-hover dark:text-zinc-400 "
-                }`}
-              >
-                {PAYMENT_TYPE_LABELS[type]}
-              </button>
-            ))}
+        <Card color="orange" className="flex flex-col gap-4">
+          <div>
+            <SectionLabel>Sale Type</SectionLabel>
+            <div className="flex gap-1 rounded-lg border border-border p-1 ">
+              {(["cash", "upi", "card", "credit"] as PaymentType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => selectPaymentType(type)}
+                  className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
+                    paymentType === type
+                      ? "bg-primary text-white"
+                      : "text-fg-muted hover:bg-card-hover dark:text-zinc-400 "
+                  }`}
+                >
+                  {PAYMENT_TYPE_LABELS[type]}
+                </button>
+              ))}
+            </div>
+
+            {paymentType === "upi" && (
+              <PaymentQrPanel
+                qrCode={tenant?.payment_qr_code ?? null}
+                confirmed={upiConfirmed}
+                onConfirmChange={setUpiConfirmed}
+              />
+            )}
           </div>
 
-          {paymentType === "upi" && (
-            <PaymentQrPanel
-              qrCode={tenant?.payment_qr_code ?? null}
-              confirmed={upiConfirmed}
-              onConfirmChange={setUpiConfirmed}
-            />
-          )}
+          <div>
+            <SectionLabel>Vehicle Details</SectionLabel>
+            <div className="flex flex-wrap gap-2">
+              {paymentType === "credit" && (
+                <div className="flex-1">
+                  <Combobox
+                    options={customers.map((c) => ({ value: c.code, label: c.name }))}
+                    value={customerCode}
+                    onChange={setCustomerCode}
+                    placeholder="Customer code (required)"
+                    className="uppercase"
+                  />
+                </div>
+              )}
+              <input
+                placeholder="Vehicle no. (optional)"
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm uppercase  bg-bg-elevated"
+                value={vehicleNo}
+                onChange={(e) => setVehicleNo(e.target.value)}
+              />
+            </div>
 
-          <div className="flex flex-wrap gap-2">
             {paymentType === "credit" && (
-              <div className="flex-1">
-                <Combobox
-                  options={customers.map((c) => ({ value: c.code, label: c.name }))}
-                  value={customerCode}
-                  onChange={setCustomerCode}
-                  placeholder="Customer code (required)"
-                  className="uppercase"
+              <div className="mt-2">
+                <input
+                  placeholder="Order number (optional)"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-bg-elevated"
+                  value={orderNo}
+                  onChange={(e) => setOrderNo(e.target.value)}
                 />
               </div>
             )}
-            <input
-              placeholder="Vehicle no. (optional)"
-              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm uppercase  bg-bg-elevated"
-              value={vehicleNo}
-              onChange={(e) => setVehicleNo(e.target.value)}
-            />
-            <div className="flex-1">
-              <Combobox
-                options={pumps.map((p) => ({ value: p.code, label: p.name }))}
-                value={pumpCode}
-                onChange={setPumpCode}
-                placeholder="Pump (optional)"
-              />
-            </div>
+
+            {paymentType === "credit" && customerInfo && (
+              <div className="mt-3 rounded-lg bg-card-hover px-3 py-2 text-sm bg-bg-elevated">
+                <span className="font-medium">{customerInfo.name}</span> — due ₹
+                {customerInfo.due_amount.toFixed(2)} · credit limit{" "}
+                <span
+                  className={
+                    customerInfo.credit_limit > 0 && customerInfo.due_amount + grandTotal > customerInfo.credit_limit
+                      ? "font-medium text-error"
+                      : ""
+                  }
+                >
+                  ₹{customerInfo.credit_limit.toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
 
-          {paymentType === "credit" && (
-            <div className="mt-2">
-              <input
-                placeholder="Order number (optional)"
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-bg-elevated"
-                value={orderNo}
-                onChange={(e) => setOrderNo(e.target.value)}
-              />
-            </div>
-          )}
-
-          {paymentType === "credit" && customerInfo && (
-            <div className="mt-3 rounded-lg bg-card-hover px-3 py-2 text-sm bg-bg-elevated">
-              <span className="font-medium">{customerInfo.name}</span> — due ₹
-              {customerInfo.due_amount.toFixed(2)} · credit limit{" "}
-              <span
-                className={
-                  customerInfo.credit_limit > 0 && customerInfo.due_amount + grandTotal > customerInfo.credit_limit
-                    ? "font-medium text-error"
-                    : ""
-                }
-              >
-                ₹{customerInfo.credit_limit.toFixed(2)}
-              </span>
-            </div>
-          )}
+          <div>
+            <SectionLabel>Pump Details</SectionLabel>
+            <Combobox
+              options={pumps.map((p) => ({ value: p.code, label: p.name }))}
+              value={pumpCode}
+              onChange={setPumpCode}
+              placeholder="Pump (optional)"
+            />
+          </div>
         </Card>
+
+        {/* Credit sales only — shows the customer's still-open order(s) so the biller can bill
+            against one instead of re-typing what was already agreed. */}
+        {paymentType === "credit" && pendingOrders.length > 0 && (
+          <Card color="orange">
+            <SectionLabel>Pending Order</SectionLabel>
+            {pendingOrders.length > 1 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {pendingOrders.map((order) => (
+                  <button
+                    key={order.order_no}
+                    onClick={() => setSelectedOrderNo(order.order_no)}
+                    className={`rounded-lg border px-3 py-1.5 text-sm ${
+                      selectedPendingOrder?.order_no === order.order_no
+                        ? "border-primary bg-primary/10"
+                        : "border-border"
+                    }`}
+                  >
+                    Order #{order.order_no}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedPendingOrder && (
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-fg-muted">
+                    <th className="py-1 pr-3 font-normal">Item</th>
+                    <th className="py-1 pr-3 font-normal">Ordered</th>
+                    <th className="py-1 pr-3 font-normal">Served</th>
+                    <th className="py-1 pr-3 font-normal">Pending</th>
+                    <th className="py-1 pr-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedPendingOrder.lines.map((line) => {
+                    const pending = line.qty_ordered - line.qty_served;
+                    return (
+                      <tr key={line.id} className="border-b border-border">
+                        <td className="py-1 pr-3">
+                          {items.find((i) => i.code === line.item_code)?.name ?? line.item_code}
+                        </td>
+                        <td className="py-1 pr-3">{line.qty_ordered}</td>
+                        <td className="py-1 pr-3">{line.qty_served}</td>
+                        <td className="py-1 pr-3">{pending.toFixed(3)}</td>
+                        <td className="py-1 pr-3">
+                          {pending > 0 && (
+                            <button
+                              onClick={() => selectPendingLine(line)}
+                              className="text-primary hover:underline"
+                            >
+                              Bill this
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        )}
 
         {/* Detail: line items */}
         <Card color="orange" className="overflow-x-auto">
@@ -411,7 +571,19 @@ export default function BillingPage() {
                 const rate = rateFor(line.item_code);
                 return (
                   <tr key={i} className="border-b border-border ">
-                    <td className="py-2 pr-4 font-medium text-fg">{item?.name ?? line.item_code}</td>
+                    <td className="py-2 pr-4 font-medium text-fg">
+                      {item?.name ?? line.item_code}
+                      {line.odometerOpening !== undefined && line.odometerClosing !== undefined && (
+                        <div className="text-xs font-normal text-fg-muted">
+                          {line.odometerOpening} → {line.odometerClosing} km
+                          {line.qty > 0 &&
+                            ` · ${((line.odometerClosing - line.odometerOpening) / line.qty).toFixed(2)} km/l`}
+                        </div>
+                      )}
+                      {line.orderLineId !== undefined && (
+                        <div className="text-xs font-normal text-fg-muted">Fulfills pending order</div>
+                      )}
+                    </td>
                     <td className="py-2 pr-4">{line.qty}</td>
                     <td className="py-2 pr-4">₹{rate.toFixed(2)}</td>
                     <td className="py-2 pr-4">₹{(rate * line.qty).toFixed(2)}</td>
@@ -526,6 +698,66 @@ export default function BillingPage() {
             </button>
           </div>
         </Card>
+
+        {/* Below Item Add: mileage capture for a tank-fill line. Legacy MAGE only ever tracked
+            one odometer pair per bill, so this is capped to a single mileage line per sale. */}
+        {(selectedItemTracksMileage || hasMileageLine) && (
+          <Card color="orange">
+            <SectionLabel>Mileage Check</SectionLabel>
+            {hasMileageLine && mileageLine ? (
+              <p className="text-sm text-fg-muted">
+                Mileage recorded for this sale — <span className="font-medium text-fg">{mileageLineItemName}</span>{" "}
+                {mileageLine.odometerOpening} → {mileageLine.odometerClosing} km. Only one mileage entry is allowed
+                per sale.
+              </p>
+            ) : (
+              <>
+                <label className="mb-2 flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={lineTrackMileage}
+                    onChange={(e) => setLineTrackMileage(e.target.checked)}
+                  />
+                  Record mileage for this fill ({selectedItemName})
+                </label>
+                {lineTrackMileage && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      placeholder="Opening km"
+                      className="w-32 rounded-lg border border-border px-2 py-1.5 text-sm bg-bg-elevated"
+                      value={lineOdoOpening}
+                      onChange={(e) => setLineOdoOpening(e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      placeholder="Closing km"
+                      className="w-32 rounded-lg border border-border px-2 py-1.5 text-sm bg-bg-elevated"
+                      value={lineOdoClosing}
+                      onChange={(e) => setLineOdoClosing(e.target.value)}
+                    />
+                    {lineOdoOpening && lineOdoClosing && Number(lineOdoClosing) > Number(lineOdoOpening) && (
+                      <span className="text-sm text-fg-muted">
+                        Mileage:{" "}
+                        {lineQty
+                          ? ((Number(lineOdoClosing) - Number(lineOdoOpening)) / Number(lineQty)).toFixed(2)
+                          : "—"}{" "}
+                        km/l
+                      </span>
+                    )}
+                    {lineOdoOpening && lineOdoClosing && Number(lineOdoClosing) <= Number(lineOdoOpening) && (
+                      <span className="text-sm text-error">Closing km must be greater than opening km</span>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </Card>
+        )}
 
         {invoice && (
           <div className="rounded-2xl border border-success/40 bg-success/10 p-4 text-sm  ">

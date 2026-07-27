@@ -9,15 +9,23 @@ export interface ResetSummary {
 
 /** Transactional/history tables — cleared on a "go live" reset. Deliberately excludes setup
  *  data (groups, items, customers, vehicles, fleet_cards, pumps, tenants, settings, users):
- *  that's the client's configuration work, not demo history, and shouldn't be lost. */
+ *  that's the client's configuration work, not demo history, and shouldn't be lost.
+ *
+ *  Order matters here — `PRAGMA foreign_keys = ON` (schema.ts) means a parent row can't be
+ *  deleted while a child still references it, so every table referencing `bills`/`order_lines`/
+ *  `orders` must be cleared before the table it references: bill_lines/pending_transactions/
+ *  mileage_log before bills; bill_lines (already gone) before order_lines; order_lines before
+ *  orders. */
 const TRANSACTIONAL_TABLES = [
   "bill_lines",
-  "bills",
   "pending_transactions",
+  "mileage_log",
+  "bills",
+  "order_lines",
+  "orders",
   "stock_daybook",
   "purchases",
   "receipts",
-  "mileage_log",
   "audit_logs",
   "shifts",
   "opening_balances",
@@ -31,6 +39,8 @@ const AUTOINCREMENT_TABLES = [
   "mileage_log",
   "audit_logs",
   "shifts",
+  "order_lines",
+  "orders",
 ];
 
 /**

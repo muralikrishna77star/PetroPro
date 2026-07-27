@@ -7,10 +7,12 @@ import type {
   BillLine,
   CashierSalesRow,
   Customer,
+  CustomerLoginResponse,
   FinYear,
   FleetCardSalesRow,
   Granularity,
   Group,
+  GroupItemSalesRow,
   GroupSalesRow,
   GstSummaryRow,
   Item,
@@ -19,6 +21,8 @@ import type {
   LedgerEntry,
   LoginResponse,
   MileageEntry,
+  Order,
+  OrderLine,
   PendingTransaction,
   Pump,
   Purchase,
@@ -30,6 +34,7 @@ import type {
   SettleResponse,
   Shift,
   StockRow,
+  StockSummaryRow,
   Tenant,
   VehicleSalesRow,
 } from "@petropro/shared-types";
@@ -42,10 +47,12 @@ export type {
   BillLine,
   CashierSalesRow,
   Customer,
+  CustomerLoginResponse,
   FinYear,
   FleetCardSalesRow,
   Granularity,
   Group,
+  GroupItemSalesRow,
   GroupSalesRow,
   GstSummaryRow,
   Item,
@@ -54,6 +61,8 @@ export type {
   LedgerEntry,
   LoginResponse,
   MileageEntry,
+  Order,
+  OrderLine,
   PendingTransaction,
   Pump,
   Purchase,
@@ -65,6 +74,7 @@ export type {
   SettleResponse,
   Shift,
   StockRow,
+  StockSummaryRow,
   Tenant,
   VehicleSalesRow,
 };
@@ -192,8 +202,15 @@ export const api = {
       customerCode?: string;
       vehicleNo?: string;
       orderNo?: string;
+      fulfillOrderNo?: number;
       pumpCode?: string;
-      lines: { item_code: string; qty: number; odometer?: number }[];
+      lines: {
+        item_code: string;
+        qty: number;
+        odometer?: number;
+        odometerOpening?: number;
+        orderLineId?: number;
+      }[];
     },
   ) => request<SettleResponse>("/bills", { method: "POST", token, body }),
 
@@ -218,11 +235,40 @@ export const api = {
 
   createCustomer: (
     token: string,
-    body: { code: string; name: string; credit_limit?: number; service_charge?: number },
+    body: { code: string; name: string; credit_limit?: number; service_charge?: number; email?: string },
   ) => request<Customer>("/customers", { method: "POST", token, body }),
+
+  updateCustomer: (
+    token: string,
+    code: string,
+    body: {
+      name: string;
+      address?: string | null;
+      print_name?: string | null;
+      phone?: string | null;
+      credit_limit?: number;
+      service_charge?: number;
+      tin_no?: string | null;
+      gst_no?: string | null;
+      email?: string | null;
+      joined_on?: string | null;
+    },
+  ) => request<Customer>(`/customers/${code}`, { method: "PUT", token, body }),
+
+  setCustomerPassword: (token: string, code: string) =>
+    request<{ code: string; temporaryPassword: string }>(`/customers/${code}/set-password`, {
+      method: "POST",
+      token,
+      body: {},
+    }),
 
   setOpeningBalance: (token: string, code: string, body: { op_date: string; op_balance: number }) =>
     request(`/customers/${code}/opening-balance`, { method: "POST", token, body }),
+
+  /** A customer's pending orders (open/partially served) — used by the Billing page's Pending
+   *  Order section when fulfilling a Credit sale. */
+  listCustomerOrders: (token: string, customerCode: string) =>
+    request<Order[]>(`/orders?customer_code=${customerCode}`, { token }),
 
   listPurchases: (token: string, itemCode?: string) =>
     request<Purchase[]>(`/purchases${itemCode ? `?item_code=${itemCode}` : ""}`, { token }),
@@ -267,6 +313,12 @@ export const api = {
     return request<StockRow[]>(`/reports/stock?${params}`, { token });
   },
 
+  getStockSummary: (token: string, from: string, to: string, granularity: Granularity, itemCode?: string) => {
+    const params = new URLSearchParams({ from, to, granularity });
+    if (itemCode) params.set("item_code", itemCode);
+    return request<StockSummaryRow[]>(`/reports/stock-summary?${params}`, { token });
+  },
+
   getPurchaseReport: (token: string, from: string, to: string, itemCode?: string) => {
     const params = new URLSearchParams({ from, to });
     if (itemCode) params.set("item_code", itemCode);
@@ -278,12 +330,12 @@ export const api = {
 
   getSalesReport: (
     token: string,
-    groupBy: "item" | "cashier" | "group",
+    groupBy: "item" | "cashier" | "group" | "group-items",
     from: string,
     to: string,
     granularity: Granularity,
   ) =>
-    request<(ItemSalesRow | CashierSalesRow | GroupSalesRow)[]>(
+    request<(ItemSalesRow | CashierSalesRow | GroupSalesRow | GroupItemSalesRow)[]>(
       `/reports/sales?groupBy=${groupBy}&from=${from}&to=${to}&granularity=${granularity}`,
       { token },
     ),
@@ -362,4 +414,19 @@ export const api = {
       token,
       body: {},
     }),
+};
+
+/** The customer portal's own client — kept separate from `api` above since it authenticates
+ *  with a customer session token (lib/customerAuth.ts), never a staff one. */
+export const customerApi = {
+  login: (email: string, password: string) =>
+    request<CustomerLoginResponse>("/customer/auth/login", { method: "POST", body: { email, password } }),
+
+  listOrders: (token: string) => request<Order[]>("/customer/orders", { token }),
+
+  createOrder: (token: string, body: { lines: { item_code: string; qty: number }[] }) =>
+    request<Order>("/customer/orders", { method: "POST", token, body }),
+
+  cancelOrder: (token: string, orderNo: number) =>
+    request<Order>(`/customer/orders/${orderNo}/cancel`, { method: "POST", token, body: {} }),
 };

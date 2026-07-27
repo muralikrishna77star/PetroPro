@@ -262,6 +262,28 @@ export function applySchema(db: DatabaseSync): void {
       running_date TEXT NOT NULL
     );
     INSERT OR IGNORE INTO business_date (id, running_date) VALUES (1, date('now'));
+
+    -- Phase 6: customer-placed orders, served incrementally across one or more bills until
+    -- every line's qty_served reaches qty_ordered (see services/orderFulfillment hookup in
+    -- services/billing.ts). No legacy analog — the FoxPro system's "order_no" (see bills.order_no
+    -- above) was always just a free-text credit-sale reference, never a real order entity.
+    CREATE TABLE IF NOT EXISTS orders (
+      order_no INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_code TEXT NOT NULL REFERENCES customers(code),
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      cancelled_at TEXT,
+      cancelled_by TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS order_lines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_no INTEGER NOT NULL REFERENCES orders(order_no),
+      item_code TEXT NOT NULL REFERENCES items(code),
+      qty_ordered REAL NOT NULL,
+      qty_served REAL NOT NULL DEFAULT 0,
+      rate_at_order REAL NOT NULL
+    );
   `);
 
   ensureColumn(db, "bills", "cancelled_by", "TEXT REFERENCES users(user_id)");
@@ -272,6 +294,9 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "pending_transactions", "pump_code", "TEXT REFERENCES pumps(code)");
   ensureColumn(db, "tenants", "payment_qr_code", "TEXT");
   ensureColumn(db, "users", "active", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "customers", "email", "TEXT");
+  ensureColumn(db, "customers", "password_hash", "TEXT");
+  ensureColumn(db, "bill_lines", "order_line_id", "INTEGER REFERENCES order_lines(id)");
 
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_transactions_client_ref ON pending_transactions(client_ref) WHERE client_ref IS NOT NULL",

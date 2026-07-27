@@ -5,6 +5,11 @@
 export interface BillingDraftLine {
   item_code: string;
   qty: number;
+  /** Tank-fill mileage reading, captured together at billing time (see billing/page.tsx). */
+  odometerOpening?: number;
+  odometerClosing?: number;
+  /** Set when this line was added from the Pending Order section to fulfill a specific order line. */
+  orderLineId?: number;
 }
 
 export interface BillingDraft {

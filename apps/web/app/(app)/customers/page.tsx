@@ -29,6 +29,13 @@ export default function CustomersPage() {
   const [opError, setOpError] = useState<string | null>(null);
   const [opMessage, setOpMessage] = useState<string | null>(null);
 
+  const [emailInput, setEmailInput] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailMessage, setEmailMessage] = useState<string | null>(null);
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+
   function refreshCustomers(token: string) {
     api.listCustomers(token).then(setCustomers).catch(() => undefined);
   }
@@ -45,6 +52,11 @@ export default function CustomersPage() {
     setReceiptMessage(null);
     setLastReceipt(null);
     setOpMessage(null);
+    setEmailInput(customer.email ?? "");
+    setEmailError(null);
+    setEmailMessage(null);
+    setPasswordError(null);
+    setTemporaryPassword(null);
     if (canViewLedger) {
       try {
         setLedger(await api.getCustomerLedger(session.token, customer.code));
@@ -116,11 +128,40 @@ export default function CustomersPage() {
     }
   }
 
+  async function handleSaveEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session || !selected) return;
+    setEmailError(null);
+    setEmailMessage(null);
+    try {
+      const updated = await api.updateCustomer(session.token, selected.code, { ...selected, email: emailInput });
+      setSelected(updated);
+      setEmailMessage("Email saved.");
+    } catch (err) {
+      setEmailError(err instanceof ApiError ? err.message : "Could not save email");
+    }
+  }
+
+  async function handleSetPassword() {
+    if (!session || !selected) return;
+    setPasswordError(null);
+    setTemporaryPassword(null);
+    setSettingPassword(true);
+    try {
+      const result = await api.setCustomerPassword(session.token, selected.code);
+      setTemporaryPassword(result.temporaryPassword);
+    } catch (err) {
+      setPasswordError(err instanceof ApiError ? err.message : "Could not set password");
+    } finally {
+      setSettingPassword(false);
+    }
+  }
+
   if (!session) return null;
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto grid w-full max-w-4xl flex-1 grid-cols-1 gap-8 px-4 py-8 md:grid-cols-2">
+      <div className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-8 px-4 py-8 md:grid-cols-2">
         <Card color="emerald">
           <h1 className="mb-4 text-xl font-semibold text-primary">Customers</h1>
 
@@ -257,6 +298,42 @@ export default function CustomersPage() {
                   {opMessage && <p className="text-sm text-success">{opMessage}</p>}
                   <button className="rounded-lg bg-primary px-3 py-1.5 text-sm text-white">Set</button>
                 </form>
+              )}
+
+              {(session.role === "super_admin" || session.role === "owner") && (
+                <div className="rounded-lg border border-border p-3 ">
+                  <h3 className="mb-2 text-sm font-medium">Order Entry login</h3>
+                  <form onSubmit={handleSaveEmail} className="mb-2 flex gap-2">
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      required
+                    />
+                    <button className="rounded-lg bg-primary px-3 py-1.5 text-sm text-white">Save</button>
+                  </form>
+                  {emailError && <p className="mb-2 text-sm text-error">{emailError}</p>}
+                  {emailMessage && <p className="mb-2 text-sm text-success">{emailMessage}</p>}
+
+                  <button
+                    type="button"
+                    onClick={handleSetPassword}
+                    disabled={settingPassword || !selected.email}
+                    title={!selected.email ? "Save an email first" : undefined}
+                    className="rounded-lg border border-border px-3 py-1.5 text-sm disabled:opacity-50"
+                  >
+                    {settingPassword ? "Setting..." : "Set/reset password"}
+                  </button>
+                  {passwordError && <p className="mt-2 text-sm text-error">{passwordError}</p>}
+                  {temporaryPassword && (
+                    <p className="mt-2 text-sm text-success">
+                      Temporary password: <span className="font-mono font-medium">{temporaryPassword}</span> — relay
+                      this to the customer, it won&apos;t be shown again.
+                    </p>
+                  )}
+                </div>
               )}
 
               {canViewLedger && (

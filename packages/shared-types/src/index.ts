@@ -75,6 +75,7 @@ export interface BillLine {
   rate: number;
   amount: number;
   tax_amount: number;
+  order_line_id: number | null;
 }
 
 export interface Bill {
@@ -108,6 +109,38 @@ export interface Customer {
   credit_limit: number;
   service_charge: number;
   gst_no: string | null;
+  email: string | null;
+}
+
+/** A customer's own order-placement login (apps/api's routes/customerAuth.ts) — a separate
+ *  audience from staff `LoginResponse`/`Role` above, never interchangeable with it. */
+export interface CustomerLoginResponse {
+  token: string;
+  customer: { code: string; name: string };
+}
+
+export type OrderStatus = "open" | "partially_served" | "completed" | "cancelled";
+
+export interface OrderLine {
+  id: number;
+  order_no: number;
+  item_code: string;
+  qty_ordered: number;
+  qty_served: number;
+  rate_at_order: number;
+}
+
+/** A customer-placed order, fulfilled incrementally across one or more Credit bills until every
+ *  line's qty_served reaches qty_ordered — unrelated to `Bill.order_no`, which is just a
+ *  free-text credit-sale reference string typed in by the cashier. */
+export interface Order {
+  order_no: number;
+  customer_code: string;
+  status: OrderStatus;
+  created_at: string;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  lines: OrderLine[];
 }
 
 export interface Purchase {
@@ -163,6 +196,19 @@ export interface StockRow {
   closed: number;
 }
 
+/** Opening/purchases/consumption/closing per item, bucketed by period (Day/Week/Month/Quarter/
+ *  Half-Year/Year) — distinct from `StockRow`'s raw per-day rows, which carry the running
+ *  `balance` the dashboard depends on. */
+export interface StockSummaryRow {
+  bucket: string;
+  item_code: string;
+  item_name: string;
+  opening: number;
+  purchases: number;
+  consumption: number;
+  closing: number;
+}
+
 export interface MileageEntry {
   id: number;
   bill_no: number;
@@ -196,6 +242,18 @@ export interface GroupSalesRow {
   bucket: string;
   group_code: string | null;
   group_name: string | null;
+  qty: number;
+  amount: number;
+  tax_amount: number;
+}
+
+/** Item-level rows carrying their group, so the report page can nest items beneath each group. */
+export interface GroupItemSalesRow {
+  bucket: string;
+  group_code: string | null;
+  group_name: string | null;
+  item_code: string;
+  item_name: string;
   qty: number;
   amount: number;
   tax_amount: number;
@@ -242,7 +300,7 @@ export type SettingKey =
 
 export type Settings = Record<SettingKey, "YES" | "NO">;
 
-export type Granularity = "day" | "month" | "year";
+export type Granularity = "day" | "week" | "month" | "quarter" | "half-year" | "year";
 
 export interface Shift {
   id: number;

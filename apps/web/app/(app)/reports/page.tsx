@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   api,
   ApiError,
@@ -8,12 +8,13 @@ import {
   type Granularity,
   type ItemSalesRow,
   type CashierSalesRow,
-  type GroupSalesRow,
+  type GroupItemSalesRow,
   type Bill,
   type VehicleSalesRow,
   type FleetCardSalesRow,
   type GstSummaryRow,
   type StockRow,
+  type StockSummaryRow,
   type Purchase,
   type MileageEntry,
 } from "@/lib/api";
@@ -28,6 +29,7 @@ type ReportType =
   | "vehicles"
   | "fleet-cards"
   | "gst"
+  | "stock-summary"
   | "stock"
   | "purchases"
   | "mileage";
@@ -40,9 +42,19 @@ const REPORT_LABELS: Record<ReportType, string> = {
   vehicles: "Vehicle-wise Sales",
   "fleet-cards": "Fleet Card Sales",
   gst: "GST Summary",
+  "stock-summary": "Stock Report",
   stock: "Stock Day-book",
   purchases: "Purchases",
   mileage: "Vehicle Mileage",
+};
+
+const GRANULARITY_LABELS: Record<Granularity, string> = {
+  day: "Day",
+  week: "Weekly",
+  month: "Monthly",
+  quarter: "Quarterly",
+  "half-year": "Half Yearly",
+  year: "Yearly",
 };
 
 function todayStr() {
@@ -61,8 +73,15 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const needsGranularity = reportType.startsWith("sales-") || reportType === "gst";
-  const needsItemFilter = reportType === "stock" || reportType === "purchases";
+  // Default "to" to the running billing date (docs: businessDateRepo) rather than the wall-clock
+  // date — bills post against that date, so it's the last date data actually exists for.
+  useEffect(() => {
+    if (!session) return;
+    api.getBusinessDate(session.token).then((r) => setTo(r.date)).catch(() => undefined);
+  }, [session]);
+
+  const needsGranularity = reportType.startsWith("sales-") || reportType === "gst" || reportType === "stock-summary";
+  const needsItemFilter = reportType === "stock" || reportType === "stock-summary" || reportType === "purchases";
   const needsVehicle = reportType === "mileage";
 
   async function runReport() {
@@ -78,7 +97,7 @@ export default function ReportsPage() {
           setRows(await api.getSalesReport(session.token, "cashier", from, to, granularity));
           break;
         case "sales-group":
-          setRows(await api.getSalesReport(session.token, "group", from, to, granularity));
+          setRows(await api.getSalesReport(session.token, "group-items", from, to, granularity));
           break;
         case "bills":
           setRows(await api.getBillRegister(session.token, from, to));
@@ -91,6 +110,9 @@ export default function ReportsPage() {
           break;
         case "gst":
           setRows(await api.getGstSummary(session.token, from, to, granularity));
+          break;
+        case "stock-summary":
+          setRows(await api.getStockSummary(session.token, from, to, granularity, itemCode || undefined));
           break;
         case "stock":
           setRows(await api.getStockReport(session.token, from, to, itemCode || undefined));
@@ -172,9 +194,11 @@ export default function ReportsPage() {
                 value={granularity}
                 onChange={(e) => setGranularity(e.target.value as Granularity)}
               >
-                <option value="day">Day</option>
-                <option value="month">Month</option>
-                <option value="year">Year</option>
+                {Object.entries(GRANULARITY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -262,13 +286,7 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
       );
     }
     case "sales-group": {
-      const data = rows as GroupSalesRow[];
-      return (
-        <Table
-          headers={["Period", "Group", "Qty", "Amount", "Tax"]}
-          rows={data.map((r) => [r.bucket, r.group_name ?? r.group_code ?? "—", r.qty, money(r.amount), money(r.tax_amount)])}
-        />
-      );
+      return <GroupItemSalesTable rows={rows as GroupItemSalesRow[]} money={money} />;
     }
     case "bills": {
       const data = rows as Bill[];
@@ -303,6 +321,22 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
         <Table
           headers={["Period", "Tax %", "Taxable value", "Tax amount", "Total"]}
           rows={data.map((r) => [r.bucket, `${r.tax_percent}%`, money(r.taxable_value), money(r.tax_amount), money(r.total)])}
+        />
+      );
+    }
+    case "stock-summary": {
+      const data = rows as StockSummaryRow[];
+      return (
+        <Table
+          headers={["Period", "Item", "Opening", "Purchases", "Consumption", "Closing"]}
+          rows={data.map((r) => [
+            r.bucket,
+            `${r.item_name} (${r.item_code})`,
+            r.opening,
+            r.purchases,
+            r.consumption,
+            r.closing,
+          ])}
         />
       );
     }
@@ -367,6 +401,74 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
               ))}
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Group-wise sales with each group's items nested beneath it — a bold group subtotal row
+ *  (rolled up client-side from the same item rows the API already returns, so there's no
+ *  second query) followed by its indented item rows, repeated per period bucket. */
+function GroupItemSalesTable({ rows, money }: { rows: GroupItemSalesRow[]; money: (n: number) => string }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-fg-muted">No data. Choose a report and click &ldquo;Run report&rdquo;.</p>;
+  }
+
+  const groups: { bucket: string; group_code: string | null; group_name: string | null; items: GroupItemSalesRow[] }[] =
+    [];
+  for (const row of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.bucket === row.bucket && last.group_code === row.group_code) {
+      last.items.push(row);
+    } else {
+      groups.push({ bucket: row.bucket, group_code: row.group_code, group_name: row.group_name, items: [row] });
+    }
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="py-2 pr-4 font-medium">Period</th>
+            <th className="py-2 pr-4 font-medium">Group / Item</th>
+            <th className="py-2 pr-4 font-medium">Qty</th>
+            <th className="py-2 pr-4 font-medium">Amount</th>
+            <th className="py-2 pr-4 font-medium">Tax</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((group, gi) => {
+            const qty = group.items.reduce((sum, r) => sum + r.qty, 0);
+            const amount = group.items.reduce((sum, r) => sum + r.amount, 0);
+            const tax = group.items.reduce((sum, r) => sum + r.tax_amount, 0);
+            return (
+              <Fragment key={`${group.bucket}-${group.group_code}-${gi}`}>
+                <tr className="border-b border-border bg-card-hover font-semibold">
+                  <td className="py-2 pr-4">{group.bucket}</td>
+                  <td className="py-2 pr-4">{group.group_name ?? group.group_code ?? "—"}</td>
+                  <td className="py-2 pr-4">{qty}</td>
+                  <td className="py-2 pr-4">{money(amount)}</td>
+                  <td className="py-2 pr-4">{money(tax)}</td>
+                </tr>
+                {group.items.map((item, ii) => (
+                  <tr
+                    key={`${group.bucket}-${group.group_code}-${item.item_code}-${ii}`}
+                    className="border-b border-border text-fg-muted"
+                  >
+                    <td className="py-1.5 pr-4" />
+                    <td className="py-1.5 pr-4 pl-6">
+                      {item.item_name} ({item.item_code})
+                    </td>
+                    <td className="py-1.5 pr-4">{item.qty}</td>
+                    <td className="py-1.5 pr-4">{money(item.amount)}</td>
+                    <td className="py-1.5 pr-4">{money(item.tax_amount)}</td>
+                  </tr>
+                ))}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

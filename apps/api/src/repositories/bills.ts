@@ -29,6 +29,7 @@ export interface BillLine {
   tax_amount: number;
   is_retail: number;
   service_charge: number;
+  order_line_id: number | null;
 }
 
 export interface NewBillLine {
@@ -41,6 +42,8 @@ export interface NewBillLine {
   tax_amount: number;
   is_retail?: boolean;
   service_charge?: number;
+  /** Set when this line fulfills part of a customer's pending order (services/orders.ts). */
+  order_line_id?: number | null;
 }
 
 export interface NewBill {
@@ -113,8 +116,8 @@ export const billsRepo = {
 
       const insertLine = db.prepare(
         `INSERT INTO bill_lines (
-          bill_no, item_code, qty, rate, rate_pretax, amount, tax_percent, tax_amount, is_retail, service_charge
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          bill_no, item_code, qty, rate, rate_pretax, amount, tax_percent, tax_amount, is_retail, service_charge, order_line_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const line of input.lines) {
         insertLine.run(
@@ -128,6 +131,7 @@ export const billsRepo = {
           line.tax_amount,
           line.is_retail === false ? 0 : 1,
           line.service_charge ?? 0,
+          line.order_line_id ?? null,
         );
       }
 

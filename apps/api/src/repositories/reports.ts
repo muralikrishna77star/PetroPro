@@ -1,11 +1,25 @@
 import { db } from "../db/client.js";
 import type { Bill } from "./bills.js";
 
-export type Granularity = "day" | "month" | "year";
+export type Granularity = "day" | "week" | "month" | "quarter" | "half-year" | "year";
 
+/** Quarter/half-year have no native strftime code, so they're built from the month number:
+ *  months 1-3/4-6/7-9/10-12 -> Q1-Q4 (integer division floors for positive ints in SQLite). */
 function bucketExpr(column: string, granularity: Granularity): string {
-  const format = granularity === "day" ? "%Y-%m-%d" : granularity === "month" ? "%Y-%m" : "%Y";
-  return `strftime('${format}', ${column})`;
+  switch (granularity) {
+    case "day":
+      return `strftime('%Y-%m-%d', ${column})`;
+    case "week":
+      return `strftime('%Y-W%W', ${column})`;
+    case "month":
+      return `strftime('%Y-%m', ${column})`;
+    case "quarter":
+      return `(strftime('%Y', ${column}) || '-Q' || ((CAST(strftime('%m', ${column}) AS INTEGER) - 1) / 3 + 1))`;
+    case "half-year":
+      return `(strftime('%Y', ${column}) || '-H' || ((CAST(strftime('%m', ${column}) AS INTEGER) - 1) / 6 + 1))`;
+    case "year":
+      return `strftime('%Y', ${column})`;
+  }
 }
 
 export interface ItemSalesRow {
@@ -34,6 +48,19 @@ export interface GroupSalesRow {
   tax_amount: number;
 }
 
+/** Item-level rows carrying their group, so the report page can nest items beneath each group
+ *  and roll up the group subtotal client-side from the same rows — one query instead of two. */
+export interface GroupItemSalesRow {
+  bucket: string;
+  group_code: string | null;
+  group_name: string | null;
+  item_code: string;
+  item_name: string;
+  qty: number;
+  amount: number;
+  tax_amount: number;
+}
+
 export interface VehicleSalesRow {
   vehicle_no: string;
   bill_count: number;
@@ -52,6 +79,16 @@ export interface GstSummaryRow {
   taxable_value: number;
   tax_amount: number;
   total: number;
+}
+
+export interface StockSummaryRow {
+  bucket: string;
+  item_code: string;
+  item_name: string;
+  opening: number;
+  purchases: number;
+  consumption: number;
+  closing: number;
 }
 
 export const reportsRepo = {
@@ -101,6 +138,23 @@ export const reportsRepo = {
          ORDER BY bucket, i.group_code`,
       )
       .all(from, to) as unknown as GroupSalesRow[];
+  },
+
+  salesByGroupItems(from: string, to: string, granularity: Granularity): GroupItemSalesRow[] {
+    const bucket = bucketExpr("b.bill_date", granularity);
+    return db
+      .prepare(
+        `SELECT ${bucket} AS bucket, i.group_code, g.name AS group_name, bl.item_code, i.name AS item_name,
+                SUM(bl.qty) AS qty, SUM(bl.amount) AS amount, SUM(bl.tax_amount) AS tax_amount
+         FROM bill_lines bl
+         JOIN bills b ON b.bill_no = bl.bill_no
+         JOIN items i ON i.code = bl.item_code
+         LEFT JOIN groups g ON g.code = i.group_code
+         WHERE b.status != 'cancelled' AND date(b.bill_date) BETWEEN ? AND ?
+         GROUP BY i.group_code, bl.item_code, bucket
+         ORDER BY bucket, i.group_code, bl.item_code`,
+      )
+      .all(from, to) as unknown as GroupItemSalesRow[];
   },
 
   /** Bill register — the "bill-wise" report is simply the filtered list of bills for a period. */
@@ -155,5 +209,36 @@ export const reportsRepo = {
          ORDER BY bucket, bl.tax_percent`,
       )
       .all(from, to) as unknown as GstSummaryRow[];
+  },
+
+  /** Opening/purchases/consumption/closing per item, bucketed by period — unlike stockRepo's raw
+   *  per-day rows (which carry a running `balance` the dashboard depends on and are left alone),
+   *  opening/closing here are the first/last day's values *within the bucket*, not summed, since
+   *  they're running balances rather than period totals (see the window-function CTE below). */
+  stockSummary(from: string, to: string, granularity: Granularity, itemCode?: string): StockSummaryRow[] {
+    const bucket = bucketExpr("sd.sdate", granularity);
+    const itemFilter = itemCode ? "AND sd.item_code = ?" : "";
+    const params = itemCode ? [from, to, itemCode] : [from, to];
+    return db
+      .prepare(
+        `WITH ordered AS (
+           SELECT sd.item_code, sd.sdate, sd.opening, sd.receipts, sd.sales, sd.closing,
+                  ${bucket} AS bucket,
+                  ROW_NUMBER() OVER (PARTITION BY sd.item_code, ${bucket} ORDER BY sd.sdate ASC) AS rn_asc,
+                  ROW_NUMBER() OVER (PARTITION BY sd.item_code, ${bucket} ORDER BY sd.sdate DESC) AS rn_desc
+           FROM stock_daybook sd
+           WHERE sd.sdate BETWEEN ? AND ? ${itemFilter}
+         )
+         SELECT o.bucket, o.item_code, i.name AS item_name,
+                MAX(CASE WHEN o.rn_asc = 1 THEN o.opening END) AS opening,
+                SUM(o.receipts) AS purchases,
+                SUM(o.sales) AS consumption,
+                MAX(CASE WHEN o.rn_desc = 1 THEN o.closing END) AS closing
+         FROM ordered o
+         JOIN items i ON i.code = o.item_code
+         GROUP BY o.item_code, o.bucket
+         ORDER BY o.bucket, o.item_code`,
+      )
+      .all(...params) as unknown as StockSummaryRow[];
   },
 };

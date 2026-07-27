@@ -6,6 +6,7 @@ import { customersRepo } from "../repositories/customers.js";
 import { stockRepo } from "../repositories/stock.js";
 import { businessDateRepo } from "../repositories/businessDate.js";
 import { mileageRepo } from "../repositories/mileage.js";
+import { ordersRepo } from "../repositories/orders.js";
 import { lineTotal } from "./tax.js";
 import { amountInWords } from "./money.js";
 
@@ -25,7 +26,14 @@ export interface SettleInput {
 export interface WalkInLineInput {
   item_code: string;
   qty: number;
+  /** Closing odometer reading (litres filled = qty). Paired with `odometerOpening` when the
+   *  cashier records both readings for a single tank-fill; otherwise mileage falls back to the
+   *  vehicle's last recorded reading (see mileageRepo.record). */
   odometer?: number;
+  odometerOpening?: number;
+  /** Set when this line is drawn against a specific line of a customer's pending order (a
+   *  wholly different concept from `orderNo` below — see `fulfillOrderNo`). */
+  orderLineId?: number;
 }
 
 export interface WalkInBillInput {
@@ -33,7 +41,10 @@ export interface WalkInBillInput {
   paymentType: string;
   customerCode?: string | null;
   vehicleNo?: string | null;
+  /** Free-text credit-sale PO reference, printed on the invoice — unrelated to `fulfillOrderNo`. */
   orderNo?: string | null;
+  /** Which of the customer's pending orders (repositories/orders.ts) this bill fulfills, if any. */
+  fulfillOrderNo?: number;
   pumpCode?: string | null;
   lines: WalkInLineInput[];
 }
@@ -60,7 +71,7 @@ function billTimestamp(businessDate: string): string {
   return `${businessDate} ${time}`;
 }
 
-function buildLine(itemCode: string, qty: number): NewBillLine {
+function buildLine(itemCode: string, qty: number, orderLineId?: number): NewBillLine {
   const item = itemsRepo.get(itemCode);
   if (!item) throw new Error(`Unknown item code: ${itemCode}`);
   const rate = item.price_retail;
@@ -74,6 +85,7 @@ function buildLine(itemCode: string, qty: number): NewBillLine {
     tax_percent: totals.taxPercent,
     tax_amount: totals.taxAmount,
     is_retail: true,
+    order_line_id: orderLineId ?? null,
   };
 }
 
@@ -150,7 +162,28 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
     throw new Error("A bill needs at least one line");
   }
 
-  const lines = input.lines.map((l) => buildLine(l.item_code, l.qty));
+  for (const line of input.lines) {
+    if (line.odometerOpening !== undefined && line.odometer !== undefined && line.odometer <= line.odometerOpening) {
+      throw new Error(`Closing odometer must be greater than opening odometer for ${line.item_code}`);
+    }
+  }
+
+  // Fulfilling a pending order: validate every tagged line up front (the order line exists,
+  // belongs to the order this bill claims to fulfill, and still has room) before anything posts —
+  // mirrors the credit-limit check below rather than discovering a problem after the bill exists.
+  for (const line of input.lines) {
+    if (line.orderLineId === undefined) continue;
+    const orderLine = ordersRepo.getLine(line.orderLineId);
+    if (!orderLine) throw new Error(`Order line ${line.orderLineId} not found`);
+    if (input.fulfillOrderNo !== undefined && orderLine.order_no !== input.fulfillOrderNo) {
+      throw new Error(`Order line ${line.orderLineId} does not belong to order ${input.fulfillOrderNo}`);
+    }
+    if (orderLine.qty_served + line.qty > orderLine.qty_ordered + 1e-9) {
+      throw new Error(`Fulfilling ${line.qty} would exceed the ordered quantity for order line ${line.orderLineId}`);
+    }
+  }
+
+  const lines = input.lines.map((l) => buildLine(l.item_code, l.qty, l.orderLineId));
   const grandTotal = lines.reduce((sum, l) => sum + l.amount, 0);
 
   const vehicle = input.vehicleNo ? vehiclesRepo.findOrCreate(input.vehicleNo) : undefined;
@@ -186,6 +219,7 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
           billNo: bill.bill_no,
           vehicleNo: vehicle.vehicle_no,
           itemCode: inputLine.item_code,
+          odometerOpening: inputLine.odometerOpening,
           odometerCurr: inputLine.odometer,
           qty: lines[i].qty,
         });
@@ -195,6 +229,12 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
 
   if (customerCode && input.paymentType === "credit") {
     customersRepo.adjustDueAmount(customerCode, bill.grand_total);
+  }
+
+  for (const [i, inputLine] of input.lines.entries()) {
+    if (inputLine.orderLineId !== undefined) {
+      ordersRepo.applyFulfillment(inputLine.orderLineId, lines[i].qty);
+    }
   }
 
   return {

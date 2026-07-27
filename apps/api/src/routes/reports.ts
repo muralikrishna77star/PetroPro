@@ -12,10 +12,13 @@ interface RangeQuery {
   granularity?: string;
 }
 
+const GRANULARITIES: Granularity[] = ["day", "week", "month", "quarter", "half-year", "year"];
+
 function resolveRange(query: RangeQuery): { from: string; to: string; granularity: Granularity } {
   const today = new Date().toISOString().slice(0, 10);
-  const granularity: Granularity =
-    query.granularity === "month" || query.granularity === "year" ? query.granularity : "day";
+  const granularity: Granularity = GRANULARITIES.includes(query.granularity as Granularity)
+    ? (query.granularity as Granularity)
+    : "day";
   return { from: query.from ?? "0000-01-01", to: query.to ?? today, granularity };
 }
 
@@ -32,11 +35,13 @@ export default async function reportRoutes(fastify: FastifyInstance) {
           return reportsRepo.salesByCashier(from, to, granularity);
         case "group":
           return reportsRepo.salesByGroup(from, to, granularity);
+        case "group-items":
+          return reportsRepo.salesByGroupItems(from, to, granularity);
         case "item":
         case undefined:
           return reportsRepo.salesByItem(from, to, granularity);
         default:
-          return reply.code(400).send({ error: "groupBy must be item, cashier, or group" });
+          return reply.code(400).send({ error: "groupBy must be item, cashier, group, or group-items" });
       }
     },
   );
@@ -92,6 +97,17 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     async (request) => {
       const { from, to } = resolveRange(request.query);
       return stockRepo.listRange(from, to, request.query.item_code);
+    },
+  );
+
+  // Opening/purchases/consumption/closing per item, bucketed by period — distinct from the raw
+  // per-day "Stock Day-book" above, which carries the running `balance` the dashboard depends on.
+  fastify.get<{ Querystring: RangeQuery & { item_code?: string } }>(
+    "/reports/stock-summary",
+    { preHandler: managerOnly },
+    async (request) => {
+      const { from, to, granularity } = resolveRange(request.query);
+      return reportsRepo.stockSummary(from, to, granularity, request.query.item_code);
     },
   );
 
