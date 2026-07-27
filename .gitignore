@@ -25,5 +25,10 @@ coverage/
 # redundant zip of legacy/Workarea (already tracked unpacked below)
 PetBro.zip
 
+# Real legacy DBF snapshot used for the FY2025-26 migration — contains real customer/vehicle
+# data, must never be committed or uploaded to any build/deploy service.
+WorkareaTill29Mar2026/
+WorkareaTill29Mar2026.zip
+
 # Vercel CLI project link (machine-local, per Vercel's own convention)
 .vercel
