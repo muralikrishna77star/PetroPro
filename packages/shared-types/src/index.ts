@@ -366,3 +366,34 @@ export interface BackupFile {
   sizeBytes: number;
   createdAt: string;
 }
+
+/** WhatsApp Invoice Module (Community edition) — see
+ *  PetroPro_WhatsApp_Invoice_Module_Claude_Prompt.pdf. `whatsapp_business`/`email`/`sms` are
+ *  architected channels with no real backend yet (Professional edition); the frontend's
+ *  CommunicationService always resolves them to a "coming soon" result. */
+export type CommunicationChannel = "whatsapp" | "whatsapp_business" | "email" | "sms" | "share_pdf";
+
+export type CommunicationStatus = "sent" | "failed";
+
+export interface CommunicationSettings {
+  whatsapp_enabled: boolean;
+  default_country_code: string;
+  /** Supports {customerName}, {tenantName}, {billNo}, {amount} placeholders. */
+  message_template: string;
+  /** Whether clicking WhatsApp opens wa.me immediately (once a valid number is known) or shows
+   *  a confirm/edit step first. */
+  auto_open_whatsapp: boolean;
+  /** Stored for the Professional-edition provider architecture; not read by any active code path. */
+  business_api_enabled: boolean;
+}
+
+export interface CommunicationLogEntry {
+  id: number;
+  bill_no: number;
+  customer_code: string | null;
+  mobile_number: string | null;
+  channel: CommunicationChannel;
+  status: CommunicationStatus;
+  remarks: string | null;
+  created_at: string;
+}

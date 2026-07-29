@@ -6,6 +6,10 @@ import type {
   Bill,
   BillLine,
   CashierSalesRow,
+  CommunicationChannel,
+  CommunicationLogEntry,
+  CommunicationSettings,
+  CommunicationStatus,
   Customer,
   CustomerLoginResponse,
   FinYear,
@@ -48,6 +52,10 @@ export type {
   Bill,
   BillLine,
   CashierSalesRow,
+  CommunicationChannel,
+  CommunicationLogEntry,
+  CommunicationSettings,
+  CommunicationStatus,
   Customer,
   CustomerLoginResponse,
   FinYear,
@@ -427,6 +435,26 @@ export const api = {
       token,
       body: {},
     }),
+
+  getCommunicationSettings: (token: string) => request<CommunicationSettings>("/communication/settings", { token }),
+
+  updateCommunicationSettings: (token: string, body: Partial<CommunicationSettings>) =>
+    request<CommunicationSettings>("/communication/settings", { method: "PUT", token, body }),
+
+  logCommunication: (
+    token: string,
+    body: {
+      bill_no: number;
+      customer_code?: string | null;
+      mobile_number?: string | null;
+      channel: CommunicationChannel;
+      status: CommunicationStatus;
+      remarks?: string | null;
+    },
+  ) => request<CommunicationLogEntry>("/communication/log", { method: "POST", token, body }),
+
+  getCommunicationLog: (token: string, billNo?: number) =>
+    request<CommunicationLogEntry[]>(`/communication/log${billNo ? `?bill_no=${billNo}` : ""}`, { token }),
 };
 
 /** The customer portal's own client — kept separate from `api` above since it authenticates

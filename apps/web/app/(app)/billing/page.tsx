@@ -18,6 +18,7 @@ import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
 import { PaymentQrPanel } from "@/components/PaymentQrPanel";
+import { SendInvoiceButton } from "@/components/SendInvoiceButton";
 import { deleteDraft, listDrafts, saveDraft, type BillingDraft, type BillingDraftLine } from "@/lib/billingDrafts";
 import { queueBill, getQueuedBills, flushBillQueue } from "@/lib/offlineQueue";
 
@@ -67,6 +68,13 @@ export default function BillingPage() {
   const [pendingOrderLineTag, setPendingOrderLineTag] = useState<number | null>(null);
   const [lines, setLines] = useState<BillingDraftLine[]>([]);
   const [invoice, setInvoice] = useState<SettleResponse | null>(null);
+  // Snapshot of who the bill was for, captured before resetForm() clears customerCode/
+  // customerInfo — SendInvoiceButton (WhatsApp Invoice Module) needs it after the form resets.
+  const [invoiceCustomer, setInvoiceCustomer] = useState<Customer | null>(null);
+  // undefined = still resolving (or nothing looked up yet), null = resolved: no customer on this
+  // bill. Distinguishing the two matters for SendInvoiceButton below — it shouldn't mount with a
+  // stale/empty customerPhone while the async lookup for a *known* customer_code is in flight.
+  const [lookupCustomer, setLookupCustomer] = useState<Customer | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [queuedNotice, setQueuedNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -344,6 +352,7 @@ export default function BillingPage() {
         lines: billLines,
       });
       setInvoice(result);
+      setInvoiceCustomer(paymentType === "credit" ? customerInfo : null);
       resetForm();
       refreshRecentBills();
       if (autoPrint) {
@@ -404,9 +413,21 @@ export default function BillingPage() {
     if (!session || !lookupBillNo) return;
     setLookupError(null);
     setLookupResult(null);
+    setLookupCustomer(undefined);
     try {
       const result = await api.getBill(session.token, Number(lookupBillNo));
       setLookupResult(result);
+      // For SendInvoiceButton (WhatsApp Invoice Module) to auto-fill the customer's number —
+      // the bill only carries customer_code, not phone/name. No customer on the bill resolves
+      // immediately (null); a real customer_code resolves once the fetch below completes.
+      if (result.bill.customer_code) {
+        api
+          .getCustomer(session.token, result.bill.customer_code)
+          .then(setLookupCustomer)
+          .catch(() => setLookupCustomer(null));
+      } else {
+        setLookupCustomer(null);
+      }
     } catch (err) {
       setLookupError(err instanceof ApiError ? err.message : "Bill not found");
     }
@@ -850,6 +871,17 @@ export default function BillingPage() {
             >
               Print Bill
             </button>
+            <SendInvoiceButton
+              key={invoice.bill.bill_no}
+              token={session.token}
+              billNo={invoice.bill.bill_no}
+              amount={invoice.bill.grand_total}
+              tenantName={tenant?.name ?? "PetroPro"}
+              customerCode={invoiceCustomer?.code}
+              customerName={invoiceCustomer?.name}
+              customerPhone={invoiceCustomer?.phone}
+              className="mt-3 ml-2"
+            />
           </div>
         )}
 
@@ -904,6 +936,18 @@ export default function BillingPage() {
                 >
                   Print Bill
                 </button>
+                {lookupResult.bill.status !== "cancelled" && lookupCustomer !== undefined && (
+                  <SendInvoiceButton
+                    key={lookupResult.bill.bill_no}
+                    token={session.token}
+                    billNo={lookupResult.bill.bill_no}
+                    amount={lookupResult.bill.grand_total}
+                    tenantName={tenant?.name ?? "PetroPro"}
+                    customerCode={lookupCustomer?.code}
+                    customerName={lookupCustomer?.name}
+                    customerPhone={lookupCustomer?.phone}
+                  />
+                )}
                 {canCancel && lookupResult.bill.status !== "cancelled" && (
                   <button
                     onClick={handleCancel}

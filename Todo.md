@@ -287,6 +287,85 @@ project rather than relying on code review alone.
 - The Combobox's 50-row render cap hasn't been stress-tested against a catalog larger than this
   demo's ~69 items — fine today, worth revisiting if the item master grows materially.
 
+## Session 16 — WhatsApp Invoice Module, Community edition
+
+User asked to build `PetroPro_WhatsApp_Invoice_Module_Claude_Prompt.pdf` — a module brief that had
+been sitting untracked/unstarted since it was first mentioned at the end of Session 15. Built
+Phase 1 (Community edition) exactly as scoped: no WhatsApp Business API, no browser automation, no
+unofficial WhatsApp client library — just a `wa.me` deep link, the same one a person would type by
+hand, plus a manual-PDF-attach notice. The Professional-edition provider architecture (WhatsApp
+Business, Email, SMS) is built to the same interface but stubbed "coming soon," per the brief.
+
+- [x] **Backend**: `communication_settings` (singleton: `whatsapp_enabled`, `default_country_code`,
+      `message_template`, `auto_open_whatsapp`, `business_api_enabled`) and `communication_log`
+      (one row per send attempt: bill, customer, mobile number, channel, status, remarks) tables.
+      `GET`/`PUT /communication/settings` (read: any signed-in staff; write: super_admin/owner,
+      matching `tenant`'s gate), `POST`/`GET /communication/log` (write: super_admin/owner/operator
+      — the same three roles billing itself is gated to). 5 new tests
+      (`communicationSettings.test.ts`, `communicationLog.test.ts`) — 78 total (was 73).
+- [x] **Frontend architecture** (`apps/web/lib/communication/`): `ICommunicationProvider` interface,
+      `CommunicationService` (Billing -> CommunicationService -> Provider, per the brief),
+      `WhatsAppCommunityProvider` (the one real implementation — builds the wa.me URL, opens it,
+      triggers a PDF download alongside since wa.me can't attach a file via URL),
+      `SharePdfProvider` (native OS share sheet via the Web Share API, falls back to a plain
+      download), `ComingSoonProvider` (one stub class parameterized by channel, used for
+      `whatsapp_business`/`email`/`sms` — architected, not half-wired). `lib/communication/
+      mobileNumber.ts` (normalize/validate — bare 10-digit numbers get the default country code
+      prepended) and `template.ts` (`{customerName}`/`{tenantName}`/`{billNo}`/`{amount}`
+      placeholder substitution).
+- [x] **`SendInvoiceButton`** (`apps/web/components/SendInvoiceButton.tsx`) — a generic "Send
+      Invoice" dropdown with WhatsApp and Share PDF active, Email/SMS visibly greyed out with a
+      "Coming soon" badge rather than hidden. If a valid mobile number is already known (from
+      Customer Master, for a credit sale) and `auto_open_whatsapp` is on, WhatsApp sends
+      immediately; otherwise it shows a confirm step with an editable number field first — covers
+      both "registered customer, auto-filled" and "walk-in, operator types a number" from the
+      brief, and "operator can edit the number before sending" in both cases. Wired into the
+      billing page in both places an invoice can appear: right after creating one, and when
+      looking an existing bill back up (not shown for a cancelled bill).
+- [x] **Settings > Communication** section (`apps/web/app/(app)/settings/page.tsx`) — Enable
+      WhatsApp / Auto Open WhatsApp toggles, default country code, message template (with a
+      placeholder-syntax hint), and a visibly-disabled "WhatsApp Business API — Coming soon" row
+      (Professional edition, stored but inert).
+- [x] **One real bug found and fixed via browser testing, one false lead corrected**: initially
+      passed `"noopener,noreferrer"` to `window.open()` for security, then used the return value to
+      detect a blocked popup — except a from-scratch Playwright repro (`window.open()` on a bare
+      page, no app code involved) proved this specific automation setup returns `null` from
+      `window.open()` regardless of whether `noopener` is present at all. So the popup-blocked
+      *detection mechanism* couldn't be verified true-vs-false-positive via this harness either
+      way — but `win.opener = null` (set by hand right after opening, instead of via the
+      `noopener` flag) is still the objectively better technique for real users, since it gets the
+      same reverse-tabnabbing protection without engine-dependent return-value risk. Kept the fix,
+      corrected the code comment to not overclaim what was actually proven.
+
+**Verified for real** (`playwright-core` + system Edge, same recipe as Session 15): logged in,
+opened Settings > Communication and confirmed the template loaded; created a cash bill (no
+customer attached); clicked Send Invoice → WhatsApp with no known number → correctly showed the
+confirm step (proving the "prompt for a number" path); typed a number, clicked Open WhatsApp →
+captured the actual new-tab URL via Playwright's `context.on("page")` and confirmed it was a real
+`api.whatsapp.com/send/...` redirect with the phone number correctly country-coded
+(`919876543210` from a typed `9876543210`) and the message template correctly rendered with the
+real tenant name (`SRINIVASA AGENCIES`), bill number, and amount substituted in. Confirmed the
+send attempt was persisted to `communication_log` with the exact result message shown in the UI.
+Full suite: 78/78 (two failures on one `npm run test` pass turned out to be a **pre-existing**
+`backup.test.ts`/`dataReset.test.ts` race over a shared OS-temp `backups/` directory — reran in
+isolation and together, confirmed unrelated to this session's changes, not a regression).
+`typecheck`/`lint`/`build` all clean (21 web routes, unchanged — no new routes, only new
+components/sections on existing pages). Cancelled the test bills created during verification
+afterward so the real demo dataset stayed clean; left the resulting `communication_log` rows in
+place (no delete endpoint exists for logs anywhere in this app, `audit_logs` included — logs are
+treated as append-only across every session, not scrubbed after testing).
+
+**Notes for the next session:**
+- The popup-blocked-vs-success distinction in `WhatsAppCommunityProvider` is unverified by
+  automation for the reason above (this Playwright+Edge combo can't distinguish the two via
+  `window.open()`'s return value) — a real, non-automated click-through would be the only way to
+  fully confirm it, if that ever becomes available.
+- No `.env.example` still — same gap flagged since Session 14, unrelated to this feature but worth
+  batching in whenever someone does add one.
+- `docs/MODULES.md` hasn't been updated to reflect this new capability — it's a genuinely new
+  feature (not a legacy-menu item), so there's nothing there to cross-reference, but worth knowing
+  it's the one doc this session didn't touch.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo

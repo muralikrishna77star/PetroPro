@@ -61,8 +61,11 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   a new `users.email` column), `bills.client_ref` (offline-queue idempotency, same pattern as
   `pending_transactions.client_ref`), `services/backup.ts`'s daily auto-backup scheduler +
   `GET /backup/:filename/download`, and `reportsRepo.salesByHsn()` + group-nested stock/purchase
-  reports. **73 tests total** (was 46 as of Session 13; the jump includes the undocumented
-  intermediate sessions' tests, not all added by Session 14).
+  reports. Session 16: WhatsApp Invoice Module (Community edition) —
+  `communication_settings`/`communication_log` tables, `GET`/`PUT /communication/settings`,
+  `POST`/`GET /communication/log`; see `docs/` note below, there's no `docs/MODULES.md` entry for
+  this since it's net-new, not a legacy-menu item. **78 tests total** (was 46 as of Session 13; the
+  jump includes the undocumented intermediate sessions' tests, not all added by Sessions 14-16).
 - **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **21 routes** (was 18
   as of Session 13; `/login/callback` is new in Session 14, the rest from undocumented intermediate
   sessions). Session 13: `NavBar` rebuilt as legacy-`MAINMENU.PRG`-style dropdown groups
@@ -79,7 +82,12 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   `<input list>`/`<datalist>` into a real filtering autocomplete dropdown (keyboard nav, click
   select, substring filter, 50-row cap) — same prop contract, so all 9 existing call sites
   (billing, catalog, settings, attendant, purchases, cashier, rate-changes, customer orders)
-  picked it up with no changes of their own.
+  picked it up with no changes of their own. Session 16: `components/SendInvoiceButton.tsx` (the
+  WhatsApp Invoice Module's "Send Invoice" button, on the billing page in both the just-created and
+  looked-up invoice views) and a new "Communication" section on `/settings`; new
+  `lib/communication/` — `CommunicationService`, `ICommunicationProvider`,
+  `WhatsAppCommunityProvider` (real), `SharePdfProvider` (real), `ComingSoonProvider`
+  (WhatsApp Business/Email/SMS stubs).
 
 - **`apps/api/src/dbf/importTransactions.ts`** — Session 11 (`npm run import:demo-transactions`
   from `apps/api`). Imports a fixed real 3-month window (2019-04 through mid-2019-06, the actual
@@ -130,6 +138,21 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   them (unlike bash); since the API's `tsx watch` never exits, the web dev server never starts.
   Not fixed — `dev:api`/`dev:web` still work individually. A real fix likely wants `concurrently`
   or similar rather than shell-native `&`.
+- **WhatsApp Invoice Module (Session 16), Community edition — `window.open()`'s popup-blocked
+  detection is unverified true-vs-false-positive.** A from-scratch Playwright repro (bare page, no
+  app code) proved this environment's Playwright+Edge combination returns `null` from
+  `window.open()` regardless of whether `"noopener"` is set — so `WhatsAppCommunityProvider`'s
+  `if (!win)` check couldn't be confirmed to correctly distinguish a real blocked popup from a
+  successful one via automation. The URL construction, message-template rendering, and mobile
+  number normalization were all separately verified for real (see `AI_Handoff.md` Session 16); only
+  the pass/fail branch of the popup check itself remains open. `win.opener = null` (set by hand,
+  not via the `noopener` flag) is used regardless, since it's the more broadly correct technique
+  independent of this finding.
+- **`backup.test.ts`/`dataReset.test.ts` share an OS-temp `backups/` directory across parallel
+  test-file processes** (found in Session 16, pre-existing) — `npm run test` occasionally shows
+  `pruneOldBackups`/`resetTransactionalData` failures from this race when the full suite runs in
+  parallel; both pass reliably when run together in isolation. Not fixed — would need each test
+  file to use its own temp directory rather than relying on `config.dbPath`'s directory.
 - **This file, `AI_Handoff.md`, and `Todo.md` fell out of sync with the repo for several sessions**
   — `git log` shows commits (`6eb6f57`, `4b1e977`, `f17bd34`, `91630be`: mileage tracking, customer
   order portal, richer reporting, HSN codes, build-context exclusions) with no matching handoff

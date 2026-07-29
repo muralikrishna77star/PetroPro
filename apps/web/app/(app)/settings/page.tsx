@@ -11,6 +11,7 @@ import {
   type BackupFile,
   type Settings,
   type SettingKey,
+  type CommunicationSettings,
 } from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
@@ -27,6 +28,10 @@ export default function SettingsPage() {
             <TenantSection token={session.token} />
             <PumpsSection token={session.token} />
             <OperationalFlagsSection token={session.token} editable={session.role === "super_admin"} />
+            <CommunicationSection
+              token={session.token}
+              editable={session.role === "super_admin" || session.role === "owner"}
+            />
             <FinYearSection token={session.token} />
             <BulkTaxSection token={session.token} />
             {session.role === "super_admin" && <BackupSection token={session.token} />}
@@ -338,6 +343,127 @@ function OperationalFlagsSection({ token, editable }: { token: string; editable:
           ))}
         {!settings && <li className="text-sm text-fg-muted">Loading...</li>}
       </ul>
+    </Card>
+  );
+}
+
+/** WhatsApp Invoice Module (Community edition) settings — see
+ *  PetroPro_WhatsApp_Invoice_Module_Claude_Prompt.pdf. */
+function CommunicationSection({ token, editable }: { token: string; editable: boolean }) {
+  const [settings, setSettings] = useState<CommunicationSettings | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.getCommunicationSettings(token).then(setSettings).catch(() => undefined);
+  }, [token]);
+
+  async function save(patch: Partial<CommunicationSettings>) {
+    if (!settings) return;
+    setError(null);
+    setMessage(null);
+    setSaving(true);
+    try {
+      setSettings(await api.updateCommunicationSettings(token, patch));
+      setMessage("Saved.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!settings) {
+    return (
+      <Card color="teal">
+        <h2 className="mb-1 text-lg font-semibold">Communication</h2>
+        <p className="text-sm text-fg-muted">Loading...</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card color="teal">
+      <h2 className="mb-1 text-lg font-semibold">Communication</h2>
+      <p className="mb-4 text-sm text-fg-muted">
+        Controls the &quot;Send Invoice&quot; button on the Billing page{editable ? "" : " (admin/owner-only to change)"}.
+      </p>
+      {error && <p className="mb-2 text-sm text-error">{error}</p>}
+      {message && <p className="mb-2 text-sm text-success">{message}</p>}
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+          <div>
+            <div className="font-medium">Enable WhatsApp</div>
+            <div className="text-xs text-fg-muted">Shows the WhatsApp option on Send Invoice</div>
+          </div>
+          <button
+            onClick={() => save({ whatsapp_enabled: !settings.whatsapp_enabled })}
+            disabled={!editable || saving}
+            className={`rounded-full px-3 py-1 text-xs font-medium disabled:opacity-50 ${
+              settings.whatsapp_enabled ? "bg-success/15 text-success" : "bg-card-hover text-fg-muted bg-bg-elevated dark:text-zinc-400"
+            }`}
+          >
+            {settings.whatsapp_enabled ? "YES" : "NO"}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+          <div>
+            <div className="font-medium">Auto Open WhatsApp</div>
+            <div className="text-xs text-fg-muted">
+              Opens WhatsApp Web immediately when the customer&apos;s number is already known; otherwise always shows a
+              confirm step first
+            </div>
+          </div>
+          <button
+            onClick={() => save({ auto_open_whatsapp: !settings.auto_open_whatsapp })}
+            disabled={!editable || saving}
+            className={`rounded-full px-3 py-1 text-xs font-medium disabled:opacity-50 ${
+              settings.auto_open_whatsapp ? "bg-success/15 text-success" : "bg-card-hover text-fg-muted bg-bg-elevated dark:text-zinc-400"
+            }`}
+          >
+            {settings.auto_open_whatsapp ? "YES" : "NO"}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm opacity-60">
+          <div>
+            <div className="font-medium">WhatsApp Business API</div>
+            <div className="text-xs text-fg-muted">Professional edition — direct, no manual PDF attach needed</div>
+          </div>
+          <span className="rounded-full bg-card-hover bg-bg-elevated px-3 py-1 text-xs font-medium text-fg-muted dark:text-zinc-400">
+            Coming soon
+          </span>
+        </div>
+
+        <label className="text-sm">
+          <span className="mb-1 block font-medium">Default country code</span>
+          <input
+            defaultValue={settings.default_country_code}
+            disabled={!editable}
+            onBlur={(e) => e.target.value !== settings.default_country_code && save({ default_country_code: e.target.value })}
+            placeholder="91"
+            className="w-24 rounded-lg border border-border px-3 py-2 text-sm bg-bg-elevated disabled:opacity-50"
+          />
+          <span className="ml-2 text-xs text-fg-muted">Prepended to a bare 10-digit number typed without one</span>
+        </label>
+
+        <label className="text-sm">
+          <span className="mb-1 block font-medium">Message template</span>
+          <textarea
+            defaultValue={settings.message_template}
+            disabled={!editable}
+            onBlur={(e) => e.target.value !== settings.message_template && save({ message_template: e.target.value })}
+            rows={3}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-bg-elevated disabled:opacity-50"
+          />
+          <span className="mt-1 block text-xs text-fg-muted">
+            Placeholders: {"{customerName}"}, {"{tenantName}"}, {"{billNo}"}, {"{amount}"}
+          </span>
+        </label>
+      </div>
     </Card>
   );
 }

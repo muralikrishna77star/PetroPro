@@ -1010,3 +1010,161 @@ decision, per the options offered (and not chosen) at the start of this session.
 - The Combobox's 50-row cap and substring-only matching (no fuzzy match, no relevance ranking) are
   simple-by-design choices appropriate for master-data lists in the tens-to-low-hundreds; revisit
   if any list this feeds ever grows into the thousands.
+
+### 2026-07-29/30 — Session 16 (WhatsApp Invoice Module, Community edition)
+
+**Context:** picked up the one concrete "next feature" flagged at the end of Session 15 — the user
+said to go ahead with `PetroPro_WhatsApp_Invoice_Module_Claude_Prompt.pdf`, a module brief that had
+been sitting in the repo root, untracked, since before Session 14. Read it in full before writing
+any code (three pages: Objective, Community Edition Phase 1, Professional Edition Future,
+Architecture, Customer Experience, Configuration, Communication Log, Validation, UI, Development
+Requirements). Built exactly Phase 1 as scoped, architected but did not implement Phase 2.
+
+**What the brief asked for, and what was built against each point:**
+- *"After bill generation show: Print, Download PDF, Send to WhatsApp."* — added a "Send Invoice"
+  button (`components/SendInvoiceButton.tsx`) alongside the existing "Print Bill" button, in both
+  places the billing page already shows an invoice: right after creating one, and when looking an
+  existing bill back up via the lookup section (not shown for a cancelled bill — sending an
+  invoice for a cancelled sale doesn't make sense). Did not touch or restructure the existing
+  Print Bill button/`downloadAuthed` flow, per "without changing existing billing logic."
+- *"If a registered customer is selected, use the WhatsApp/mobile number from Customer Master."* —
+  `customers.phone` already existed (Session 1); reused it rather than adding a separate
+  `whatsapp_number` column. For a Credit sale, the billing page already loads full `Customer` info
+  into `customerInfo` for its due/credit-limit panel — snapshotted into a new `invoiceCustomer`
+  state *before* `resetForm()` clears it (the existing post-submit reset happens synchronously
+  right after `setInvoice(result)`, so without this snapshot the phone number would already be
+  gone by the time the invoice success box renders). For the bill-lookup path, the `Bill` type only
+  carries `customer_code`, not phone/name, so `handleLookup()` now does a follow-up
+  `api.getCustomer()` fetch — tracked as `Customer | null | undefined` (undefined = still
+  resolving) specifically so `SendInvoiceButton` doesn't mount with a stale empty number while
+  that fetch is in flight; see the useEffect/lint note below for why this mattered.
+- *"If no customer is selected, prompt the operator to enter a mobile number... allow operator to
+  edit the number before sending."* — for cash/UPI/card sales, the billing page has no customer
+  field at all today (only Credit shows one — Session 13's master-detail rework), so
+  `customerPhone` is simply undefined for those and the mobile-number field in
+  `SendInvoiceButton`'s confirm step starts empty, always editable regardless of source.
+- *"Generate/reuse the invoice PDF, open WhatsApp Web (wa.me) with a pre-filled thank-you message,
+  then display a notice asking the operator to attach the generated PDF manually. Do not use
+  browser automation or unofficial WhatsApp automation."* — `WhatsAppCommunityProvider.send()`
+  builds `https://wa.me/{number}?text={encoded message}`, calls plain `window.open()` (no
+  automation library, no headless-browser driving of WhatsApp itself — this is the literal
+  deep-link mechanism, the same URL a person could type into their address bar), and separately
+  triggers a PDF download (`downloadAuthed`, reusing the existing `/bills/:billNo/pdf` route
+  rather than adding a new one — "reuse", not regenerate-differently) so the file is sitting in
+  Downloads for the operator to attach by hand. The result message says exactly that: "attach the
+  downloaded invoice PDF before sending."
+- *"Provider-based communication architecture... WhatsApp Business API, Email, SMS... left as
+  'Coming Soon' but fully architected."* — `lib/communication/types.ts`'s `ICommunicationProvider`
+  interface (`channel`, `label`, `isAvailable()`, `send()`) is implemented by
+  `WhatsAppCommunityProvider` and `SharePdfProvider` for real, and by one shared
+  `ComingSoonProvider` class (parameterized by channel + label) for `whatsapp_business`/`email`/
+  `sms` — same interface, `isAvailable()` always `false`, `send()` always resolves
+  `{success:false, message:"X is coming soon"}`. `CommunicationService` (Billing ->
+  CommunicationService -> Provider, per the brief's own architecture diagram) holds one instance
+  of each, keyed by channel, and is what actually gets called from `SendInvoiceButton` — logging
+  to the backend is centralized there (one `api.logCommunication()` call per send, regardless of
+  which provider handled it), not duplicated per-provider.
+- *"CommunicationLog model and CommunicationResult model... Store InvoiceId, CustomerId, Mobile
+  Number, Channel, Status, Date/Time and Remarks."* — new `communication_log` table
+  (`repositories/communicationLog.ts`), one row per send attempt across every channel. Community
+  edition only ever writes `whatsapp`/`share_pdf` rows in practice, but the schema and repo don't
+  special-case that — a future Professional-edition provider just starts writing real rows through
+  the same path with no schema change needed.
+- *"Settings > Communication with Enable WhatsApp, Default Country Code, Message Template, Auto
+  Open WhatsApp and Future Business API toggle."* — new `communication_settings` singleton table
+  (same one-row-per-deployment pattern as `tenants`/`fin_years`), new section on the existing
+  `/settings` page (`CommunicationSection`, placed right after `OperationalFlagsSection`). The
+  Business API toggle is rendered but visibly disabled/greyed with a "Coming soon" label — the
+  column (`business_api_enabled`) exists in the schema for forward compatibility, but nothing
+  reads it; flipping it would currently do nothing, which is honest given there's no real provider
+  behind it yet.
+- *"Validate mobile number, PDF generation, popup blocking and missing customer details."* —
+  `lib/communication/mobileNumber.ts`'s `normalizeMobileNumber()`/`isValidMobileNumber()` (bare
+  10-digit numbers get the default country code prepended; anything shorter is rejected as
+  implausible). PDF generation failures inside the WhatsApp send path are caught and treated as
+  non-fatal (WhatsApp Web still opened; the operator can fall back to the existing "Print Bill"
+  button). Popup-blocking detection is real (`if (!win) return {success:false, ...}`) but its
+  true-vs-false-positive accuracy couldn't be fully verified this session — see the bug/false-lead
+  note below. Missing customer details just means an empty confirm-step field, handled by the
+  existing required-before-send validation.
+- *"Generic 'Send Invoice' button with channels: WhatsApp (active), Email (future), SMS (future),
+  Share PDF."* — exactly this: WhatsApp and Share PDF are clickable, Email/SMS render with a
+  "Coming soon" badge and `disabled`, not hidden — so the eventual Professional-edition upgrade
+  path is visible to whoever's using the app today, not a surprise later.
+
+**One real bug found, and one false lead corrected, both via actual browser testing (not just code
+review):** first implementation passed `window.open(url, "_blank", "noopener,noreferrer")` — the
+conventional pairing for "open a new tab safely." Testing it live showed the result message always
+said "popup blocked" even when the tab visibly opened successfully (captured via Playwright's
+`context.on("page")` listener showing the real `wa.me`/`api.whatsapp.com` URL). Initial diagnosis:
+blamed `noopener` specifically, since some browsers are documented to return `null` from
+`window.open()` when it's set — removed `noopener` from the features string, kept the same
+security property by setting `win.opener = null` by hand right after opening instead. Retested:
+**same failure, unchanged.** That disproved the specific diagnosis, so before accepting defeat,
+wrote a from-scratch, three-line repro (`page.setContent()` with a plain button and
+`window.open()`, no PetroPro code involved at all) — confirmed this exact Playwright + system-Edge
+combination returns `null` from `window.open()` **regardless of whether `noopener` is present**,
+even for a same-task, direct-click, no-app-code call. So the actual root cause is an
+automation/engine-specific quirk of this test harness, not anything in the app. Kept the
+`win.opener = null` change anyway (it's still the objectively better technique for real,
+non-automated users — same security property, no engine-dependent return-value risk), but
+corrected the code's own comment to stop asserting a causal claim ("confirmed via real browser
+testing") that the follow-up repro had actually disproven. Recorded plainly here and in `Todo.md`
+that the popup-blocked-vs-success *distinction* itself remains unverified by automation for this
+reason — everything else about the send flow (URL construction, message rendering with real
+tenant/bill data, mobile number normalization, the confirm-step UX) was verified for real.
+
+**A second, smaller lint-driven fix, same class as Session 15's Combobox one:** `SendInvoiceButton`
+initially synced its local `mobile` input state from the `customerPhone` prop via
+`useEffect(() => setMobile(customerPhone ?? ""), [customerPhone])` — flagged by
+`react-hooks/set-state-in-effect` again. Fixed the same way as the Combobox: dropped the effect,
+initialize `mobile` from the prop once (`useState(customerPhone ?? "")`), and key the component by
+bill number at both call sites in `billing/page.tsx` so a new bill/lookup remounts it fresh instead
+of needing prop-change-triggered state syncing. This surfaced a real related timing question for
+the lookup path specifically: `lookupCustomer` resolves *after* the initial render (an async
+`getCustomer()` call), so keying by bill number alone wasn't enough — `SendInvoiceButton` would
+still mount once with `customerPhone` undefined before the fetch resolved, and (correctly, per the
+lint fix) never re-sync afterward. Fixed by tracking `lookupCustomer` as `Customer | null |
+undefined` (undefined = still resolving) and not rendering `SendInvoiceButton` for the lookup
+result until it resolves either way — a couple hundred milliseconds' delay before the button
+appears, not a bug, just an honest reflection of the async fetch it depends on.
+
+**Verification performed this session:** `npm run typecheck`/`lint`/`build` all clean throughout
+(21 web routes, unchanged). 5 new backend tests (`communicationSettings.test.ts`,
+`communicationLog.test.ts`) — 78 total (was 73). Real browser verification via the same
+`playwright-core` + system Edge recipe Session 15 established: logged in, opened Settings >
+Communication and confirmed the message template loaded from the real seeded default; created a
+cash bill; clicked Send Invoice → WhatsApp with no known customer number → confirmed the confirm
+step appeared (proving the "prompt for a number" requirement); typed a number, clicked "Open
+WhatsApp" → captured the real new-tab URL and confirmed the phone number was correctly
+country-coded (`9876543210` typed → `919876543210` in the URL) and the message template rendered
+with the real tenant name (`SRINIVASA AGENCIES`, from Session 13's imported Srinivasa Agencies
+data), the real bill number, and the real amount, all substituted correctly. Confirmed via a direct
+`GET /communication/log` call that the send attempt was persisted with the exact result message
+shown in the UI. One `npm run test` pass showed 2 failures in `backup.test.ts`/`dataReset.test.ts`
+(`pruneOldBackups` count mismatch, an `ENOENT` on a backup file) — reran those two files together
+in isolation (both passed) and the full suite twice more (78/78 both times), confirming a
+pre-existing race over a shared OS-temp `backups/` directory across parallel test-file processes,
+not a regression introduced this session — neither of those test files or the code they exercise
+was touched.
+
+**State:** cancelled the 3 test bills created during verification (`45451`–`45453`) so the real
+Session 11 demo dataset stayed clean; left the resulting `communication_log` rows in place (no
+delete endpoint exists for logs anywhere in this app — `audit_logs` is the same, treated as
+append-only across every session). Dev servers stopped, ports 3000/4000 confirmed free.
+
+**Next task:** none prescribed. Phase 2 (Professional edition — a real WhatsApp Business API
+integration, Email, SMS) is architected but not implemented; picking it up means replacing
+`ComingSoonProvider` instances with real ones behind the same `ICommunicationProvider` interface,
+which shouldn't require touching `CommunicationService`, `SendInvoiceButton`, or the backend
+`communication_log`/`communication_settings` shape at all — that's the point of the interface.
+
+**Notes for the next session:**
+- The popup-blocked-vs-success distinction in `WhatsAppCommunityProvider` could not be verified
+  true-vs-false-positive by automation in this environment (see the bug/false-lead writeup above)
+  — only a real, non-automated click-through would settle it conclusively, if that ever becomes
+  available.
+- `docs/MODULES.md` was not updated — this is a genuinely new capability, not a legacy-menu-item
+  gap, so there was nothing there to cross-reference, but it's the one doc this session left alone.
+- No `.env.example` still exists — flagged in Sessions 14 and 15 too; nothing this session added
+  needs one (no new env vars), but it remains a real, accumulating gap.

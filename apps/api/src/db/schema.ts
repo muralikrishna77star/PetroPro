@@ -286,6 +286,35 @@ export function applySchema(db: DatabaseSync): void {
       qty_served REAL NOT NULL DEFAULT 0,
       rate_at_order REAL NOT NULL
     );
+
+    -- WhatsApp Invoice Module (Community edition) — see
+    -- PetroPro_WhatsApp_Invoice_Module_Claude_Prompt.pdf. One row per deployment, same
+    -- singleton pattern as tenants/fin_years. business_api_enabled is stored for forward
+    -- compatibility with the Professional-edition architecture the brief asks for, but nothing
+    -- reads it yet — WhatsAppBusinessProvider on the frontend is a "coming soon" stub regardless.
+    CREATE TABLE IF NOT EXISTS communication_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      whatsapp_enabled INTEGER NOT NULL DEFAULT 1,
+      default_country_code TEXT NOT NULL DEFAULT '91',
+      message_template TEXT NOT NULL DEFAULT 'Hello {customerName}, thank you for your purchase at {tenantName}. Your invoice #{billNo} for Rs.{amount} is ready. We will share the PDF separately.',
+      auto_open_whatsapp INTEGER NOT NULL DEFAULT 1,
+      business_api_enabled INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT OR IGNORE INTO communication_settings (id) VALUES (1);
+
+    -- One row per send attempt, any channel. Community edition only ever writes 'whatsapp' and
+    -- 'share_pdf' rows — sending happens client-side (wa.me / Web Share API), so status reflects
+    -- what the browser could observe (opened/shared/failed), not a WhatsApp delivery receipt.
+    CREATE TABLE IF NOT EXISTS communication_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bill_no INTEGER NOT NULL REFERENCES bills(bill_no),
+      customer_code TEXT REFERENCES customers(code),
+      mobile_number TEXT,
+      channel TEXT NOT NULL,
+      status TEXT NOT NULL,
+      remarks TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   ensureColumn(db, "bills", "cancelled_by", "TEXT REFERENCES users(user_id)");
