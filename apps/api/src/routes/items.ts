@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { itemsRepo, type ItemInput } from "../repositories/items.js";
 import { auditLogsRepo } from "../repositories/auditLogs.js";
+import { isValidHsnCode } from "../services/hsn.js";
+
+const HSN_ERROR = "hsn_code must be 4, 6, or 8 digits (per GST invoicing rules)";
 
 export default async function itemRoutes(fastify: FastifyInstance) {
   fastify.get("/items", { preHandler: fastify.authenticate }, async () => itemsRepo.list());
@@ -18,13 +21,21 @@ export default async function itemRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: ItemInput }>(
     "/items",
     { preHandler: fastify.requireRole("super_admin", "owner") },
-    async (request, reply) => reply.code(201).send(itemsRepo.create(request.body)),
+    async (request, reply) => {
+      if (!isValidHsnCode(request.body.hsn_code)) {
+        return reply.code(400).send({ error: HSN_ERROR });
+      }
+      return reply.code(201).send(itemsRepo.create(request.body));
+    },
   );
 
   fastify.put<{ Params: { code: string }; Body: Omit<ItemInput, "code"> }>(
     "/items/:code",
     { preHandler: fastify.requireRole("super_admin", "owner") },
     async (request, reply) => {
+      if (!isValidHsnCode(request.body.hsn_code)) {
+        return reply.code(400).send({ error: HSN_ERROR });
+      }
       const updated = itemsRepo.update(request.params.code, request.body);
       if (!updated) return reply.code(404).send({ error: "Item not found" });
       return updated;

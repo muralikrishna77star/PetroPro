@@ -21,6 +21,8 @@ export interface Item {
   purchase_value: number;
   tax_percent: number;
   track_mileage: number;
+  /** GST HSN code — 4, 6, or 8 numeric digits per CBIC invoicing rules; null if not set. */
+  hsn_code: string | null;
 }
 
 export interface ItemInput {
@@ -32,6 +34,7 @@ export interface ItemInput {
   purchase_value: number;
   track_mileage?: boolean;
   tax_percent: number;
+  hsn_code?: string | null;
 }
 
 export interface Group {

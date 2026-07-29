@@ -36,6 +36,7 @@ typically priced tax-inclusive.
 | IPRICEWBTX / IPRICEWTAX | N8,2 | price_wholesale_pretax / _tax | derived |
 | IPRICERBTX / IPRICERTAX | N8,2 | price_retail_pretax / _tax | derived |
 | PUR_VALBTX / PUR_VALTAX  | N8,2 | purchase_value_pretax / _tax | derived |
+| —            | —     | hsn_code      | PWA-only, no legacy analog (FoxPro system predates GST). Optional; validated as 4/6/8 numeric digits per CBIC invoicing rules — see `services/hsn.ts` |
 
 ### PRODUCT (`PRODUCT.DBF`) → `products`
 Alternate catalog with effective-dated pricing (kept for compatibility).

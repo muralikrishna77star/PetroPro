@@ -10,6 +10,7 @@ export interface Item {
   purchase_value: number;
   track_mileage: number;
   tax_percent: number;
+  hsn_code: string | null;
   price_wholesale_pretax: number;
   price_wholesale_tax: number;
   price_retail_pretax: number;
@@ -27,6 +28,7 @@ export interface ItemInput {
   purchase_value: number;
   track_mileage?: boolean;
   tax_percent: number;
+  hsn_code?: string | null;
 }
 
 function deriveTaxFields(input: ItemInput) {
@@ -57,9 +59,9 @@ export const itemsRepo = {
     db.prepare(
       `INSERT INTO items (
         code, name, group_code, price_wholesale, price_retail, purchase_value,
-        track_mileage, tax_percent, price_wholesale_pretax, price_wholesale_tax,
+        track_mileage, tax_percent, hsn_code, price_wholesale_pretax, price_wholesale_tax,
         price_retail_pretax, price_retail_tax, purchase_value_pretax, purchase_value_tax
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.code,
       input.name,
@@ -69,6 +71,7 @@ export const itemsRepo = {
       input.purchase_value,
       input.track_mileage ? 1 : 0,
       input.tax_percent,
+      input.hsn_code ?? null,
       derived.price_wholesale_pretax,
       derived.price_wholesale_tax,
       derived.price_retail_pretax,
@@ -84,7 +87,7 @@ export const itemsRepo = {
     db.prepare(
       `UPDATE items SET
         name = ?, group_code = ?, price_wholesale = ?, price_retail = ?, purchase_value = ?,
-        track_mileage = ?, tax_percent = ?, price_wholesale_pretax = ?, price_wholesale_tax = ?,
+        track_mileage = ?, tax_percent = ?, hsn_code = ?, price_wholesale_pretax = ?, price_wholesale_tax = ?,
         price_retail_pretax = ?, price_retail_tax = ?, purchase_value_pretax = ?, purchase_value_tax = ?
       WHERE code = ?`,
     ).run(
@@ -95,6 +98,7 @@ export const itemsRepo = {
       input.purchase_value,
       input.track_mileage ? 1 : 0,
       input.tax_percent,
+      input.hsn_code ?? null,
       derived.price_wholesale_pretax,
       derived.price_wholesale_tax,
       derived.price_retail_pretax,

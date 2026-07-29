@@ -133,7 +133,12 @@ const emptyItemForm: ItemInput = {
   purchase_value: 0,
   track_mileage: false,
   tax_percent: 0,
+  hsn_code: "",
 };
+
+// GST invoicing rules (CBIC notification 78/2020): HSN codes are numeric, 4/6/8 digits long.
+const HSN_CODE_PATTERN = /^\d{4}$|^\d{6}$|^\d{8}$/;
+const HSN_ERROR = "HSN code must be 4, 6, or 8 digits";
 
 function ItemsSection({ token }: { token: string }) {
   const [items, setItems] = useState<Item[]>([]);
@@ -164,6 +169,7 @@ function ItemsSection({ token }: { token: string }) {
       purchase_value: item.purchase_value,
       track_mileage: item.track_mileage === 1,
       tax_percent: item.tax_percent,
+      hsn_code: item.hsn_code ?? "",
     });
   }
 
@@ -175,6 +181,11 @@ function ItemsSection({ token }: { token: string }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const hsnCode = (form.hsn_code ?? "").trim();
+    if (hsnCode && !HSN_CODE_PATTERN.test(hsnCode)) {
+      setError(HSN_ERROR);
+      return;
+    }
     setSaving(true);
     try {
       const body: ItemInput = {
@@ -184,6 +195,7 @@ function ItemsSection({ token }: { token: string }) {
         price_retail: Number(form.price_retail) || 0,
         purchase_value: Number(form.purchase_value) || 0,
         tax_percent: Number(form.tax_percent) || 0,
+        hsn_code: hsnCode || null,
       };
       if (editingCode) {
         await api.updateItem(token, editingCode, body);
@@ -278,6 +290,18 @@ function ItemsSection({ token }: { token: string }) {
               required
             />
           </label>
+          <label className="flex flex-col text-xs text-fg-muted">
+            HSN code
+            <input
+              placeholder="e.g. 271019"
+              inputMode="numeric"
+              maxLength={8}
+              title={HSN_ERROR}
+              className="w-28 rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
+              value={form.hsn_code ?? ""}
+              onChange={(e) => setForm({ ...form, hsn_code: e.target.value.replace(/\D/g, "") })}
+            />
+          </label>
           <label className="flex items-end gap-1.5 pb-2 text-sm">
             <input
               type="checkbox"
@@ -314,6 +338,7 @@ function ItemsSection({ token }: { token: string }) {
               <th className="py-2 pr-4">Group</th>
               <th className="py-2 pr-4">Retail</th>
               <th className="py-2 pr-4">Tax %</th>
+              <th className="py-2 pr-4">HSN</th>
               <th className="py-2 pr-4">Mileage</th>
               <th className="py-2 pr-4"></th>
             </tr>
@@ -326,6 +351,7 @@ function ItemsSection({ token }: { token: string }) {
                 <td className="py-2 pr-4">{item.group_code ?? "—"}</td>
                 <td className="py-2 pr-4">₹{item.price_retail.toFixed(2)}</td>
                 <td className="py-2 pr-4">{item.tax_percent}%</td>
+                <td className="py-2 pr-4 font-mono">{item.hsn_code ?? "—"}</td>
                 <td className="py-2 pr-4">{item.track_mileage ? "Yes" : "No"}</td>
                 <td className="py-2 pr-4">
                   <button onClick={() => startEdit(item)} className="text-fg-muted underline">
@@ -336,7 +362,7 @@ function ItemsSection({ token }: { token: string }) {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-4 text-center text-fg-muted">
+                <td colSpan={8} className="py-4 text-center text-fg-muted">
                   No items yet.
                 </td>
               </tr>

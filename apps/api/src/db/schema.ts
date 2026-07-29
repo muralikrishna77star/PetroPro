@@ -297,6 +297,7 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "customers", "email", "TEXT");
   ensureColumn(db, "customers", "password_hash", "TEXT");
   ensureColumn(db, "bill_lines", "order_line_id", "INTEGER REFERENCES order_lines(id)");
+  ensureColumn(db, "items", "hsn_code", "TEXT");
 
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_transactions_client_ref ON pending_transactions(client_ref) WHERE client_ref IS NOT NULL",
