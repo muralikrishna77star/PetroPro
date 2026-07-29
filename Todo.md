@@ -220,6 +220,73 @@ verified**: the real Google OAuth round trip (no credentials configured here) an
 launcher's actual browser-opening behavior (no Chromium + no built output exercised this session) —
 both need a non-headless environment with real credentials/a browser installed.
 
+**Update, same day:** the offline-billing half *was* subsequently verified for real (see Session 15
+below) — installed `playwright-core` in a scratch dir and drove it against the system's Edge browser,
+the first time any session in this project has had real browser automation available. Struck through
+here in spirit; full detail in Session 15 rather than rewritten in place.
+
+## Session 15 — real browser verification (offline sync) + AutoComplete Combobox
+
+**Context:** continuing directly from Session 14. Asked the user what to pick up next; they chose
+verifying the offline billing sync for real over starting the (untracked, unstarted) WhatsApp invoice
+module or other `Todo.md` gaps. Mid-verification, the user separately asked for the shared
+`Combobox` component (item/customer/vehicle/pump pickers, native `<input list>`/`<datalist>` today)
+to become a real filtering autocomplete dropdown, applied everywhere it's used — sequenced to land
+after the verification in progress.
+
+- [x] **First real browser automation available in this project's history.** No `chromium-cli` in
+      this environment, but the machine has Edge installed
+      (`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`) — installed `playwright-core`
+      (no bundled-browser download) in a scratch directory and launched it with `executablePath`
+      pointed at the system Edge. Every prior session's "not verified — no browser automation tool
+      available" note for offline/UI behavior was a real, environment-imposed limit, not something
+      skipped by choice; this unblocks it going forward if the same tool is available.
+- [x] **Offline billing sync, driven end-to-end for real**: logged in as `admin`, turned on
+      `OFFLINEMODE` via the API, opened `/billing`, added a line, set the browser context offline
+      (`context.setOffline(true)` — real `navigator.onLine` + real `online`/`offline` events, not
+      just blocked requests), submitted — got the "Offline — bill queued" notice, and confirmed the
+      bill actually landed in IndexedDB's `queued-bills` store (read directly via
+      `indexedDB.open()` in-page). Went back online; the page's own `online` listener fired
+      `flushBillQueue()` automatically with no manual action — IndexedDB emptied and the bill
+      appeared in the Recent Bills panel. Separately confirmed the idempotency guarantee this
+      depends on on the API side directly: posted the same `clientRef` to `POST /bills` twice,
+      got back the identical `bill_no` both times. Cleaned up afterward — cancelled both test bills
+      and reverted `OFFLINEMODE` to `NO` — so the real demo dataset (Session 11) wasn't left dirty.
+- [x] **`Combobox` rewritten as a real autocomplete** (`apps/web/components/ui/Combobox.tsx`) —
+      same external prop shape (`options`/`value`/`onChange`/`className`/native input props) so
+      none of its 9 existing call sites needed to change. Filters `options` by substring match on
+      label or value as you type (capped at 50 rendered rows), dropdown opens on focus, full
+      keyboard nav (arrow keys to highlight, Enter to select, Escape to close), click-to-select via
+      `onMouseDown` + `preventDefault` (so the dropdown doesn't close from the input's `onBlur`
+      before the click registers), closes on blur/outside click. `value` still updates on every
+      keystroke, not only on selecting a suggestion — several call sites depend on free text being
+      valid (e.g. billing's customer-code field, typed against the loaded customer list rather than
+      requiring an exact dropdown pick). One real lint catch during this: an initial version cleared
+      a stale highlighted index via `useEffect` + `setState`, which `eslint-plugin-react-hooks`
+      correctly flagged (cascading-render risk on every keystroke that shrank the match list) —
+      replaced with a derived `activeIndex` computed inline instead of stored state.
+- [x] **Visually verified in the real Edge browser** (screenshots retained in the session scratch
+      dir, not committed): dropdown renders correctly themed on the billing page, typing "pet"
+      filters to the three matching items (`PETROL`, `PET ADDITIVE`, `PET`/"Petrol"), two
+      `ArrowDown` presses correctly highlights the third option, `Enter` selects it and closes the
+      dropdown, clicking an option with the mouse selects it without losing focus first, `Escape`
+      and clicking outside both close without changing the value.
+
+Verified: full test suite (73/73 — one transient failure on the very first post-change `npm run
+test` run, traced to a stale SQLite file lock from a just-killed dev-server process, not a real
+regression; reran clean twice), `typecheck`/`lint`/`build` all clean (21 web routes, unchanged — no
+new routes, only a component rewrite). Real end-to-end browser verification of both the offline
+sync and the new Combobox, detailed above — the first time either has been possible in this
+project rather than relying on code review alone.
+
+**Notes for the next session:**
+- `playwright-core` + a system Edge/Chrome executable is now a known-working recipe for real
+  browser verification in this environment when no `chromium-cli` is available — worth reusing
+  rather than rediscovering, and worth writing up as a project skill (`/run-skill-generator`) if a
+  future session wants to save the rediscovery cost.
+- The Combobox's 50-row render cap hasn't been stress-tested against a catalog larger than this
+  demo's ~69 items — fine today, worth revisiting if the item master grows materially.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo

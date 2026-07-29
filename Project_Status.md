@@ -75,7 +75,11 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   Session 14: `/login/callback` (lands here after Google SSO, hands off to the same role-based
   routing password login uses) and `components/DesktopTitleBar.tsx` (only renders inside the
   `scripts/desktop/start.mjs` kiosk window — a slim bar with a Close button, invisible in the
-  ordinary browser/PWA case).
+  ordinary browser/PWA case). Session 15: `components/ui/Combobox.tsx` rewritten from a native
+  `<input list>`/`<datalist>` into a real filtering autocomplete dropdown (keyboard nav, click
+  select, substring filter, 50-row cap) — same prop contract, so all 9 existing call sites
+  (billing, catalog, settings, attendant, purchases, cashier, rate-changes, customer orders)
+  picked it up with no changes of their own.
 
 - **`apps/api/src/dbf/importTransactions.ts`** — Session 11 (`npm run import:demo-transactions`
   from `apps/api`). Imports a fixed real 3-month window (2019-04 through mid-2019-06, the actual
@@ -100,19 +104,32 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
 - An output validation harness vs FoxPro reports — no reference FoxPro output exists in this repo
   to validate against; not fabricated. Still blocked.
 - Browser-based E2E tests (Playwright/Cypress) — no browser automation tool has been available in
-  any session so far, this one included. Session 13's NavBar/billing UI rework was verified via
-  `tsc`/`eslint`/production build (all clean) plus HTTP-level checks of the data it renders
-  (`GET /tenant`, credit-limit rejection, a downloaded+read invoice PDF confirming the new
-  letterhead) — the dropdown menu and master-detail layout's actual rendering were not visually
-  confirmed in a browser.
+  most sessions so far. Session 13's NavBar/billing UI rework was verified via `tsc`/`eslint`/
+  production build (all clean) plus HTTP-level checks of the data it renders (`GET /tenant`,
+  credit-limit rejection, a downloaded+read invoice PDF confirming the new letterhead) — the
+  dropdown menu and master-detail layout's actual rendering were not visually confirmed in a
+  browser. **Session 15 broke this pattern**: no `chromium-cli` here, but the dev machine has Edge
+  installed, so `playwright-core` (pointed at the system Edge via `executablePath`, no bundled
+  Chromium download) gave the first real, driven browser verification in this project's history —
+  used to confirm the offline billing sync and the new Combobox autocomplete end-to-end, not just
+  by code review. Still not a standing E2E *suite* — this was ad hoc, scratch-directory tooling per
+  session, not committed to the repo.
 - Real-world verification of the Docker packaging and CI workflow — both written in Session 7, and
   the Dockerfiles were updated in Session 10 for the `packages/shared-types` build step, but neither
   has actually been run (no Docker in this dev environment). The repo is on git now (Session 14
   found it already initialized, on branch `master`) but hasn't been pushed anywhere a real Actions
   run could happen — still blocked on both fronts.
-- **Google SSO and the desktop kiosk launcher (Session 14) are unverified beyond a clean
-  typecheck/lint/build** — no real Google OAuth credentials and no Chromium browser have been
-  available in this environment to exercise either end-to-end. See `AI_Handoff.md` Session 14.
+- **Google SSO and the desktop kiosk launcher (Session 14) are still unverified beyond a clean
+  typecheck/lint/build** — no real Google OAuth credentials are available in this environment, and
+  the desktop launcher needs an actual `npm run build` + Chromium install exercised together,
+  neither attempted yet. The *offline billing sync* (also Session 14) is the one Session-14 item
+  that **has** since been verified for real, in Session 15 — see `AI_Handoff.md` Session 15.
+- **The root `"dev"` npm script only starts the API on Windows** (found in Session 15) —
+  `npm run dev --workspace apps/api & npm run dev --workspace apps/web` uses `&`, which under the
+  `cmd.exe` shell npm scripts run through on Windows sequences commands rather than backgrounding
+  them (unlike bash); since the API's `tsx watch` never exits, the web dev server never starts.
+  Not fixed — `dev:api`/`dev:web` still work individually. A real fix likely wants `concurrently`
+  or similar rather than shell-native `&`.
 - **This file, `AI_Handoff.md`, and `Todo.md` fell out of sync with the repo for several sessions**
   — `git log` shows commits (`6eb6f57`, `4b1e977`, `f17bd34`, `91630be`: mileage tracking, customer
   order portal, richer reporting, HSN codes, build-context exclusions) with no matching handoff

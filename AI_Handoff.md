@@ -885,3 +885,128 @@ fake pass.
   sides but there is still no `.env.example` anywhere in this repo (there wasn't one before this
   session either) — worth adding if a future session has spare capacity, so these don't have to be
   rediscovered by grepping source.
+
+### 2026-07-29/30 — Session 15 (real browser verification: offline sync + AutoComplete Combobox)
+
+**Context:** continued directly from Session 14 in the same working session (spans the midnight
+rollover — commits/log timestamps below may read 07-29 or 07-30 depending on exactly when a given
+action ran). Asked the user what to pick up next; three options were offered (verify offline sync
+for real, start the untracked WhatsApp invoice module PDF, or another `Todo.md` gap) — they picked
+verifying offline sync. Mid-verification, the user separately rejected an unrelated tool call
+specifically to hand over a new instruction: replace the shared `Combobox` component (native
+`<input list>`/`<datalist>`) with a real autocomplete dropdown, applied everywhere it's used. Asked
+how to sequence the two; the user chose to finish the in-progress verification first.
+
+**Part 1 — first real browser automation available in this project's history.** Every prior session
+(1 through 14) noted "not verified — no browser automation tool available" for anything requiring
+actual UI interaction; that was a genuine environment limit, not a shortcut taken. This session found
+one: no `chromium-cli`, but the Windows machine has Edge installed at
+`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`. Installed `playwright-core` (not
+full `playwright` — avoids downloading a bundled Chromium, since a real browser was already on disk)
+in a throwaway npm project under the session scratch directory, and launched it with
+`chromium.launch({ executablePath: EDGE_PATH, headless: true })`. This is a reusable recipe for this
+environment going forward, not a one-off.
+
+**Part 2 — offline billing sync verified end-to-end, for real:**
+- Started both dev servers. Discovered along the way that the root `"dev"` script
+  (`npm run dev --workspace apps/api & npm run dev --workspace apps/web`) silently only starts the
+  API on this Windows setup — npm scripts run through `cmd.exe` here, where `&` sequences commands
+  rather than backgrounding them the way bash does, so the (never-exiting) API dev process blocks
+  the web one from ever starting. Worked around it by starting `dev:api`/`dev:web` separately this
+  session; **not fixed in `package.json`** — flagged here rather than silently patched, since the
+  right fix (cross-platform background launcher, e.g. `concurrently`) is a small dependency
+  decision that felt worth surfacing rather than assuming.
+- Logged in as `admin` via the real login form, turned `OFFLINEMODE` on via a direct API call,
+  navigated to `/billing`, added a line to the pre-filled first item.
+- `context.setOffline(true)` — Playwright's real network-condition emulation, which actually flips
+  `navigator.onLine` and fires the browser's native `offline` event (unlike, say, intercepting
+  `fetch` calls, which wouldn't exercise the app's `window.addEventListener("online", ...)` path at
+  all). Submitted the bill: got the "Offline — bill queued" notice in the UI, then independently
+  confirmed via `page.evaluate()` reading `indexedDB.open("petropro-offline")` directly that the
+  bill was really sitting in the `queued-bills` object store — not just a UI-only claim.
+- `context.setOffline(false)` — the page's own `online` listener fired `flushBillQueue()`
+  automatically with zero manual action from the test script. Re-read IndexedDB: the store was
+  empty. Checked the Recent Bills panel: the new bill (`#45449`, ₹135.04) was there.
+- Separately verified the idempotency guarantee this whole mechanism depends on, directly against
+  the API (bypassing the browser): posted the same `clientRef` to `POST /bills` twice in a row —
+  both responses came back with the identical `bill_no` (`45450`), confirming a retried sync can
+  never double-post.
+- **Cleaned up afterward**, since the dev database on disk is the real Session 11 demo dataset, not
+  a throwaway: cancelled both test bills (`45449`, `45450`) via `POST /bills/:billNo/cancel` and
+  reverted `OFFLINEMODE` back to `NO`. Stopped both dev servers (`Stop-Process` on the listening
+  PIDs — `TaskStop`/normal kill doesn't reliably reach the actual `tsx watch`/`next dev` child on
+  this setup, same gotcha Sessions 6 and 10 already flagged).
+
+**Part 3 — Combobox rewritten as a real autocomplete** (`apps/web/components/ui/Combobox.tsx`):
+- Read every existing call site first (9 files: billing ×3, customer orders, catalog, settings,
+  attendant ×2, purchases, cashier, rate-changes) to confirm the external contract to preserve:
+  `options: {value,label}[]`, `value: string`, `onChange: (value: string) => void`, plus arbitrary
+  native `<input>` props and `className` passed through. Critically, several callers rely on
+  `onChange` firing on *every keystroke*, not just on selecting a suggestion — e.g. billing's
+  customer-code field is looked up against the loaded customer list by whatever's currently typed,
+  and typing a code that doesn't (yet) match anything is a valid, expected state. The rewrite
+  preserves this exactly: `onChange(e.target.value)` still fires on every input event; the dropdown
+  is a pure addition, not a gate on what value can be set.
+- New behavior: opens on focus, filters `options` by substring match against label or value
+  (case-insensitive, capped at 50 rendered rows — not stress-tested against a catalog bigger than
+  this demo's ~69 items, fine for now), full keyboard nav (`ArrowUp`/`ArrowDown` to move a
+  highlighted index, `Enter` to select the highlighted row, `Escape` to close), and click-to-select.
+  Click-to-select uses `onMouseDown` + `preventDefault()` on the option, not `onClick` — `onClick`
+  would fire *after* the input's `onBlur` (which closes the dropdown), so a plain click would race
+  its own dropdown-closing logic and sometimes miss; `preventDefault()` on `mousedown` stops the
+  blur from happening at all, so the click always lands on a still-open list.
+- **One real lint catch mid-build**: the first draft cleared a stale highlighted-index via
+  `useEffect(() => { if (highlighted >= filtered.length) setHighlighted(0) }, [...])`.
+  `eslint-plugin-react-hooks`'s `set-state-in-effect` rule correctly flagged this as a
+  cascading-render risk — it would re-render an extra time on every keystroke that shrank the
+  match list. Fixed by deriving `activeIndex` inline (`Math.min(highlighted, filtered.length - 1)`)
+  instead of storing the clamped value as state at all — no effect needed.
+- Preserved `list`/`datalist` being unnecessary now (native browser autocomplete UI is fully
+  replaced by the custom dropdown) — the prop type still `Omit`s `list` from the underlying
+  `InputHTMLAttributes`, just no longer needs to construct one.
+
+**Visual verification** (same `playwright-core` + Edge setup as Part 1), on the real running app:
+typing "pet" into the billing page's item field correctly filtered to `PETROL`, `PET ADDITIVE`, and
+`PET` (item code for "Petrol") — confirming the label-or-value substring match; two `ArrowDown`
+presses correctly highlighted the third (`Petrol`) row; `Enter` selected it, set the input value to
+`PET` (the item *code*, matching the existing `onChange(option.value)` contract — not a bug, just
+worth noting since "PET" reads oddly as a selected value until you know it's a code not a label);
+the dropdown closed after selection; a mouse click on an option in the pump-code field worked
+without the dropdown vanishing first; `Escape` and clicking outside the input both closed the
+dropdown without altering the value. Screenshots taken at each step, kept in the session scratch
+directory (not committed — throwaway verification artifacts, not project deliverables).
+
+**Verification performed this session:** `npm run typecheck` clean, `npm run lint` clean (after
+fixing the one `set-state-in-effect` finding above — a genuine, correctly-flagged issue, not a
+false positive dismissed), `npm run build` clean (21 web routes, unchanged — component rewrite only,
+no new routes). `npm run test`: **one transient failure on the very first run right after the
+Combobox change** — traced to a stale SQLite file lock left by a just-`Stop-Process`-killed dev-API
+process (same class of issue Session 6 flagged: forcibly killing `tsx watch` doesn't always release
+the file handle instantly). Reran twice immediately after with zero other changes: 73/73 both times,
+confirming it was a timing flake from process cleanup, not a real regression — noted here rather
+than silently ignored, since "reran and it passed" always deserves a stated reason, not just being
+memory-holed as noise. The full offline-sync and Combobox browser verification is detailed in Parts
+2–3 above.
+
+**State:** offline-sync verification left no residue (test bills cancelled, `OFFLINEMODE` reverted,
+dev servers stopped, ports 3000/4000 confirmed free). Combobox change is a pure component-file
+rewrite with no data-layer or schema impact. Not yet committed as of this write-up — see the actual
+end-of-session action for whether/how it got committed.
+
+**Next task:** none prescribed. If resuming from here: the WhatsApp invoice module PDF is still
+sitting untracked and unstarted, and is probably the most concrete "next feature" waiting on a
+decision, per the options offered (and not chosen) at the start of this session.
+
+**Notes for the next session:**
+- **`playwright-core` + a system Chrome/Edge `executablePath` is now a confirmed-working recipe**
+  for real browser verification in this environment when `chromium-cli` isn't installed. Worth
+  writing up as an actual project skill (`/run-skill-generator` was suggested by the `run` skill's
+  own guidance for exactly this situation — a fallback pattern that worked but required
+  installing a package and writing a driver) rather than re-deriving it from scratch next time.
+- **The root `"dev"` npm script is broken on Windows** (only starts the API — see Part 2's
+  explanation of `cmd.exe`'s `&` semantics vs bash's). Not fixed this session, flagged instead. A
+  real fix likely wants `concurrently` (or similar) rather than the shell-native `&`/`&&` a
+  cross-platform script needs to avoid.
+- The Combobox's 50-row cap and substring-only matching (no fuzzy match, no relevance ranking) are
+  simple-by-design choices appropriate for master-data lists in the tens-to-low-hundreds; revisit
+  if any list this feeds ever grows into the thousands.
