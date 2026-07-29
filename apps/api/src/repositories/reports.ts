@@ -61,6 +61,17 @@ export interface GroupItemSalesRow {
   tax_amount: number;
 }
 
+/** GST HSN summary (GSTR-1's HSN-wise table) — same shape as GstSummaryRow but keyed on the
+ *  item's HSN code instead of its tax rate. `hsn_code` is null for items with none set. */
+export interface HsnSalesRow {
+  bucket: string;
+  hsn_code: string | null;
+  qty: number;
+  taxable_value: number;
+  tax_amount: number;
+  total: number;
+}
+
 export interface VehicleSalesRow {
   vehicle_no: string;
   bill_count: number;
@@ -85,10 +96,24 @@ export interface StockSummaryRow {
   bucket: string;
   item_code: string;
   item_name: string;
+  group_code: string | null;
+  group_name: string | null;
   opening: number;
   purchases: number;
   consumption: number;
   closing: number;
+}
+
+/** Item-level purchase rows carrying their group, so the report page can nest items beneath each
+ *  group the same way GroupItemSalesRow does for sales. */
+export interface PurchaseGroupItemRow {
+  bucket: string;
+  group_code: string | null;
+  group_name: string | null;
+  item_code: string;
+  item_name: string;
+  qty: number;
+  value: number;
 }
 
 export const reportsRepo = {
@@ -155,6 +180,26 @@ export const reportsRepo = {
          ORDER BY bucket, i.group_code, bl.item_code`,
       )
       .all(from, to) as unknown as GroupItemSalesRow[];
+  },
+
+  /** GST HSN summary — GSTR-1's HSN-wise table groups by HSN code rather than tax rate. */
+  salesByHsn(from: string, to: string, granularity: Granularity): HsnSalesRow[] {
+    const bucket = bucketExpr("b.bill_date", granularity);
+    return db
+      .prepare(
+        `SELECT ${bucket} AS bucket, i.hsn_code,
+                SUM(bl.qty) AS qty,
+                SUM(bl.amount - bl.tax_amount) AS taxable_value,
+                SUM(bl.tax_amount) AS tax_amount,
+                SUM(bl.amount) AS total
+         FROM bill_lines bl
+         JOIN bills b ON b.bill_no = bl.bill_no
+         JOIN items i ON i.code = bl.item_code
+         WHERE b.status != 'cancelled' AND date(b.bill_date) BETWEEN ? AND ?
+         GROUP BY i.hsn_code, bucket
+         ORDER BY bucket, i.hsn_code`,
+      )
+      .all(from, to) as unknown as HsnSalesRow[];
   },
 
   /** Bill register — the "bill-wise" report is simply the filtered list of bills for a period. */
@@ -229,16 +274,35 @@ export const reportsRepo = {
            FROM stock_daybook sd
            WHERE sd.sdate BETWEEN ? AND ? ${itemFilter}
          )
-         SELECT o.bucket, o.item_code, i.name AS item_name,
+         SELECT o.bucket, o.item_code, i.name AS item_name, i.group_code, g.name AS group_name,
                 MAX(CASE WHEN o.rn_asc = 1 THEN o.opening END) AS opening,
                 SUM(o.receipts) AS purchases,
                 SUM(o.sales) AS consumption,
                 MAX(CASE WHEN o.rn_desc = 1 THEN o.closing END) AS closing
          FROM ordered o
          JOIN items i ON i.code = o.item_code
+         LEFT JOIN groups g ON g.code = i.group_code
          GROUP BY o.item_code, o.bucket
          ORDER BY o.bucket, o.item_code`,
       )
       .all(...params) as unknown as StockSummaryRow[];
+  },
+
+  /** Group-wise purchases — same "group subtotal + item rows beneath it" shape as
+   *  salesByGroupItems, applied to the purchases side instead of sales. */
+  purchasesByGroupItems(from: string, to: string, granularity: Granularity): PurchaseGroupItemRow[] {
+    const bucket = bucketExpr("p.pur_date", granularity);
+    return db
+      .prepare(
+        `SELECT ${bucket} AS bucket, i.group_code, g.name AS group_name, p.item_code, i.name AS item_name,
+                SUM(p.qty) AS qty, SUM(p.value) AS value
+         FROM purchases p
+         JOIN items i ON i.code = p.item_code
+         LEFT JOIN groups g ON g.code = i.group_code
+         WHERE date(p.pur_date) BETWEEN ? AND ?
+         GROUP BY i.group_code, p.item_code, bucket
+         ORDER BY bucket, i.group_code, p.item_code`,
+      )
+      .all(from, to) as unknown as PurchaseGroupItemRow[];
   },
 };

@@ -15,6 +15,7 @@ export interface Bill {
   cancelled_at: string | null;
   order_no: string | null;
   pump_code: string | null;
+  client_ref: string | null;
 }
 
 export interface BillLine {
@@ -56,6 +57,10 @@ export interface NewBill {
   /** Defaults to the DB's `datetime('now')` when omitted (see schema.ts) — pass explicitly to
    *  stamp a bill against the running business date rather than the wall-clock date. */
   bill_date?: string;
+  /** Idempotency key for offline-queued submissions (see web's lib/offlineQueue.ts) — a retried
+   *  sync attempt with the same client_ref must not create a second bill. Same shape as
+   *  pending_transactions.client_ref. */
+  client_ref?: string | null;
   lines: NewBillLine[];
 }
 
@@ -66,6 +71,13 @@ export const billsRepo = {
 
   getLines(billNo: number): BillLine[] {
     return db.prepare("SELECT * FROM bill_lines WHERE bill_no = ? ORDER BY id").all(billNo) as unknown as BillLine[];
+  },
+
+  /** Used by createWalkInBill's idempotency check — a retried offline-queue sync with a
+   *  previously-seen client_ref returns the bill that already exists instead of creating a
+   *  duplicate. */
+  getByClientRef(clientRef: string): Bill | undefined {
+    return db.prepare("SELECT * FROM bills WHERE client_ref = ?").get(clientRef) as Bill | undefined;
   },
 
   /** Creates a bill + its lines as a single unit. Not wrapped in an app-level transaction
@@ -81,8 +93,8 @@ export const billsRepo = {
       const billResult = input.bill_date
         ? db
             .prepare(
-              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, bill_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, bill_date, client_ref)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               input.vehicle_no ?? null,
@@ -95,11 +107,12 @@ export const billsRepo = {
               input.order_no ?? null,
               input.pump_code ?? null,
               input.bill_date,
+              input.client_ref ?? null,
             )
         : db
             .prepare(
-              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, client_ref)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
               input.vehicle_no ?? null,
@@ -111,6 +124,7 @@ export const billsRepo = {
               input.payment_type,
               input.order_no ?? null,
               input.pump_code ?? null,
+              input.client_ref ?? null,
             );
       const billNo = Number(billResult.lastInsertRowid);
 

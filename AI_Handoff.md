@@ -788,3 +788,100 @@ items) — this session added a scoped demo slice alongside those, not a replace
   will surface these rather than a real customer's biggest fuel purchase. Worth a heads-up to
   whoever presents the demo, not something to silently filter out (that would be guessing at
   business meaning the data doesn't confirm).
+
+### 2026-07-29 — Session 14 (doc-gap note + Google SSO, desktop launcher, offline bill idempotency, auto-backup, HSN/group reports)
+
+**Doc-gap note, read first:** this handoff log stopped being updated after Session 13, but the repo
+kept moving — `git log` shows the repo was later (re-)initialized as a single "Initial commit:
+PetroPro PWA (Phases 1-4) plus running business-date billing," then three more commits landed with
+no matching handoff entry: `6eb6f57` "Add mileage tracking, customer order portal, and richer
+reporting", `4b1e977`/`f17bd34` (excluding `WorkareaTill29Mar2026` legacy data from the Docker/
+Vercel build context), and `91630be` "Add HSN code to Item Master with GST-compliant format
+validation". None of those sessions' actual reasoning/verification detail was captured here — if
+you need that context, it isn't recoverable from this file, only from reading the commits
+themselves. Restarting doc discipline from this session forward.
+
+**Context:** picked up mid-session from a large uncommitted working tree — a full feature batch was
+already written (untracked new files + modifications across ~27 tracked files) but never verified
+end-to-end or committed. Asked the user how to proceed after finishing verification; they chose
+"update handoff docs first, then commit."
+
+**What was already in the working tree (built by whatever session came before this one, not by me
+this session):**
+- **Google SSO for staff** (`apps/api/src/routes/googleAuth.ts`, `apps/web/app/login/callback/`) —
+  additive to password login, matches by `users.email` (new nullable+unique column) against an
+  *existing active* user only; no auto-provisioning. CSRF `state` is HMAC-signed with the app's own
+  JWT secret and carried in the redirect URL (no server-side session needed for the round trip).
+  Session handoff back to the SPA rides in a URL fragment, never a query string, so it can't land in
+  server access logs. Gated by `NEXT_PUBLIC_GOOGLE_SSO_ENABLED` on the web side and
+  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` on the API side — absent either, the feature no-ops
+  cleanly (501 from the API, no button on the web login page).
+- **Desktop kiosk launcher** (`scripts/desktop/start.mjs`, `apps/web/components/DesktopTitleBar.tsx`)
+  — starts the built API + Next.js standalone server locally, then opens a chromeless
+  `chrome/edge/brave --app --kiosk` window (falls back to the OS default browser if none found), so
+  the app behaves like a native install with no Electron/Tauri runtime. A same-origin, localhost-only
+  control server (`DESKTOP_CONTROL_PORT`, default 4098) lets `DesktopTitleBar`'s Close button shut
+  the whole thing down, since a kiosk window has no window chrome of its own to close. Explicitly
+  modeled on WareCore's existing `scripts/desktop/start.mjs` pattern (per the file's own comment).
+- **Offline bill-queue idempotency** — `bills.client_ref` (new nullable+unique column, same pattern
+  `pending_transactions.client_ref` already used), `billsRepo.getByClientRef()`,
+  `createWalkInBill()` short-circuits to the existing bill on a repeat `client_ref` instead of
+  double-posting. Web side: `lib/offlineQueue.ts` gained a second IndexedDB object store
+  (`queued-bills`, DB version bumped 1→2 with an `onupgradeneeded` that only creates whichever store
+  is missing, so existing installs keep their queued pending-transaction entries) plus
+  `queueBill()`/`flushBillQueue()`, mirroring the existing pending-transaction queue/flush pair.
+- **Automatic daily backups** — new `AUTOBACKUP`/`OFFLINEMODE` settings keys (schema defaults +
+  `SETTINGS_KEYS`, toggle UI on `/settings`); `services/backup.ts` gained
+  `runAutoBackupIfDue()`/`startBackupScheduler()` (checked on startup, then every 24h; skips if the
+  newest backup on disk is under a day old) plus `pruneOldBackups()` (keeps the newest 14) and
+  `getBackupPath()`. `startBackupScheduler()` is called from `index.ts` after the server starts
+  listening — deliberately not from `buildApp()`, so building the app for tests never schedules
+  background work. New `GET /backup/:filename/download` route (streams the file; the prior API could
+  create/list/restore backups but never get a copy off the server).
+- **HSN-wise GST report + group-nested stock/purchase reports** — `reportsRepo.salesByHsn()` (GSTR-1
+  HSN-wise table, groups by `items.hsn_code` instead of tax rate), `stockSummary()` and the new
+  `purchasesByGroupItems()` both now carry `group_code`/`group_name` so the reports page can nest
+  items beneath their group, matching the existing sales-by-group-item report's shape.
+- **Users page gained an `email` field** (create + inline edit) — this is what an admin sets to
+  enable Google SSO for a staff account; column is otherwise unused by anything else.
+
+**What I actually did this session:**
+1. Read the full diff/untracked-file set file-by-file to confirm the batch was internally consistent
+   (routes registered in `app.ts`, scheduler started from `index.ts`, schema migrations present,
+   shared-types updated, UI wired to the new endpoints) rather than assuming from the diffstat alone.
+2. Ran `npm run test` (73/73), `npm run typecheck` (clean across `shared-types`+`api`+`web`),
+   `npm run lint` (found one issue), `npm run build` (clean, 21 web routes).
+3. **Fixed the one lint finding**: a stale `eslint-disable-next-line react-hooks/set-state-in-effect`
+   comment in `apps/web/app/(app)/billing/page.tsx` (line 185) — the rule was no longer firing there,
+   so ESLint flagged the directive itself as unused. Removed it; re-ran lint clean.
+4. **Wired the missing integration point**: `scripts/desktop/start.mjs` existed and was fully
+   functional but nothing in root `package.json` invoked it. Added a `"desktop": "node
+   scripts/desktop/start.mjs"` script.
+5. Re-ran the full test/typecheck/lint/build pass after both fixes — all clean.
+
+**Verification performed this session:** the four commands above, all clean, on the exact code as it
+now sits in the working tree. **Not verified:** the Google OAuth round trip against real Google
+infra (no `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` configured in this environment, and no browser
+automation tool available — same standing gap as every prior session), and the desktop kiosk
+launcher's actual browser-opening behavior (would need a built `apps/api/dist` +
+`.next/standalone` plus a real Chromium install to exercise `scripts/desktop/start.mjs` end-to-end,
+not attempted this session — build-clean and read-through were the extent of verification here).
+
+**State:** working tree changes verified clean and then committed this session (see the commit for
+the exact file list).
+
+**Next task:** none prescribed beyond what's in `Todo.md`. If picking up the two "not verified" gaps
+above: Google SSO needs real Google Cloud OAuth credentials to test against, and the desktop launcher
+needs an actual `npm run build` + a Chromium browser on the machine running it — neither is possible
+in a headless dev-container environment like this one, so flag that plainly rather than attempting a
+fake pass.
+
+**Notes for the next session:**
+- Resume the per-session handoff-doc discipline this file establishes — it lapsed for at least the
+  four commits listed in the doc-gap note above, and losing that trail is exactly the failure mode
+  this file exists to prevent.
+- The `GOOGLE_SSO_ENABLED`/`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_OAUTH_REDIRECT_URI`/
+  `WEB_APP_URL`/`DESKTOP_CONTROL_PORT` environment variables are read by `config.ts` files on both
+  sides but there is still no `.env.example` anywhere in this repo (there wasn't one before this
+  session either) — worth adding if a future session has spare capacity, so these don't have to be
+  rediscovered by grepping source.

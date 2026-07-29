@@ -101,6 +101,31 @@ test("createWalkInBill persists a pump code", () => {
   assert.equal(result.bill.pump_code, "P1");
 });
 
+test("createWalkInBill with a clientRef is idempotent — a retried sync doesn't double-post", () => {
+  const todayBefore = new Date().toISOString().slice(0, 10);
+  const stockBefore = stockRepo.getRow("OIL", todayBefore)?.sales ?? 0;
+
+  const first = createWalkInBill({
+    cashierId: "cashier1",
+    paymentType: "cash",
+    clientRef: "offline-bill-abc123",
+    lines: [{ item_code: "OIL", qty: 3 }],
+  });
+  const second = createWalkInBill({
+    cashierId: "cashier1",
+    paymentType: "cash",
+    clientRef: "offline-bill-abc123",
+    lines: [{ item_code: "OIL", qty: 3 }],
+  });
+
+  assert.equal(second.bill.bill_no, first.bill.bill_no);
+  assert.equal(second.bill.grand_total, first.bill.grand_total);
+
+  // Only one sale posted to stock, not two.
+  const stockAfter = stockRepo.getRow("OIL", todayBefore)?.sales ?? 0;
+  assert.equal(stockAfter - stockBefore, 3);
+});
+
 test("billsRepo.listRecent returns the newest bills first, most recent limited", () => {
   const first = createWalkInBill({ cashierId: "cashier1", paymentType: "cash", lines: [{ item_code: "OIL", qty: 1 }] });
   const second = createWalkInBill({ cashierId: "cashier1", paymentType: "cash", lines: [{ item_code: "OIL", qty: 1 }] });

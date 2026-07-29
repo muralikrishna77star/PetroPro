@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type Tenant, type Group, type Pump, type BackupFile, type Settings, type SettingKey } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  downloadAuthed,
+  type Tenant,
+  type Group,
+  type Pump,
+  type BackupFile,
+  type Settings,
+  type SettingKey,
+} from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
@@ -261,6 +271,11 @@ const FLAG_LABELS: Record<SettingKey, { label: string; hint: string }> = {
   PRINTSPECIALCHARACTERS: { label: "Print special characters", hint: "Legacy key: PRINTSPECIALCHARACTERS" },
   BILLENTRY: { label: "Bill entry", hint: "Legacy key: BILLENTRY" },
   GSTNAMEADD: { label: "GST name on printout", hint: "Legacy key: GSTNAMEADD" },
+  AUTOBACKUP: { label: "Automatic daily backups", hint: "Runs once a day on the server, keeps the last 14" },
+  OFFLINEMODE: {
+    label: "Allow offline billing",
+    hint: "Staff can keep entering bills without connectivity — they queue on-device and sync automatically once back online",
+  },
 };
 
 function OperationalFlagsSection({ token, editable }: { token: string; editable: boolean }) {
@@ -452,6 +467,19 @@ function BackupSection({ token }: { token: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  async function handleDownload(filename: string) {
+    setError(null);
+    setDownloading(filename);
+    try {
+      await downloadAuthed(api.backupDownloadUrl(filename), token, filename);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Download failed");
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   function refresh() {
     api.listBackups(token).then(setBackups).catch(() => undefined);
@@ -499,7 +527,9 @@ function BackupSection({ token }: { token: string }) {
     <Card color="teal">
       <h2 className="mb-1 text-lg font-semibold">Backup &amp; Restore</h2>
       <p className="mb-4 text-sm text-fg-muted">
-        Snapshots are stored on the server (admin-only). Restoring overwrites the live database.
+        Snapshots are stored on the server (admin-only) — download a copy to keep one off-server too.
+        Restoring overwrites the live database. Automatic daily backups can be toggled below under
+        Operational Settings.
       </p>
       <button
         onClick={handleCreate}
@@ -517,9 +547,18 @@ function BackupSection({ token }: { token: string }) {
             <span>
               {b.filename} — {(b.sizeBytes / 1024).toFixed(0)} KB
             </span>
-            <button onClick={() => handleRestore(b.filename)} disabled={working} className="text-error disabled:opacity-50">
-              Restore
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleDownload(b.filename)}
+                disabled={downloading === b.filename}
+                className="text-fg-muted underline disabled:opacity-50"
+              >
+                {downloading === b.filename ? "Downloading..." : "Download"}
+              </button>
+              <button onClick={() => handleRestore(b.filename)} disabled={working} className="text-error disabled:opacity-50">
+                Restore
+              </button>
+            </div>
           </li>
         ))}
         {backups.length === 0 && <li className="text-fg-muted">No backups yet.</li>}

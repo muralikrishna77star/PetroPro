@@ -192,6 +192,34 @@ billing master-detail layout in an actual browser** — no Playwright/Puppeteer/
 in this environment (same gap as every prior session); relied on clean typecheck/lint/build plus the
 HTTP-level checks above instead.
 
+## Session 14 — doc-gap note + Google SSO, desktop launcher, offline bill idempotency, auto-backup, HSN/group reports
+
+Picked up a large already-written but uncommitted/unverified working tree (see `AI_Handoff.md`
+Session 14 for full detail on both what was built and the doc-tracking gap since Session 13 — commits
+`6eb6f57`/`4b1e977`/`f17bd34`/`91630be` landed with no matching handoff entry).
+
+- [x] **Google SSO for staff** — `GET /auth/google` + `/auth/google/callback`, matches an existing
+      active user by `users.email` (new column), no auto-provisioning. Gated off by default
+      (`GOOGLE_CLIENT_ID`/`SECRET` unset → 501; `NEXT_PUBLIC_GOOGLE_SSO_ENABLED` unset → no button).
+- [x] **Desktop kiosk launcher** — `npm run desktop` (script existed, wasn't wired into
+      `package.json` until this session) starts the built API+web servers and opens a chromeless
+      Chromium kiosk window; `DesktopTitleBar` gives it a Close button via a localhost control server.
+- [x] **Offline bill-queue idempotency** — `bills.client_ref`, same pattern as the existing
+      `pending_transactions.client_ref`; web's IndexedDB offline queue gained a second store for
+      full queued bills (not just pending fuel entries).
+- [x] **Automatic daily backups** — `AUTOBACKUP` setting, checked on startup + every 24h, keeps the
+      newest 14; new `GET /backup/:filename/download` to get a copy off the server.
+- [x] **HSN-wise GST report** (`salesByHsn`) + group-nesting added to the stock and purchase reports
+      (`stockSummary`, new `purchasesByGroupItems`), matching the existing group-nested sales report.
+- [x] **Users page: email field** — what an admin sets to enable Google SSO for a staff account.
+- [x] Fixed one lint finding (stale `eslint-disable` in `billing/page.tsx`) and wired the missing
+      `"desktop"` root npm script — the only two loose ends found during verification.
+
+Verified: full test suite (73/73), `typecheck`/`lint`/`build` all clean (21 web routes). **Not
+verified**: the real Google OAuth round trip (no credentials configured here) and the desktop
+launcher's actual browser-opening behavior (no Chromium + no built output exercised this session) —
+both need a non-headless environment with real credentials/a browser installed.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo
@@ -202,7 +230,13 @@ HTTP-level checks above instead.
   any session so far.
 - Real-world verification of the Docker packaging and CI workflow (Dockerfiles updated Session 10
   for the shared-types build step, but neither has actually been run — no Docker in this dev
-  environment; repo isn't a git repository yet).
+  environment; the repo is now on git, per Session 14, but a real Actions run still hasn't happened).
+- **Google SSO and the desktop kiosk launcher (Session 14) are unverified beyond typecheck/lint/build**
+  — no real Google OAuth credentials and no Chromium browser have been available in this environment
+  to actually exercise either end-to-end.
+- **No `.env.example`** anywhere in the repo, despite a growing list of env vars read by `config.ts`
+  on both sides (`GOOGLE_CLIENT_ID`/`SECRET`, `WEB_APP_URL`, `DESKTOP_CONTROL_PORT`, etc.) — would
+  need to be grepped out of source today.
 - See `Project_Status.md`'s "Known gaps" for smaller, accumulated items (date-range query pattern,
   floating-point rounding, `opening_balances` overwrite semantics, the destructured-dynamic-import
   gotcha, the `applyDueRateChanges()` stale-response-snapshot quirk, the `BILL_NO`-isn't-unique

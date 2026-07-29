@@ -11,6 +11,8 @@ export const SETTINGS_KEYS = [
   "PRINTSPECIALCHARACTERS",
   "BILLENTRY",
   "GSTNAMEADD",
+  "AUTOBACKUP",
+  "OFFLINEMODE",
 ] as const;
 
 export type SettingKey = (typeof SETTINGS_KEYS)[number];

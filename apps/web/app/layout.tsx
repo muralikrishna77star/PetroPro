@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Poppins, Roboto_Mono } from "next/font/google";
 import { RegisterServiceWorker } from "./register-sw";
+import { DesktopTitleBar } from "@/components/DesktopTitleBar";
 import "./globals.css";
 
 const inter = Inter({
@@ -56,6 +57,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <RegisterServiceWorker />
+        <DesktopTitleBar />
         {children}
       </body>
     </html>

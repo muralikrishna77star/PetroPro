@@ -36,3 +36,23 @@ test("list() never includes password_hash", () => {
     assert.equal((user as Record<string, unknown>).password_hash, undefined);
   }
 });
+
+test("getByEmail() finds a user by their Google SSO email, used by routes/googleAuth.ts", () => {
+  usersRepo.create({ user_id: "U5", name: "Has Email", password_hash: "hash", role: "operator", email: "u5@example.com" });
+  assert.equal(usersRepo.getByEmail("u5@example.com")?.user_id, "U5");
+  assert.equal(usersRepo.getByEmail("nobody@example.com"), undefined);
+});
+
+test("update() without an email field leaves a previously-set email untouched", () => {
+  usersRepo.create({ user_id: "U6", name: "Keep Email", password_hash: "hash", role: "operator", email: "u6@example.com" });
+  usersRepo.update("U6", { name: "Renamed U6", role: "operator" });
+  assert.equal(usersRepo.getById("U6")?.email, "u6@example.com");
+});
+
+test("update() with an explicit email clears or changes it", () => {
+  usersRepo.create({ user_id: "U7", name: "Change Email", password_hash: "hash", role: "operator", email: "old@example.com" });
+  usersRepo.update("U7", { name: "Change Email", role: "operator", email: "new@example.com" });
+  assert.equal(usersRepo.getById("U7")?.email, "new@example.com");
+  usersRepo.update("U7", { name: "Change Email", role: "operator", email: null });
+  assert.equal(usersRepo.getById("U7")?.email, null);
+});

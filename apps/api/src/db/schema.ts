@@ -218,7 +218,9 @@ export function applySchema(db: DatabaseSync): void {
       ('PRINTTESTMODE', 'YES'),
       ('PRINTSPECIALCHARACTERS', 'NO'),
       ('BILLENTRY', 'NO'),
-      ('GSTNAMEADD', 'NO');
+      ('GSTNAMEADD', 'NO'),
+      ('AUTOBACKUP', 'YES'),
+      ('OFFLINEMODE', 'NO');
 
     -- Phase 4: shifts, audit trail, financial year, offline-entry dedup.
 
@@ -298,8 +300,21 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "customers", "password_hash", "TEXT");
   ensureColumn(db, "bill_lines", "order_line_id", "INTEGER REFERENCES order_lines(id)");
   ensureColumn(db, "items", "hsn_code", "TEXT");
+  // Optional Google SSO identity for a staff user — see routes/googleAuth.ts. Nullable so
+  // user-id/password login keeps working for anyone with no email on file.
+  ensureColumn(db, "users", "email", "TEXT");
+  // Idempotency key for offline-queued bill submissions (see lib/offlineQueue.ts on the web
+  // side) — the same "retry-safe because the client_ref already exists" pattern
+  // pending_transactions.client_ref already uses.
+  ensureColumn(db, "bills", "client_ref", "TEXT");
 
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_transactions_client_ref ON pending_transactions(client_ref) WHERE client_ref IS NOT NULL",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_bills_client_ref ON bills(client_ref) WHERE client_ref IS NOT NULL",
   );
 }

@@ -46,6 +46,9 @@ export interface WalkInBillInput {
   /** Which of the customer's pending orders (repositories/orders.ts) this bill fulfills, if any. */
   fulfillOrderNo?: number;
   pumpCode?: string | null;
+  /** Idempotency key for offline-queued bill submissions — see createWalkInBill's early-return
+   *  below and web's lib/offlineQueue.ts. */
+  clientRef?: string | null;
   lines: WalkInLineInput[];
 }
 
@@ -158,6 +161,19 @@ export function settlePendingTransaction(input: SettleInput): SettleResult {
  * straight by the cashier.
  */
 export function createWalkInBill(input: WalkInBillInput): BillResult {
+  // Idempotent retry: an offline-queued bill synced twice (e.g. the sync succeeded but the
+  // client never saw the response) must resolve to the one bill already created, not a duplicate.
+  if (input.clientRef) {
+    const existing = billsRepo.getByClientRef(input.clientRef);
+    if (existing) {
+      return {
+        bill: existing,
+        lines: billsRepo.getLines(existing.bill_no),
+        amountInWords: amountInWords(existing.grand_total),
+      };
+    }
+  }
+
   if (input.lines.length === 0) {
     throw new Error("A bill needs at least one line");
   }
@@ -209,6 +225,7 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
     order_no: input.orderNo ?? null,
     pump_code: input.pumpCode ?? null,
     bill_date: billTimestamp(businessDate),
+    client_ref: input.clientRef ?? null,
     lines,
   });
 

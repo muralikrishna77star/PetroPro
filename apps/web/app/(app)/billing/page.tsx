@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -19,6 +19,7 @@ import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
 import { PaymentQrPanel } from "@/components/PaymentQrPanel";
 import { deleteDraft, listDrafts, saveDraft, type BillingDraft, type BillingDraftLine } from "@/lib/billingDrafts";
+import { queueBill, getQueuedBills, flushBillQueue } from "@/lib/offlineQueue";
 
 type PaymentType = "cash" | "upi" | "card" | "credit";
 
@@ -67,6 +68,7 @@ export default function BillingPage() {
   const [lines, setLines] = useState<BillingDraftLine[]>([]);
   const [invoice, setInvoice] = useState<SettleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [queuedNotice, setQueuedNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [lookupBillNo, setLookupBillNo] = useState("");
@@ -81,6 +83,29 @@ export default function BillingPage() {
   const [closingDay, setClosingDay] = useState(false);
   const [closeDayError, setCloseDayError] = useState<string | null>(null);
 
+  const [offlineModeAllowed, setOfflineModeAllowed] = useState(false);
+  const [queuedBillCount, setQueuedBillCount] = useState(0);
+  const [syncingBills, setSyncingBills] = useState(false);
+
+  const refreshQueuedBillCount = useCallback(() => {
+    getQueuedBills()
+      .then((queued) => setQueuedBillCount(queued.length))
+      .catch(() => undefined);
+  }, []);
+
+  const syncQueuedBills = useCallback(async () => {
+    if (!session) return;
+    setSyncingBills(true);
+    try {
+      await flushBillQueue(session.token);
+    } finally {
+      setSyncingBills(false);
+      refreshQueuedBillCount();
+      refreshRecentBills();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, refreshQueuedBillCount]);
+
   useEffect(() => {
     if (!session) return;
     api
@@ -93,10 +118,23 @@ export default function BillingPage() {
     api.listCustomers(session.token).then(setCustomers).catch(() => undefined);
     api.listPumps(session.token).then(setPumps).catch(() => undefined);
     api.getTenant(session.token).then(setTenant).catch(() => undefined);
+    api
+      .getSettings(session.token)
+      .then((s) => setOfflineModeAllowed(s.OFFLINEMODE === "YES"))
+      .catch(() => undefined);
     refreshBusinessDate();
     refreshRecentBills();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bridging from localStorage, an external system
     setDrafts(listDrafts());
+
+    refreshQueuedBillCount();
+    syncQueuedBills();
+    window.addEventListener("online", syncQueuedBills);
+    const interval = setInterval(syncQueuedBills, 20_000);
+    return () => {
+      window.removeEventListener("online", syncQueuedBills);
+      clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
@@ -144,7 +182,6 @@ export default function BillingPage() {
     if (!known || !session) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting derived UI state (not credit / no match yet), not a subscription
       setCustomerInfo(null);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting derived UI state, not a subscription
       setPendingOrders([]);
       setSelectedOrderNo(null);
       return;
@@ -285,7 +322,17 @@ export default function BillingPage() {
   async function submitBill(autoPrint: boolean) {
     if (!session || !canSubmit) return;
     setError(null);
+    setQueuedNotice(null);
     setSubmitting(true);
+
+    const billLines = lines.map((l) => ({
+      item_code: l.item_code,
+      qty: l.qty,
+      odometer: l.odometerClosing,
+      odometerOpening: l.odometerOpening,
+      orderLineId: l.orderLineId,
+    }));
+
     try {
       const result = await api.createWalkInBill(session.token, {
         paymentType,
@@ -294,13 +341,7 @@ export default function BillingPage() {
         orderNo: paymentType === "credit" && orderNo ? orderNo : undefined,
         fulfillOrderNo: paymentType === "credit" ? selectedPendingOrder?.order_no : undefined,
         pumpCode: pumpCode || undefined,
-        lines: lines.map((l) => ({
-          item_code: l.item_code,
-          qty: l.qty,
-          odometer: l.odometerClosing,
-          odometerOpening: l.odometerOpening,
-          orderLineId: l.orderLineId,
-        })),
+        lines: billLines,
       });
       setInvoice(result);
       resetForm();
@@ -309,7 +350,27 @@ export default function BillingPage() {
         downloadAuthed(api.invoicePdfUrl(result.bill.bill_no), session.token, `invoice-${result.bill.bill_no}.pdf`, "open");
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Bill creation failed");
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (offlineModeAllowed) {
+        // Network unreachable (server rejected nothing — never got there) rather than a
+        // validation failure, and the admin has allowed offline billing — queue it locally.
+        await queueBill({
+          clientRef: crypto.randomUUID(),
+          paymentType,
+          customerCode: paymentType === "credit" ? customerCode : undefined,
+          vehicleNo: vehicleNo || undefined,
+          orderNo: paymentType === "credit" && orderNo ? orderNo : undefined,
+          pumpCode: pumpCode || undefined,
+          lines: billLines,
+          queuedAt: new Date().toISOString(),
+        });
+        setQueuedNotice("Offline — bill queued, will sync automatically once back online.");
+        resetForm();
+        refreshQueuedBillCount();
+      } else {
+        setError("Bill creation failed — check connectivity and try again");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -378,6 +439,15 @@ export default function BillingPage() {
               <span className="rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-sm">
                 Billing date: <span className="font-medium">{businessDate}</span>
               </span>
+            )}
+            {queuedBillCount > 0 && (
+              <button
+                onClick={syncQueuedBills}
+                disabled={syncingBills}
+                className="rounded-full border border-warning px-3 py-1 text-xs text-warning disabled:opacity-50"
+              >
+                {syncingBills ? "Syncing..." : `${queuedBillCount} bill(s) queued — sync now`}
+              </button>
             )}
             <button
               onClick={handleCloseDay}
@@ -665,6 +735,7 @@ export default function BillingPage() {
           </table>
 
           {error && <p className="mt-3 text-sm text-error">{error}</p>}
+          {queuedNotice && <p className="mt-3 text-sm text-warning">{queuedNotice}</p>}
 
           <div className="mt-4 flex flex-wrap gap-2">
             <button

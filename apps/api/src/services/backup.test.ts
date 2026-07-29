@@ -16,7 +16,7 @@ process.env.DB_PATH = testDbPath;
 // repository uses) or repeated `dbClient.db` property access preserves the ESM live binding.
 const dbClient = await import("../db/client.js");
 const { groupsRepo } = await import("../repositories/groups.js");
-const { createBackup, listBackups, restoreBackup } = await import("./backup.js");
+const { createBackup, listBackups, restoreBackup, pruneOldBackups } = await import("./backup.js");
 
 test.after(() => {
   try {
@@ -69,4 +69,19 @@ test("restoreBackup rejects a path-traversal filename", () => {
 
 test("restoreBackup rejects a nonexistent backup", () => {
   assert.throws(() => restoreBackup("does-not-exist.db"), /not found/i);
+});
+
+test("pruneOldBackups keeps only the newest `keep` backups", () => {
+  for (let i = 0; i < 5; i++) createBackup();
+  const before = listBackups(); // already sorted newest-first
+  assert.ok(before.length >= 5);
+  const expectedSurvivors = before.slice(0, 2).map((b) => b.filename);
+
+  pruneOldBackups(2);
+  const after = listBackups();
+  assert.equal(after.length, 2);
+  assert.deepEqual(
+    after.map((b) => b.filename),
+    expectedSurvivors,
+  );
 });

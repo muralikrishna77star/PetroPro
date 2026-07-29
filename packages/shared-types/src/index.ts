@@ -54,6 +54,8 @@ export interface AppUser {
   role: Role;
   active: number;
   created_at: string;
+  /** Optional Google SSO identity — null means this user can only sign in with user-id/password. */
+  email: string | null;
 }
 
 export interface PendingTransaction {
@@ -206,6 +208,8 @@ export interface StockSummaryRow {
   bucket: string;
   item_code: string;
   item_name: string;
+  group_code: string | null;
+  group_name: string | null;
   opening: number;
   purchases: number;
   consumption: number;
@@ -262,6 +266,29 @@ export interface GroupItemSalesRow {
   tax_amount: number;
 }
 
+/** GST HSN summary (GSTR-1's HSN-wise table) — same shape as GstSummaryRow but keyed on the
+ *  item's HSN code instead of its tax rate. `hsn_code` is null for items with none set. */
+export interface HsnSalesRow {
+  bucket: string;
+  hsn_code: string | null;
+  qty: number;
+  taxable_value: number;
+  tax_amount: number;
+  total: number;
+}
+
+/** Item-level purchase rows carrying their group, mirroring GroupItemSalesRow for the
+ *  purchases side of the group-wise reports. */
+export interface PurchaseGroupItemRow {
+  bucket: string;
+  group_code: string | null;
+  group_name: string | null;
+  item_code: string;
+  item_name: string;
+  qty: number;
+  value: number;
+}
+
 export interface VehicleSalesRow {
   vehicle_no: string;
   bill_count: number;
@@ -299,7 +326,9 @@ export type SettingKey =
   | "PRINTTESTMODE"
   | "PRINTSPECIALCHARACTERS"
   | "BILLENTRY"
-  | "GSTNAMEADD";
+  | "GSTNAMEADD"
+  | "AUTOBACKUP"
+  | "OFFLINEMODE";
 
 export type Settings = Record<SettingKey, "YES" | "NO">;
 

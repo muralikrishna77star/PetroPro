@@ -55,15 +55,27 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   SQLite database per customer, not a shared multi-tenant schema; see "Known gaps"), seeded with the
   real Srinivasa Agencies identity via a new `importTenant()` step in `dbf/import.ts`
   (`HEADINGS.DBF` + `SETTINGS.DBF`'s `GSTNO`). Invoice/receipt PDFs now also print the tenant's
-  tagline. **46 tests total** (was 44).
-- **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **18 routes**
-  (unchanged). Session 13: `NavBar` rebuilt as legacy-`MAINMENU.PRG`-style dropdown groups
+  tagline. Sessions since 13 without handoff detail added mileage tracking, a customer order portal,
+  richer reporting, and HSN codes on the item master (see "Known gaps" — doc trail lost for these).
+  Session 14: `routes/googleAuth.ts` (Google SSO for staff, additive to password login, matches by
+  a new `users.email` column), `bills.client_ref` (offline-queue idempotency, same pattern as
+  `pending_transactions.client_ref`), `services/backup.ts`'s daily auto-backup scheduler +
+  `GET /backup/:filename/download`, and `reportsRepo.salesByHsn()` + group-nested stock/purchase
+  reports. **73 tests total** (was 46 as of Session 13; the jump includes the undocumented
+  intermediate sessions' tests, not all added by Session 14).
+- **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **21 routes** (was 18
+  as of Session 13; `/login/callback` is new in Session 14, the rest from undocumented intermediate
+  sessions). Session 13: `NavBar` rebuilt as legacy-`MAINMENU.PRG`-style dropdown groups
   (Maintenance/Bill/Reports/Search/Utilities, colored per group) showing the live tenant name instead
   of a hardcoded "PetroPro"; new shared `components/Card.tsx` (colored-left-border bordered panel,
   color matched to each page's NavBar group) applied across all 14 authenticated pages, replacing the
   ad hoc `border-zinc-200` wrappers every page used to hand-roll; `/billing` reworked into a
   master-detail layout (payment-type header + a real line-items table with computed rate/amount) with
   the customer-code field and a due/credit-limit panel shown only for Credit, hidden for Cash/Card.
+  Session 14: `/login/callback` (lands here after Google SSO, hands off to the same role-based
+  routing password login uses) and `components/DesktopTitleBar.tsx` (only renders inside the
+  `scripts/desktop/start.mjs` kiosk window — a slim bar with a Close button, invisible in the
+  ordinary browser/PWA case).
 
 - **`apps/api/src/dbf/importTransactions.ts`** — Session 11 (`npm run import:demo-transactions`
   from `apps/api`). Imports a fixed real 3-month window (2019-04 through mid-2019-06, the actual
@@ -94,9 +106,18 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   letterhead) — the dropdown menu and master-detail layout's actual rendering were not visually
   confirmed in a browser.
 - Real-world verification of the Docker packaging and CI workflow — both written in Session 7, and
-  the Dockerfiles were updated this session for the new `packages/shared-types` build step, but
-  neither has actually been run (no Docker in this dev environment; repo isn't a git repository
-  yet, let alone pushed to GitHub). Still blocked on the same two things.
+  the Dockerfiles were updated in Session 10 for the `packages/shared-types` build step, but neither
+  has actually been run (no Docker in this dev environment). The repo is on git now (Session 14
+  found it already initialized, on branch `master`) but hasn't been pushed anywhere a real Actions
+  run could happen — still blocked on both fronts.
+- **Google SSO and the desktop kiosk launcher (Session 14) are unverified beyond a clean
+  typecheck/lint/build** — no real Google OAuth credentials and no Chromium browser have been
+  available in this environment to exercise either end-to-end. See `AI_Handoff.md` Session 14.
+- **This file, `AI_Handoff.md`, and `Todo.md` fell out of sync with the repo for several sessions**
+  — `git log` shows commits (`6eb6f57`, `4b1e977`, `f17bd34`, `91630be`: mileage tracking, customer
+  order portal, richer reporting, HSN codes, build-context exclusions) with no matching handoff
+  entries. That history isn't reconstructable from these docs; Session 14 restarted the discipline
+  but didn't attempt to backfill what those sessions actually did or why.
 - Any behavior actually gated by the new operational-settings flags (e.g. `FLEETCARDENTRY=NO`
   doesn't hide fleet-card fields anywhere) — the gap asked for a settings screen, not new gating
   logic, and `SETTINGS.PRG` doesn't survive in `legacy/Workarea/` to confirm what the legacy gating

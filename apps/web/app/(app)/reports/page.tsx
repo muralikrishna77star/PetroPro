@@ -9,6 +9,8 @@ import {
   type ItemSalesRow,
   type CashierSalesRow,
   type GroupItemSalesRow,
+  type HsnSalesRow,
+  type PurchaseGroupItemRow,
   type Bill,
   type VehicleSalesRow,
   type FleetCardSalesRow,
@@ -25,6 +27,7 @@ type ReportType =
   | "sales-item"
   | "sales-cashier"
   | "sales-group"
+  | "sales-hsn"
   | "bills"
   | "vehicles"
   | "fleet-cards"
@@ -32,19 +35,22 @@ type ReportType =
   | "stock-summary"
   | "stock"
   | "purchases"
+  | "purchases-group"
   | "mileage";
 
 const REPORT_LABELS: Record<ReportType, string> = {
   "sales-item": "Sales — Item-wise",
   "sales-cashier": "Sales — Cashier-wise",
   "sales-group": "Sales — Group-wise",
+  "sales-hsn": "Sales — HSN-wise",
   bills: "Bill Register",
   vehicles: "Vehicle-wise Sales",
   "fleet-cards": "Fleet Card Sales",
   gst: "GST Summary",
-  "stock-summary": "Stock Report",
+  "stock-summary": "Stock Report — Group-wise",
   stock: "Stock Day-book",
   purchases: "Purchases",
+  "purchases-group": "Purchases — Group-wise",
   mileage: "Vehicle Mileage",
 };
 
@@ -80,7 +86,11 @@ export default function ReportsPage() {
     api.getBusinessDate(session.token).then((r) => setTo(r.date)).catch(() => undefined);
   }, [session]);
 
-  const needsGranularity = reportType.startsWith("sales-") || reportType === "gst" || reportType === "stock-summary";
+  const needsGranularity =
+    reportType.startsWith("sales-") ||
+    reportType === "gst" ||
+    reportType === "stock-summary" ||
+    reportType === "purchases-group";
   const needsItemFilter = reportType === "stock" || reportType === "stock-summary" || reportType === "purchases";
   const needsVehicle = reportType === "mileage";
 
@@ -98,6 +108,12 @@ export default function ReportsPage() {
           break;
         case "sales-group":
           setRows(await api.getSalesReport(session.token, "group-items", from, to, granularity));
+          break;
+        case "sales-hsn":
+          setRows(await api.getSalesReport(session.token, "hsn", from, to, granularity));
+          break;
+        case "purchases-group":
+          setRows(await api.getPurchasesByGroup(session.token, from, to, granularity));
           break;
         case "bills":
           setRows(await api.getBillRegister(session.token, from, to));
@@ -286,7 +302,43 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
       );
     }
     case "sales-group": {
-      return <GroupItemSalesTable rows={rows as GroupItemSalesRow[]} money={money} />;
+      return (
+        <GroupedTable
+          rows={rows as GroupItemSalesRow[]}
+          columns={[
+            { header: "Qty", value: (r) => r.qty },
+            { header: "Amount", value: (r) => r.amount, format: money },
+            { header: "Tax", value: (r) => r.tax_amount, format: money },
+          ]}
+        />
+      );
+    }
+    case "sales-hsn": {
+      const data = rows as HsnSalesRow[];
+      return (
+        <Table
+          headers={["Period", "HSN Code", "Qty", "Taxable value", "Tax", "Total"]}
+          rows={data.map((r) => [
+            r.bucket,
+            r.hsn_code ?? "Not set",
+            r.qty,
+            money(r.taxable_value),
+            money(r.tax_amount),
+            money(r.total),
+          ])}
+        />
+      );
+    }
+    case "purchases-group": {
+      return (
+        <GroupedTable
+          rows={rows as PurchaseGroupItemRow[]}
+          columns={[
+            { header: "Qty", value: (r) => r.qty },
+            { header: "Value", value: (r) => r.value, format: money },
+          ]}
+        />
+      );
     }
     case "bills": {
       const data = rows as Bill[];
@@ -325,18 +377,15 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
       );
     }
     case "stock-summary": {
-      const data = rows as StockSummaryRow[];
       return (
-        <Table
-          headers={["Period", "Item", "Opening", "Purchases", "Consumption", "Closing"]}
-          rows={data.map((r) => [
-            r.bucket,
-            `${r.item_name} (${r.item_code})`,
-            r.opening,
-            r.purchases,
-            r.consumption,
-            r.closing,
-          ])}
+        <GroupedTable
+          rows={rows as StockSummaryRow[]}
+          columns={[
+            { header: "Opening", value: (r) => r.opening },
+            { header: "Purchases", value: (r) => r.purchases },
+            { header: "Consumption", value: (r) => r.consumption },
+            { header: "Closing", value: (r) => r.closing },
+          ]}
         />
       );
     }
@@ -407,16 +456,31 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
   );
 }
 
-/** Group-wise sales with each group's items nested beneath it — a bold group subtotal row
- *  (rolled up client-side from the same item rows the API already returns, so there's no
- *  second query) followed by its indented item rows, repeated per period bucket. */
-function GroupItemSalesTable({ rows, money }: { rows: GroupItemSalesRow[]; money: (n: number) => string }) {
+interface GroupedRow {
+  bucket: string;
+  group_code: string | null;
+  group_name: string | null;
+  item_code: string;
+  item_name: string;
+}
+
+interface GroupedColumn<T> {
+  header: string;
+  value: (row: T) => number;
+  format?: (n: number) => string;
+}
+
+/** Shared shape for every "group subtotal + item rows beneath it" report (Sales, Purchases,
+ *  Stock Summary — all group-wise views of an item-centric report): a bold group subtotal row
+ *  (rolled up client-side from the same item rows the API already returns, so there's no second
+ *  query) followed by its indented item rows, repeated per period bucket. `columns` supplies the
+ *  numeric fields to sum/render — everything else (grouping, layout) is shared. */
+function GroupedTable<T extends GroupedRow>({ rows, columns }: { rows: T[]; columns: GroupedColumn<T>[] }) {
   if (rows.length === 0) {
     return <p className="text-sm text-fg-muted">No data. Choose a report and click &ldquo;Run report&rdquo;.</p>;
   }
 
-  const groups: { bucket: string; group_code: string | null; group_name: string | null; items: GroupItemSalesRow[] }[] =
-    [];
+  const groups: { bucket: string; group_code: string | null; group_name: string | null; items: T[] }[] = [];
   for (const row of rows) {
     const last = groups[groups.length - 1];
     if (last && last.bucket === row.bucket && last.group_code === row.group_code) {
@@ -433,42 +497,46 @@ function GroupItemSalesTable({ rows, money }: { rows: GroupItemSalesRow[]; money
           <tr className="border-b border-border">
             <th className="py-2 pr-4 font-medium">Period</th>
             <th className="py-2 pr-4 font-medium">Group / Item</th>
-            <th className="py-2 pr-4 font-medium">Qty</th>
-            <th className="py-2 pr-4 font-medium">Amount</th>
-            <th className="py-2 pr-4 font-medium">Tax</th>
+            {columns.map((c) => (
+              <th key={c.header} className="py-2 pr-4 font-medium">
+                {c.header}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {groups.map((group, gi) => {
-            const qty = group.items.reduce((sum, r) => sum + r.qty, 0);
-            const amount = group.items.reduce((sum, r) => sum + r.amount, 0);
-            const tax = group.items.reduce((sum, r) => sum + r.tax_amount, 0);
-            return (
-              <Fragment key={`${group.bucket}-${group.group_code}-${gi}`}>
-                <tr className="border-b border-border bg-card-hover font-semibold">
-                  <td className="py-2 pr-4">{group.bucket}</td>
-                  <td className="py-2 pr-4">{group.group_name ?? group.group_code ?? "—"}</td>
-                  <td className="py-2 pr-4">{qty}</td>
-                  <td className="py-2 pr-4">{money(amount)}</td>
-                  <td className="py-2 pr-4">{money(tax)}</td>
-                </tr>
-                {group.items.map((item, ii) => (
-                  <tr
-                    key={`${group.bucket}-${group.group_code}-${item.item_code}-${ii}`}
-                    className="border-b border-border text-fg-muted"
-                  >
-                    <td className="py-1.5 pr-4" />
-                    <td className="py-1.5 pr-4 pl-6">
-                      {item.item_name} ({item.item_code})
+          {groups.map((group, gi) => (
+            <Fragment key={`${group.bucket}-${group.group_code}-${gi}`}>
+              <tr className="border-b border-border bg-card-hover font-semibold">
+                <td className="py-2 pr-4">{group.bucket}</td>
+                <td className="py-2 pr-4">{group.group_name ?? group.group_code ?? "—"}</td>
+                {columns.map((c) => {
+                  const total = group.items.reduce((sum, r) => sum + c.value(r), 0);
+                  return (
+                    <td key={c.header} className="py-2 pr-4">
+                      {c.format ? c.format(total) : total}
                     </td>
-                    <td className="py-1.5 pr-4">{item.qty}</td>
-                    <td className="py-1.5 pr-4">{money(item.amount)}</td>
-                    <td className="py-1.5 pr-4">{money(item.tax_amount)}</td>
-                  </tr>
-                ))}
-              </Fragment>
-            );
-          })}
+                  );
+                })}
+              </tr>
+              {group.items.map((item, ii) => (
+                <tr
+                  key={`${group.bucket}-${group.group_code}-${item.item_code}-${ii}`}
+                  className="border-b border-border text-fg-muted"
+                >
+                  <td className="py-1.5 pr-4" />
+                  <td className="py-1.5 pr-4 pl-6">
+                    {item.item_name} ({item.item_code})
+                  </td>
+                  {columns.map((c) => (
+                    <td key={c.header} className="py-1.5 pr-4">
+                      {c.format ? c.format(c.value(item)) : c.value(item)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </Fragment>
+          ))}
         </tbody>
       </table>
     </div>

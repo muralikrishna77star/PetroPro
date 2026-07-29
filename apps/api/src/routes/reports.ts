@@ -37,11 +37,13 @@ export default async function reportRoutes(fastify: FastifyInstance) {
           return reportsRepo.salesByGroup(from, to, granularity);
         case "group-items":
           return reportsRepo.salesByGroupItems(from, to, granularity);
+        case "hsn":
+          return reportsRepo.salesByHsn(from, to, granularity);
         case "item":
         case undefined:
           return reportsRepo.salesByItem(from, to, granularity);
         default:
-          return reply.code(400).send({ error: "groupBy must be item, cashier, group, or group-items" });
+          return reply.code(400).send({ error: "groupBy must be item, cashier, group, group-items, or hsn" });
       }
     },
   );
@@ -117,6 +119,18 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     async (request) => {
       const { from, to } = resolveRange(request.query);
       return purchasesRepo.listRange(from, to, request.query.item_code);
+    },
+  );
+
+  // Group-wise view of purchases — same "group subtotal + item rows beneath" shape as
+  // /reports/sales?groupBy=group-items, kept as its own endpoint since /reports/purchases above
+  // stays the flat/raw per-purchase list.
+  fastify.get<{ Querystring: RangeQuery }>(
+    "/reports/purchases-by-group",
+    { preHandler: managerOnly },
+    async (request) => {
+      const { from, to, granularity } = resolveRange(request.query);
+      return reportsRepo.purchasesByGroupItems(from, to, granularity);
     },
   );
 

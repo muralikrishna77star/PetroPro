@@ -13,11 +13,11 @@ function generateTempPassword(): string {
 export default async function userRoutes(fastify: FastifyInstance) {
   fastify.get("/users", { preHandler: fastify.requireRole("super_admin") }, async () => usersRepo.list());
 
-  fastify.post<{ Body: { user_id: string; name: string; role: Role; password?: string } }>(
+  fastify.post<{ Body: { user_id: string; name: string; role: Role; password?: string; email?: string | null } }>(
     "/users",
     { preHandler: fastify.requireRole("super_admin") },
     async (request, reply) => {
-      const { user_id, name, role, password } = request.body ?? {};
+      const { user_id, name, role, password, email } = request.body ?? {};
       if (!user_id || !name || !role) {
         return reply.code(400).send({ error: "user_id, name and role are required" });
       }
@@ -27,6 +27,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
       if (usersRepo.getById(user_id)) {
         return reply.code(409).send({ error: `User ${user_id} already exists` });
       }
+      const normalizedEmail = email ? email.trim().toLowerCase() : null;
+      if (normalizedEmail && usersRepo.getByEmail(normalizedEmail)) {
+        return reply.code(409).send({ error: `Email ${normalizedEmail} is already in use` });
+      }
 
       const tempPassword = password || generateTempPassword();
       const created = usersRepo.create({
@@ -34,6 +38,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         name,
         password_hash: hashPassword(tempPassword),
         role,
+        email: normalizedEmail,
       });
       auditLogsRepo.record({
         user_id: request.user.sub,
@@ -46,16 +51,23 @@ export default async function userRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.put<{ Params: { id: string }; Body: { name: string; role: Role } }>(
+  fastify.put<{ Params: { id: string }; Body: { name: string; role: Role; email?: string | null } }>(
     "/users/:id",
     { preHandler: fastify.requireRole("super_admin") },
     async (request, reply) => {
-      const { name, role } = request.body ?? {};
+      const { name, role, email } = request.body ?? {};
       if (!name || !role) return reply.code(400).send({ error: "name and role are required" });
       if (!ROLES.includes(role)) {
         return reply.code(400).send({ error: `role must be one of: ${ROLES.join(", ")}` });
       }
-      const updated = usersRepo.update(request.params.id, { name, role });
+      const normalizedEmail = email ? email.trim().toLowerCase() : null;
+      if (normalizedEmail) {
+        const owner = usersRepo.getByEmail(normalizedEmail);
+        if (owner && owner.user_id !== request.params.id) {
+          return reply.code(409).send({ error: `Email ${normalizedEmail} is already in use` });
+        }
+      }
+      const updated = usersRepo.update(request.params.id, { name, role, email: normalizedEmail });
       if (!updated) return reply.code(404).send({ error: "User not found" });
       auditLogsRepo.record({
         user_id: request.user.sub,

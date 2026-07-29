@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { db, closeDb, openDb } from "../db/client.js";
 import { config } from "../config.js";
+import { settingsRepo } from "../repositories/settings.js";
 
 const backupsDir = path.join(path.dirname(config.dbPath), "backups");
 
@@ -42,6 +43,47 @@ export function listBackups(): BackupFile[] {
       return { filename, sizeBytes: stat.size, createdAt: stat.birthtime.toISOString() };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Resolves a backup filename to its on-disk path for the download route — validates the
+ *  filename the same way restoreBackup() does, since this also turns user input into a path. */
+export function getBackupPath(filename: string): string {
+  assertSafeFilename(filename);
+  const filePath = path.join(backupsDir, filename);
+  if (!fs.existsSync(filePath)) throw new Error(`Backup not found: ${filename}`);
+  return filePath;
+}
+
+/** Deletes the oldest backups beyond `keep`, newest-first per listBackups()'s sort — keeps the
+ *  backups directory from growing unbounded under scheduled automatic backups. */
+export function pruneOldBackups(keep: number): void {
+  const stale = listBackups().slice(keep);
+  for (const backup of stale) {
+    fs.rmSync(path.join(backupsDir, backup.filename), { force: true });
+  }
+}
+
+const AUTO_BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const AUTO_BACKUP_RETENTION = 14;
+
+/** Runs a backup now if the newest one on disk is more than a day old (or none exists) and the
+ *  AUTOBACKUP setting allows it — covers both "it's been a day" and "the server was just
+ *  restarted after being off for a while", so a live station is never more than ~a day stale. */
+function runAutoBackupIfDue(): void {
+  if (settingsRepo.getAll().AUTOBACKUP !== "YES") return;
+  const [latest] = listBackups();
+  const isStale = !latest || Date.now() - new Date(latest.createdAt).getTime() >= AUTO_BACKUP_INTERVAL_MS;
+  if (!isStale) return;
+  createBackup();
+  pruneOldBackups(AUTO_BACKUP_RETENTION);
+}
+
+/** Checks immediately on startup, then once a day thereafter — called once from index.ts when the
+ *  server actually starts listening (not from buildApp(), so building the app for tests never
+ *  schedules background work). */
+export function startBackupScheduler(): void {
+  runAutoBackupIfDue();
+  setInterval(runAutoBackupIfDue, AUTO_BACKUP_INTERVAL_MS);
 }
 
 /** Overwrites the live database file with a prior backup and reopens the connection. Destructive

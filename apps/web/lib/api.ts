@@ -15,6 +15,7 @@ import type {
   GroupItemSalesRow,
   GroupSalesRow,
   GstSummaryRow,
+  HsnSalesRow,
   Item,
   ItemInput,
   ItemSalesRow,
@@ -26,6 +27,7 @@ import type {
   PendingTransaction,
   Pump,
   Purchase,
+  PurchaseGroupItemRow,
   RateChange,
   Receipt,
   Role,
@@ -55,6 +57,7 @@ export type {
   GroupItemSalesRow,
   GroupSalesRow,
   GstSummaryRow,
+  HsnSalesRow,
   Item,
   ItemInput,
   ItemSalesRow,
@@ -66,6 +69,7 @@ export type {
   PendingTransaction,
   Pump,
   Purchase,
+  PurchaseGroupItemRow,
   RateChange,
   Receipt,
   Role,
@@ -155,10 +159,10 @@ export const api = {
 
   listUsers: (token: string) => request<AppUser[]>("/users", { token }),
 
-  createUser: (token: string, body: { user_id: string; name: string; role: Role }) =>
+  createUser: (token: string, body: { user_id: string; name: string; role: Role; email?: string | null }) =>
     request<AppUser & { temporaryPassword?: string }>("/users", { method: "POST", token, body }),
 
-  updateUser: (token: string, userId: string, body: { name: string; role: Role }) =>
+  updateUser: (token: string, userId: string, body: { name: string; role: Role; email?: string | null }) =>
     request<AppUser>(`/users/${userId}`, { method: "PUT", token, body }),
 
   deactivateUser: (token: string, userId: string) =>
@@ -204,6 +208,7 @@ export const api = {
       orderNo?: string;
       fulfillOrderNo?: number;
       pumpCode?: string;
+      clientRef?: string;
       lines: {
         item_code: string;
         qty: number;
@@ -325,17 +330,23 @@ export const api = {
     return request<Purchase[]>(`/reports/purchases?${params}`, { token });
   },
 
+  getPurchasesByGroup: (token: string, from: string, to: string, granularity: Granularity) =>
+    request<PurchaseGroupItemRow[]>(
+      `/reports/purchases-by-group?from=${from}&to=${to}&granularity=${granularity}`,
+      { token },
+    ),
+
   getMileageReport: (token: string, vehicleNo: string) =>
     request<MileageEntry[]>(`/reports/mileage?vehicle_no=${vehicleNo}`, { token }),
 
   getSalesReport: (
     token: string,
-    groupBy: "item" | "cashier" | "group" | "group-items",
+    groupBy: "item" | "cashier" | "group" | "group-items" | "hsn",
     from: string,
     to: string,
     granularity: Granularity,
   ) =>
-    request<(ItemSalesRow | CashierSalesRow | GroupSalesRow | GroupItemSalesRow)[]>(
+    request<(ItemSalesRow | CashierSalesRow | GroupSalesRow | GroupItemSalesRow | HsnSalesRow)[]>(
       `/reports/sales?groupBy=${groupBy}&from=${from}&to=${to}&granularity=${granularity}`,
       { token },
     ),
@@ -398,6 +409,8 @@ export const api = {
 
   restoreBackup: (token: string, filename: string) =>
     request<{ restored: string }>("/backup/restore", { method: "POST", token, body: { filename, confirm: true } }),
+
+  backupDownloadUrl: (filename: string) => `${API_URL}/backup/${filename}/download`,
 
   resetTransactionalData: (token: string) =>
     request<{ backup: BackupFile; clearedTables: string[]; finYearStart: string }>("/data-reset", {

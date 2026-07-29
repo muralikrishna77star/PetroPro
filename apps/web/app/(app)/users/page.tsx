@@ -14,11 +14,13 @@ export default function UsersPage() {
   const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>("operator");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<Role>("operator");
+  const [editEmail, setEditEmail] = useState("");
 
   function refresh(token: string) {
     api.listUsers(token).then(setUsers).catch(() => undefined);
@@ -35,10 +37,11 @@ export default function UsersPage() {
     setError(null);
     setNotice(null);
     try {
-      const created = await api.createUser(session.token, { user_id: userId, name, role });
+      const created = await api.createUser(session.token, { user_id: userId, name, role, email: email || null });
       setUserId("");
       setName("");
       setRole("operator");
+      setEmail("");
       refresh(session.token);
       if (created.temporaryPassword) {
         setNotice(`Created ${created.user_id} — temporary password: ${created.temporaryPassword} (shown once)`);
@@ -52,13 +55,14 @@ export default function UsersPage() {
     setEditingId(user.user_id);
     setEditName(user.name);
     setEditRole(user.role);
+    setEditEmail(user.email ?? "");
   }
 
   async function saveEdit(id: string) {
     if (!session) return;
     setError(null);
     try {
-      await api.updateUser(session.token, id, { name: editName, role: editRole });
+      await api.updateUser(session.token, id, { name: editName, role: editRole, email: editEmail || null });
       setEditingId(null);
       refresh(session.token);
     } catch (err) {
@@ -115,6 +119,13 @@ export default function UsersPage() {
             onChange={(e) => setName(e.target.value)}
             required
           />
+          <input
+            type="email"
+            placeholder="Email (optional — enables Google sign-in)"
+            className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
           <select
             className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
             value={role}
@@ -142,6 +153,7 @@ export default function UsersPage() {
               <tr className="border-b border-border ">
                 <th className="py-2 pr-4">User ID</th>
                 <th className="py-2 pr-4">Name</th>
+                <th className="py-2 pr-4">Email</th>
                 <th className="py-2 pr-4">Role</th>
                 <th className="py-2 pr-4">Status</th>
                 <th className="py-2 pr-4">Created</th>
@@ -159,6 +171,15 @@ export default function UsersPage() {
                           className="w-full rounded border border-border px-2 py-1 text-sm  bg-bg-elevated"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
+                        />
+                      </td>
+                      <td className="py-2 pr-4">
+                        <input
+                          type="email"
+                          placeholder="Email (optional)"
+                          className="w-full rounded border border-border px-2 py-1 text-sm  bg-bg-elevated"
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
                         />
                       </td>
                       <td className="py-2 pr-4">
@@ -188,6 +209,7 @@ export default function UsersPage() {
                   ) : (
                     <>
                       <td className="py-2 pr-4">{u.name}</td>
+                      <td className="py-2 pr-4 text-fg-muted">{u.email ?? "—"}</td>
                       <td className="py-2 pr-4">{u.role}</td>
                       <td className="py-2 pr-4">
                         <span className={u.active ? "text-success" : "text-error"}>
@@ -219,7 +241,7 @@ export default function UsersPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-fg-muted">
+                  <td colSpan={7} className="py-4 text-center text-fg-muted">
                     No users yet.
                   </td>
                 </tr>

@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import authPlugin from "./plugins/auth.js";
 import authRoutes from "./routes/auth.js";
+import googleAuthRoutes from "./routes/googleAuth.js";
 import groupRoutes from "./routes/groups.js";
 import pumpRoutes from "./routes/pumps.js";
 import itemRoutes from "./routes/items.js";
@@ -35,6 +36,7 @@ export async function buildApp() {
   app.get("/health", async () => ({ status: "ok" }));
 
   await app.register(authRoutes);
+  await app.register(googleAuthRoutes);
   await app.register(groupRoutes);
   await app.register(pumpRoutes);
   await app.register(itemRoutes);
