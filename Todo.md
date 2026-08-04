@@ -366,6 +366,111 @@ treated as append-only across every session, not scrubbed after testing).
   feature (not a legacy-menu item), so there's nothing there to cross-reference, but worth knowing
   it's the one doc this session didn't touch.
 
+## Session 17 — QR-code invoice sharing (Community edition)
+
+User asked: with a QR code already generated (payment QR), could a customer scan a code and get
+their bill onto their own phone — an "easy way with the community edition." Asked the user to pick
+between three feasible flows (WhatsApp can't be made to push a message to an arbitrary number
+without the Business API, which Community edition explicitly excludes); they picked the public
+invoice-link option over a wa.me request-to-shop flow or a share-to-any-contact flow.
+
+- [x] **New JWT audience**: `InvoiceTokenPayload` (`role: "invoice"`, `sub` = bill number as a
+      string) in `plugins/auth.ts`, alongside the existing staff/customer payload types. Scoped to
+      exactly one bill, short-lived (30 min, `SHARE_LINK_TTL` in `routes/bills.ts`).
+- [x] **`GET /bills/:billNo/share-link`** (any signed-in staff, same gate as the existing PDF
+      route) mints one and returns `{ token, url, expiresInSeconds }`, `url` pointing at
+      `apps/web`'s new `/i/[billNo]?t=...` page.
+- [x] **`routes/publicInvoice.ts`** (new, no login of any kind): `GET /public/invoice/:billNo` and
+      `GET /public/invoice/:billNo/pdf`, both gated purely on a valid `t` token scoped to that
+      exact bill number — verified via `fastify.jwt.verify()` called directly on the query-string
+      token, not `request.jwtVerify()` (there's no Authorization header on a page a phone camera
+      opens cold).
+- [x] **Real security fix found and closed while wiring this up, before it shipped**: adding the
+      `"invoice"` role to the JWT payload union broke `requireRole`'s type check (an `"invoice"`
+      token isn't a `Role`), which surfaced that `fastify.authenticate` — used by several
+      staff-only `GET /bills/*` routes (`/bills/recent`, `/bills/:billNo`, `/bills/:billNo/pdf`,
+      the new `/bills/:billNo/share-link`) — only checks that a JWT is *valid*, not that its role
+      is staff. Without a fix, a QR-scanned invoice token (or even an existing customer-portal
+      token) could hit any of those routes directly, e.g. minting a fresh share-link for an
+      *arbitrary* bill number rather than the one it was actually scoped to. Fixed by making
+      `authenticate` reject `"customer"`/`"invoice"` roles the same way `requireRole` already did.
+      Verified directly over HTTP (see below) — this was a real, exploitable gap this session's
+      own change would have introduced, not a hypothetical.
+- [x] **`SendInvoiceButton`** gained a third dropdown action, "Customer scans QR" — mints a
+      share-link and renders it as a QR image (client-side, `qrcode` npm package, new dependency
+      in `apps/web`) with a copy-link fallback. Same component, same two call sites as the
+      WhatsApp/Share PDF actions (billing page's just-created and looked-up invoice views) — no
+      new props needed.
+- [x] **`apps/web/app/i/[billNo]/page.tsx`** (new, public route, no `(app)` layout/session) — what
+      the customer's phone actually lands on: tenant letterhead, line items, totals, amount in
+      words, a cancelled-bill banner if applicable, a plain PDF download link, and a Share button
+      (Web Share API with a file attachment where supported, falling back to a plain download —
+      same pattern as `SharePdfProvider`, reimplemented standalone since this page has no staff
+      token to reuse `downloadAuthed()` with).
+- [x] `packages/shared-types`: `ShareLinkResponse`, `PublicInvoice` — the wire shapes for the two
+      new endpoints above.
+
+Verified: `typecheck`/`lint`/`build` all clean (new `/i/[billNo]` route builds as dynamic, ƒ).
+Full HTTP pass against a running server: minted a share-link for a real bill, fetched
+`/public/invoice/:billNo` with the valid token (correct bill/tenant/totals came back), fetched the
+PDF (`file` confirmed a real single-page PDF), confirmed a *wrong* bill number with the same
+token 401s, confirmed no token and a garbage token both 401 with the same user-facing message.
+Confirmed the security fix directly: the invoice token gets 403 from `/bills/recent` and from
+minting a share-link for a different bill; a real staff token is unaffected on both. Cancelled the
+test bill afterward. **Not verified**: no real browser scan-and-open of the QR code itself (no
+camera/phone available in this environment) — the link it encodes was verified to work correctly
+via curl, and the QR image generation (`qrcode` client-side) wasn't separately checked in a real
+browser rendering pass.
+
+**Notes for the next session:**
+- The `SendInvoiceButton` fix above (`authenticate` rejecting non-staff roles) is a general
+  hardening, not scoped to QR — worth remembering if any future token audience gets added, since
+  the same gap would reopen for it too unless `authenticate` explicitly allow-lists staff roles.
+- The 30-minute share-link TTL is a judgment call, not specified by the user — easy to change
+  (`SHARE_LINK_TTL` in `routes/bills.ts`) if it turns out too short/long in practice.
+- No visual/real-device verification of the QR scan-to-page flow — flag if a real phone or camera
+  becomes available to test with, same caveat as every other UI-only-verified feature in this repo.
+
+## Session 18 — Customer Master phone capture (WhatsApp invoice fix)
+
+User reported: for Credit Bills, the Send Invoice button's WhatsApp option should reach the
+customer's "designated WhatsApp number... captured from the customer master." Investigation found
+`SendInvoiceButton` already pre-fills and (with `auto_open_whatsapp` on, the default) auto-opens
+WhatsApp from `customer.phone` for credit sales — that logic was correct and unchanged since
+Session 16. The actual gap: **the Customers page had no UI to ever set a customer's `phone` at
+all** — not in the create form, not anywhere in the detail panel — despite the backend
+(`customersRepo`, `PUT /customers/:code`) fully supporting it since Phase 1. Every credit
+customer's `phone` was therefore always null, so the WhatsApp flow always fell back to "type a
+number" with nothing pre-filled — not a bug in the WhatsApp module, a missing master-data field in
+the UI in front of it.
+
+- [x] **Create-customer form** (`app/(app)/customers/page.tsx`) gained a "WhatsApp / mobile
+      number (optional)" input, wired into `api.createCustomer` (its `apps/web/lib/api.ts` type
+      didn't include `phone` either — added).
+- [x] **New "WhatsApp / mobile number" edit block** in the customer detail panel, same pattern as
+      the existing "Order Entry login" email editor (`handleSavePhone`, gated
+      `super_admin`/`owner` to match the backend's `PUT /customers/:code` role gate exactly).
+      Detail header now also shows the number inline when one is set.
+
+Verified: `typecheck`/`lint`/`build` all clean (still 22 web routes — no new routes, only fields on
+an existing page). Full test suite 78/78 (no new repo logic — the backend already supported
+`phone` end to end). HTTP pass with the frontend's exact payload shapes: created a credit customer
+with a phone via the create-form's payload shape, confirmed `GET` returns it, updated it via the
+edit-panel's full-object PUT shape, confirmed the new value persisted, then created and cancelled
+a real credit bill against that customer to confirm the whole chain (customer → credit bill →
+`due_amount`) still works with a phone on file. Did not re-verify the WhatsApp send mechanism
+itself (wa.me URL construction, template rendering, auto-open) — that logic wasn't touched and was
+already verified for real in Session 16.
+
+**Notes for the next session:**
+- Phone editing is restricted to `super_admin`/`owner` in the UI, matching the backend gate — an
+  `operator` (who actually clicks Send Invoice day to day) cannot fix a wrong/missing number
+  themselves and has to ask an admin/owner. Flag if that turns out to be friction in practice.
+- Still just one `phone` field per customer (no concept of multiple recipients/numbers) — the
+  request used the phrase "designated whatsapp numbers" (plural) but the schema and every other
+  part of this flow only ever supported one; treated as phrasing, not a multi-recipient request,
+  since it wasn't confirmed otherwise.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo

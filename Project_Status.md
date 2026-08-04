@@ -66,7 +66,8 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   `POST`/`GET /communication/log`; see `docs/` note below, there's no `docs/MODULES.md` entry for
   this since it's net-new, not a legacy-menu item. **78 tests total** (was 46 as of Session 13; the
   jump includes the undocumented intermediate sessions' tests, not all added by Sessions 14-16).
-- **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **21 routes** (was 18
+- **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **22 routes** (was
+  21 as of Session 16; `/i/[billNo]` is new in Session 17 — the QR-code public invoice page). Was 18
   as of Session 13; `/login/callback` is new in Session 14, the rest from undocumented intermediate
   sessions). Session 13: `NavBar` rebuilt as legacy-`MAINMENU.PRG`-style dropdown groups
   (Maintenance/Bill/Reports/Search/Utilities, colored per group) showing the live tenant name instead
@@ -87,7 +88,20 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   looked-up invoice views) and a new "Communication" section on `/settings`; new
   `lib/communication/` — `CommunicationService`, `ICommunicationProvider`,
   `WhatsAppCommunityProvider` (real), `SharePdfProvider` (real), `ComingSoonProvider`
-  (WhatsApp Business/Email/SMS stubs).
+  (WhatsApp Business/Email/SMS stubs). Session 17: QR-code invoice sharing — a third
+  `SendInvoiceButton` action mints a 30-minute, single-bill `InvoiceTokenPayload` JWT
+  (`plugins/auth.ts`, `GET /bills/:billNo/share-link`) and renders it as a QR code (`qrcode`, new
+  dependency) pointing at new public route `app/i/[billNo]/page.tsx` — no login of any kind,
+  served by new `routes/publicInvoice.ts` (`GET /public/invoice/:billNo`, `.../pdf`), token-gated
+  only. Fixing this exposed and closed a real gap: `fastify.authenticate` previously accepted
+  *any* valid JWT regardless of role, so a customer/invoice-scoped token could hit staff-only
+  `GET /bills/*` routes — now rejects non-staff roles explicitly. No new repo/service logic was
+  added (pure route + auth-plugin + frontend work), so the test count is unchanged at 78 — this
+  session's verification was a full HTTP pass instead (see `Todo.md` Session 17). Session 18: the
+  Customers page (`app/(app)/customers/page.tsx`) gained the ability to actually set a customer's
+  `phone` (create form + a dedicated edit block, admin/owner-gated) — the backend always
+  supported it, but no UI ever exposed it, so every credit customer's WhatsApp-invoice number was
+  silently null. `SendInvoiceButton`/`WhatsAppCommunityProvider` themselves were unchanged.
 
 - **`apps/api/src/dbf/importTransactions.ts`** — Session 11 (`npm run import:demo-transactions`
   from `apps/api`). Imports a fixed real 3-month window (2019-04 through mid-2019-06, the actual
@@ -148,6 +162,11 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   the pass/fail branch of the popup check itself remains open. `win.opener = null` (set by hand,
   not via the `noopener` flag) is used regardless, since it's the more broadly correct technique
   independent of this finding.
+- **QR-code invoice sharing (Session 17) has no real-device verification** — the share-link's
+  security boundaries (correct bill scoping, expiry, staff-vs-invoice-token role separation) were
+  verified for real over HTTP (curl), but no physical phone/camera was available in this
+  environment to actually scan a rendered QR code and confirm `app/i/[billNo]/page.tsx` renders
+  and behaves correctly end-to-end in a real mobile browser.
 - **`backup.test.ts`/`dataReset.test.ts` share an OS-temp `backups/` directory across parallel
   test-file processes** (found in Session 16, pre-existing) — `npm run test` occasionally shows
   `pruneOldBackups`/`resetTransactionalData` failures from this race when the full suite runs in

@@ -397,3 +397,27 @@ export interface CommunicationLogEntry {
   remarks: string | null;
   created_at: string;
 }
+
+/** A short-lived, single-bill link for the QR-code invoice flow (apps/api's
+ *  routes/bills.ts `/bills/:billNo/share-link`) — `url` is what gets encoded into the QR image
+ *  and opens apps/web's public `/i/[billNo]` page with no login required. */
+export interface ShareLinkResponse {
+  token: string;
+  url: string;
+  expiresInSeconds: number;
+}
+
+/** What apps/web's public `/i/[billNo]` page renders — same shape as `SettleResponse` plus the
+ *  letterhead fields a signed-out viewer needs (apps/api's routes/publicInvoice.ts). */
+export interface PublicInvoice {
+  bill: Bill;
+  lines: BillLine[];
+  amountInWords: string;
+  tenant: {
+    name: string;
+    address_line1: string | null;
+    address_line2: string | null;
+    tagline: string | null;
+    gst_no: string | null;
+  };
+}

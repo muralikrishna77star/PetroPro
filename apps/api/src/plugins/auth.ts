@@ -19,10 +19,21 @@ export interface CustomerTokenPayload {
   name: string;
 }
 
+/** A single-bill, time-limited link (QR-code invoice sharing — see routes/publicInvoice.ts) —
+ *  a third audience, distinct from both staff and customer sessions. `sub` is the bill number
+ *  as a string; a token only ever grants access to that one bill, never a customer's full
+ *  history or account. Short `expiresIn` (set where it's signed, routes/bills.ts) is the only
+ *  access control here — anyone holding a valid link can view/download that one invoice, same
+ *  as anyone holding the printed paper copy. */
+export interface InvoiceTokenPayload {
+  sub: string;
+  role: "invoice";
+}
+
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: AuthTokenPayload | CustomerTokenPayload;
-    user: AuthTokenPayload | CustomerTokenPayload;
+    payload: AuthTokenPayload | CustomerTokenPayload | InvoiceTokenPayload;
+    user: AuthTokenPayload | CustomerTokenPayload | InvoiceTokenPayload;
   }
 }
 
@@ -42,6 +53,17 @@ async function authPlugin(fastify: FastifyInstance) {
       await request.jwtVerify();
     } catch {
       reply.code(401).send({ error: "Unauthorized" });
+      return;
+    }
+    // A valid JWT alone isn't enough — this decorator is staff-only. Without this check, a
+    // customer-portal token (or, since InvoiceTokenPayload was added, a QR-code single-bill
+    // token handed to any walk-in) would satisfy every route gated with plain `authenticate`
+    // (e.g. GET /bills/recent, GET /bills/:billNo/pdf for an arbitrary bill number) — not just
+    // the one bill/account it was actually scoped to. Customer/invoice-scoped access always goes
+    // through their own dedicated decorator or route instead (authenticateCustomer,
+    // routes/publicInvoice.ts's own token check).
+    if (request.user.role === "customer" || request.user.role === "invoice") {
+      reply.code(403).send({ error: "Forbidden" });
     }
   });
 
@@ -53,7 +75,7 @@ async function authPlugin(fastify: FastifyInstance) {
         reply.code(401).send({ error: "Unauthorized" });
         return;
       }
-      if (request.user.role === "customer" || !roles.includes(request.user.role)) {
+      if (request.user.role === "customer" || request.user.role === "invoice" || !roles.includes(request.user.role)) {
         reply.code(403).send({ error: "Forbidden" });
       }
     };

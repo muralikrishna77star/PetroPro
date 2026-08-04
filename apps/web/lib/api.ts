@@ -30,6 +30,7 @@ import type {
   OrderLine,
   PendingTransaction,
   Pump,
+  PublicInvoice,
   Purchase,
   PurchaseGroupItemRow,
   RateChange,
@@ -38,6 +39,7 @@ import type {
   SettingKey,
   Settings,
   SettleResponse,
+  ShareLinkResponse,
   Shift,
   StockRow,
   StockSummaryRow,
@@ -76,6 +78,7 @@ export type {
   OrderLine,
   PendingTransaction,
   Pump,
+  PublicInvoice,
   Purchase,
   PurchaseGroupItemRow,
   RateChange,
@@ -84,6 +87,7 @@ export type {
   SettingKey,
   Settings,
   SettleResponse,
+  ShareLinkResponse,
   Shift,
   StockRow,
   StockSummaryRow,
@@ -242,13 +246,23 @@ export const api = {
 
   invoicePdfUrl: (billNo: number) => `${API_URL}/bills/${billNo}/pdf`,
 
+  getShareLink: (token: string, billNo: number) =>
+    request<ShareLinkResponse>(`/bills/${billNo}/share-link`, { token }),
+
   listCustomers: (token: string) => request<Customer[]>("/customers", { token }),
 
   getCustomer: (token: string, code: string) => request<Customer>(`/customers/${code}`, { token }),
 
   createCustomer: (
     token: string,
-    body: { code: string; name: string; credit_limit?: number; service_charge?: number; email?: string },
+    body: {
+      code: string;
+      name: string;
+      credit_limit?: number;
+      service_charge?: number;
+      email?: string;
+      phone?: string;
+    },
   ) => request<Customer>("/customers", { method: "POST", token, body }),
 
   updateCustomer: (
@@ -470,4 +484,15 @@ export const customerApi = {
 
   cancelOrder: (token: string, orderNo: number) =>
     request<Order>(`/customer/orders/${orderNo}/cancel`, { method: "POST", token, body: {} }),
+};
+
+/** The QR-code invoice flow's client (apps/web/app/i/[billNo]/page.tsx) — no session token at
+ *  all, staff or customer; the bill-scoped `t` query param (from `api.getShareLink`) is the only
+ *  credential, so these hit apps/api's routes/publicInvoice.ts directly rather than going
+ *  through `request()`'s Authorization-header plumbing. */
+export const publicApi = {
+  getInvoice: (billNo: number, t: string) =>
+    request<PublicInvoice>(`/public/invoice/${billNo}?t=${encodeURIComponent(t)}`),
+
+  invoicePdfUrl: (billNo: number, t: string) => `${API_URL}/public/invoice/${billNo}/pdf?t=${encodeURIComponent(t)}`,
 };

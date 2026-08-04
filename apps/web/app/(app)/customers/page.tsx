@@ -16,6 +16,7 @@ export default function CustomersPage() {
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [newCreditLimit, setNewCreditLimit] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [receiptAmount, setReceiptAmount] = useState("");
@@ -32,6 +33,9 @@ export default function CustomersPage() {
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
   const [settingPassword, setSettingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
@@ -57,6 +61,9 @@ export default function CustomersPage() {
     setEmailMessage(null);
     setPasswordError(null);
     setTemporaryPassword(null);
+    setPhoneInput(customer.phone ?? "");
+    setPhoneError(null);
+    setPhoneMessage(null);
     if (canViewLedger) {
       try {
         setLedger(await api.getCustomerLedger(session.token, customer.code));
@@ -75,10 +82,12 @@ export default function CustomersPage() {
         code: newCode,
         name: newName,
         credit_limit: newCreditLimit ? Number(newCreditLimit) : 0,
+        phone: newPhone || undefined,
       });
       setNewCode("");
       setNewName("");
       setNewCreditLimit("");
+      setNewPhone("");
       refreshCustomers(session.token);
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : "Could not create customer");
@@ -142,6 +151,27 @@ export default function CustomersPage() {
     }
   }
 
+  // The WhatsApp Invoice Module's SendInvoiceButton pre-fills a credit sale's recipient number
+  // from exactly this field (Customer Master's `phone`) — this is what makes "designated WhatsApp
+  // number captured from Customer Master" actually true rather than aspirational.
+  async function handleSavePhone(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session || !selected) return;
+    setPhoneError(null);
+    setPhoneMessage(null);
+    try {
+      const updated = await api.updateCustomer(session.token, selected.code, {
+        ...selected,
+        phone: phoneInput || null,
+      });
+      setSelected(updated);
+      refreshCustomers(session.token);
+      setPhoneMessage("WhatsApp / mobile number saved.");
+    } catch (err) {
+      setPhoneError(err instanceof ApiError ? err.message : "Could not save the number");
+    }
+  }
+
   async function handleSetPassword() {
     if (!session || !selected) return;
     setPasswordError(null);
@@ -189,8 +219,15 @@ export default function CustomersPage() {
                   value={newCreditLimit}
                   onChange={(e) => setNewCreditLimit(e.target.value)}
                 />
-                <button className="rounded-lg bg-primary px-3 py-1.5 text-sm text-white">Add</button>
               </div>
+              <input
+                type="tel"
+                placeholder="WhatsApp / mobile number (optional)"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+              />
+              <button className="self-start rounded-lg bg-primary px-3 py-1.5 text-sm text-white">Add</button>
               {createError && <p className="text-sm text-error">{createError}</p>}
             </form>
           )}
@@ -223,8 +260,30 @@ export default function CustomersPage() {
                 <h2 className="text-lg font-semibold">{selected.name} ({selected.code})</h2>
                 <p className="text-sm text-fg-muted">
                   Due: ₹{selected.due_amount.toFixed(2)} · Credit limit: ₹{selected.credit_limit.toFixed(2)}
+                  {selected.phone && <> · WhatsApp: {selected.phone}</>}
                 </p>
               </div>
+
+              {(session.role === "super_admin" || session.role === "owner") && (
+                <form onSubmit={handleSavePhone} className="rounded-lg border border-border p-3 ">
+                  <h3 className="mb-2 text-sm font-medium">WhatsApp / mobile number</h3>
+                  <p className="mb-2 text-xs text-fg-muted">
+                    Used by the Send Invoice button to reach this customer on WhatsApp for their credit bills.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      placeholder="10-digit mobile number"
+                      className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                    />
+                    <button className="rounded-lg bg-primary px-3 py-1.5 text-sm text-white">Save</button>
+                  </div>
+                  {phoneError && <p className="mt-2 text-sm text-error">{phoneError}</p>}
+                  {phoneMessage && <p className="mt-2 text-sm text-success">{phoneMessage}</p>}
+                </form>
+              )}
 
               <form onSubmit={handleRecordReceipt} className="rounded-lg border border-border p-3 ">
                 <h3 className="mb-2 text-sm font-medium">Record a receipt</h3>

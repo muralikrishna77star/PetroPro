@@ -10,6 +10,12 @@ import {
 import { amountInWords } from "../services/money.js";
 import { generateInvoicePdf } from "../services/invoicePdf.js";
 import { auditLogsRepo } from "../repositories/auditLogs.js";
+import { config } from "../config.js";
+
+// How long a QR/share link stays valid — long enough for a customer to scan the printed/
+// on-screen code at the counter and open it, short enough that a photo of an old receipt
+// doesn't stay a live link indefinitely.
+const SHARE_LINK_TTL = "30m";
 
 export default async function billRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { vehicle_no?: string; customer_code?: string } }>(
@@ -65,6 +71,26 @@ export default async function billRoutes(fastify: FastifyInstance) {
       } catch (err) {
         return reply.code(404).send({ error: (err as Error).message });
       }
+    },
+  );
+
+  // Mints a short-lived, single-bill link for the QR-code invoice flow (Community edition — see
+  // PetroPro_WhatsApp_Invoice_Module_Claude_Prompt.pdf). Any signed-in staff member can generate
+  // one for a bill they can already see (same gate as the PDF route above), independent of
+  // whether the customer has a portal account — this is what lets a walk-in cash customer with
+  // no account scan a QR and land on their own invoice.
+  fastify.get<{ Params: { billNo: string } }>(
+    "/bills/:billNo/share-link",
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const billNo = Number(request.params.billNo);
+      if (!billsRepo.get(billNo)) return reply.code(404).send({ error: "Bill not found" });
+      const token = fastify.jwt.sign({ sub: String(billNo), role: "invoice" }, { expiresIn: SHARE_LINK_TTL });
+      return {
+        token,
+        url: `${config.webAppUrl}/i/${billNo}?t=${token}`,
+        expiresInSeconds: 30 * 60,
+      };
     },
   );
 

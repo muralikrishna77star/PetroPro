@@ -1168,3 +1168,174 @@ which shouldn't require touching `CommunicationService`, `SendInvoiceButton`, or
   gap, so there was nothing there to cross-reference, but it's the one doc this session left alone.
 - No `.env.example` still exists — flagged in Sessions 14 and 15 too; nothing this session added
   needs one (no new env vars), but it remains a real, accumulating gap.
+
+### 2026-08-04 — Session 17 (QR-code invoice sharing, Community edition)
+
+**Context:** user asked, given the outlet already has a payment QR code, whether a customer could
+scan a QR code and get their bill onto their own phone — "any easy way with the community
+edition." Since WhatsApp can't be made to proactively deliver a message to an arbitrary number
+without the Business API (explicitly out of scope for Community edition per Session 16's brief),
+asked the user to choose between three feasible flows before building anything: (1) a public,
+token-gated invoice link that the customer's own phone opens directly, with a one-tap share into
+WhatsApp; (2) a QR that opens WhatsApp on the customer's phone pre-addressed to the shop asking
+for the bill, requiring a manual staff reply; (3) a QR that opens WhatsApp's contact picker with
+the invoice link as the message body. User picked option 1.
+
+**Last completed task:** the public invoice-link flow, backend and frontend.
+
+- `plugins/auth.ts`: new `InvoiceTokenPayload` (`role: "invoice"`, `sub` = bill number as a
+  string) — a third JWT audience alongside the existing staff (`AuthTokenPayload`) and customer
+  (`CustomerTokenPayload`) ones. Added to the `FastifyJWT` payload/user union.
+- `routes/bills.ts`: `GET /bills/:billNo/share-link` (any signed-in staff — same gate as the
+  existing PDF route) signs one with a 30-minute `expiresIn` (`SHARE_LINK_TTL`) and returns
+  `{ token, url, expiresInSeconds }`, `url` pointing at `${config.webAppUrl}/i/:billNo?t=...`.
+- New `routes/publicInvoice.ts`, registered in `app.ts` with **no** `authenticate`/`requireRole`
+  preHandler at all: `GET /public/invoice/:billNo` and `GET /public/invoice/:billNo/pdf`. A local
+  `checkToken()` helper calls `fastify.jwt.verify<InvoiceTokenPayload>(token)` directly on the
+  query-string `t` param (not `request.jwtVerify()`, since there's no Authorization header when a
+  phone camera opens a bare URL) and additionally checks `payload.sub === String(billNo)` — a
+  token minted for bill 100 must 401 against bill 101, not just any valid-looking token working
+  for any bill.
+
+**Real bug found and fixed while wiring this up, before it shipped, not after:** adding
+`"invoice"` to the JWT payload union broke `requireRole`'s TypeScript check (`Role[]` can't
+accept `"invoice"`), and tracking that down surfaced that `fastify.authenticate` — used by
+several staff-only `GET /bills/*` routes including the brand-new `/bills/:billNo/share-link` —
+only ever checked that the JWT verifies, never that its role is actually staff. Before this fix, a
+QR-scanned invoice token (or, it turns out, an existing customer-portal token — this gap
+predates this session) could hit any `authenticate`-gated route directly: in particular, calling
+the new share-link endpoint with an invoice token for bill 100 could mint a *fresh* share-link for
+bill 101, escalating a single scanned QR into read access to every bill in the system within that
+token's 30-minute window. Fixed by making `authenticate` explicitly reject `"customer"`/
+`"invoice"` roles, the same way `requireRole` already did — not a new mechanism, just closing the
+one decorator that had been left permissive. Verified directly over HTTP (below), not just by
+code review.
+
+- `SendInvoiceButton.tsx`: third dropdown action, "Customer scans QR" — calls the new
+  `api.getShareLink()`, renders the returned URL as a QR image via the `qrcode` npm package
+  (new `apps/web` dependency, client-side `QRCode.toDataURL()`, no network round-trip beyond the
+  share-link fetch itself), with a "Copy link" fallback for anyone without a camera handy. Same
+  `token`/`billNo` props the component already had — no changes needed at either of its two call
+  sites on the billing page.
+- New `apps/web/app/i/[billNo]/page.tsx` — a public route with no `(app)` layout, no session of
+  any kind (doesn't touch `lib/auth.ts` or `lib/customerAuth.ts`). Reads `billNo` from the route
+  param and `t` from `window.location.search` (matching `app/login/page.tsx`'s established
+  reasoning for not using `useSearchParams()` — avoids an unnecessary Suspense boundary), fetches
+  `/public/invoice/:billNo`, and renders a mobile-first card: tenant letterhead, a cancelled-bill
+  banner where applicable, line items, totals, amount in words, a plain PDF download link (the
+  token is in the URL, not an Authorization header, so an ordinary `<a href>` works — no
+  `downloadAuthed()` needed here), and a Share button (Web Share API with a file attachment where
+  supported, falling back to a plain download — the same pattern `SharePdfProvider` already uses,
+  reimplemented standalone since this page has no staff token to reuse that helper with).
+- `packages/shared-types`: `ShareLinkResponse`, `PublicInvoice` — wire shapes for the two new
+  endpoints; `apps/web/lib/api.ts` gained `api.getShareLink()` (staff-authenticated) and a new
+  `publicApi` object (`getInvoice`, `invoicePdfUrl`) that deliberately bypasses `request()`'s
+  Authorization-header plumbing since there's no staff/customer token in this flow at all.
+
+**Verification performed this session:** `typecheck`/`lint`/`build` all clean across all three
+workspaces (`/i/[billNo]` builds as a dynamic route, 22 web routes total, up from 21). Full test
+suite still 78/78 — no new repository/service logic was added (this was routing, an auth-plugin
+fix, and frontend work), so no new test files were warranted. Ran a real HTTP pass against a
+running dev server: created a live cash bill, minted a share-link for it, fetched
+`/public/invoice/:billNo` with the token and confirmed the correct bill/tenant/line-item/total
+data came back, fetched `/public/invoice/:billNo/pdf` and confirmed via `file` it's a real
+single-page PDF, confirmed the *same* token against a *different* bill number 401s, confirmed no
+token and a garbage token both 401 with the same user-facing message. Then specifically verified
+the security fix: the invoice token gets 403 from the staff-only `/bills/recent` and from trying
+to mint a share-link for a bill other than its own, while a normal staff token is completely
+unaffected on both of those same routes. Cancelled the one test bill created during verification
+afterward.
+
+**Not verified:** no physical phone or camera was available in this environment to actually scan a
+rendered QR code and watch `/i/[billNo]` render in a real mobile browser — the link the QR encodes
+was verified to work correctly end-to-end via curl, and the QR image itself is generated by a
+widely-used library (`qrcode`) rather than anything custom, but the true "point a camera at the
+screen" path is unverified, same category of gap as every other real-device-only check flagged in
+this project's history.
+
+**State:** dev API server was stopped at end of session (port 4000 confirmed free). The one test
+bill created during verification was cancelled, not deleted — consistent with how every prior
+session has handled test data, since there's no delete endpoint for bills (only cancel) anywhere
+in this app.
+
+**Next task:** none prescribed. If a real phone/camera becomes available in a future session,
+finishing the verification above (actually scanning a QR code and confirming the page renders
+correctly on a real mobile browser) would be the natural next step for this specific feature.
+
+**Notes for the next session:**
+- The `fastify.authenticate` fix (rejecting `"customer"`/`"invoice"` roles) is general hardening,
+  not QR-specific — worth remembering if a future session adds yet another JWT audience, since the
+  same gap would reopen for it unless `authenticate` keeps explicitly allow-listing staff roles
+  rather than just checking "is this JWT valid at all."
+- The 30-minute share-link TTL (`SHARE_LINK_TTL` in `routes/bills.ts`) is a judgment call, not
+  something the user specified — easy to change if it proves too short (a customer who steps away
+  and comes back later) or too long (extends the window a leaked/screenshotted link stays live) in
+  practice.
+
+### 2026-08-04 — Session 18 (Customer Master phone capture — WhatsApp invoice fix)
+
+**Context:** user reported that for Credit Bills, the Send Invoice button's WhatsApp option
+should reach the customer's "designated whatsapp number... captured from the customer master."
+
+**Investigation before writing any code:** read `SendInvoiceButton`, `WhatsAppCommunityProvider`,
+and `billing/page.tsx` again — the pre-fill/auto-open logic for credit sales (customer's `phone`
+→ `SendInvoiceButton`'s `customerPhone` prop → initial `mobile` state → auto-opens wa.me if
+`auto_open_whatsapp` is on, the default) was already correct and unchanged since Session 16. Then
+checked `app/(app)/customers/page.tsx` directly: **no `phone` field appears anywhere in that file**
+— not in the create-customer form, not in the customer detail/edit panel — despite
+`customersRepo.create`/`update` (`repositories/customers.ts`) and `PUT /customers/:code`
+(`routes/customers.ts`) both fully supporting `phone` since Phase 1, with the `?? null` fallback
+pattern already correctly in place. So every credit customer's `phone` was always null in
+practice — not a WhatsApp-module bug, a missing master-data field in the UI in front of it. This
+is the kind of thing worth stating plainly to the user rather than silently "fixing WhatsApp":
+the WhatsApp send logic was never broken, there was just never a way to give it a number to use.
+
+**Last completed task:** gave Customer Master an actual way to capture and edit a phone number.
+
+- `apps/web/lib/api.ts`: `createCustomer`'s body type gained `phone?: string` (backend already
+  accepted it; only the frontend's type/call site didn't send it).
+- `app/(app)/customers/page.tsx`: the create-customer form gained a "WhatsApp / mobile number
+  (optional)" input. The customer detail panel gained a new edit block, "WhatsApp / mobile
+  number," directly under the customer's name/due/credit-limit header — same shape as the
+  existing "Order Entry login" email editor (`handleSavePhone`, mirroring `handleSaveEmail`
+  exactly: spread `...selected`, override the one field, `PUT /customers/:code`), gated to
+  `super_admin`/`owner` to match the backend's role gate on that route precisely (an `operator`
+  can view but not edit, consistent with how credit limits and opening balances are already
+  restricted on this same page). The header line now also shows the number inline once one is
+  set, so it's visible at a glance whether a given customer has one on file at all.
+
+**Verification performed this session:** `typecheck`/`lint`/`build` all clean (still 22 web
+routes — this only added fields to an existing page, no new route). Full test suite 78/78 — no
+backend logic changed, so no new tests were warranted. Ran a real HTTP pass against a running dev
+server using the frontend's exact payload shapes: created a credit customer
+(`{code, name, credit_limit, phone}`, matching the new create-form's body) and confirmed `GET`
+returned the phone; updated it via the edit-panel's full-object `PUT` shape (spreading the
+existing customer plus the new phone) and confirmed the new value persisted; then, to prove the
+number is actually reachable through the real credit-billing path and not just stored inertly,
+created a real credit bill against that customer and confirmed `due_amount` moved correctly,
+cancelled it, and confirmed `due_amount` reversed back to 0. Did **not** re-verify the WhatsApp
+send mechanism itself (wa.me URL construction, country-code prefixing, template rendering,
+auto-open) — none of that code was touched this session, and it was already verified for real
+(Playwright + system Edge) in Session 16; re-testing unchanged code wouldn't have added signal.
+
+**State:** dev API server stopped, port 4000 confirmed free. Cancelled the one test credit bill
+created during verification. Left the throwaway test customer (`QRTEST1`) in place — there is no
+delete endpoint for customers anywhere in this app (matches how other master-data entities in
+this codebase are deactivated/left alone rather than deleted, e.g. users), so removing it wasn't
+an available option; it's harmless (zero due amount, no other side effects).
+
+**Next task:** none prescribed — this was a direct, scoped response to a user-reported gap, not
+part of an open punch list.
+
+**Notes for the next session:**
+- Phone editing is admin/owner-only in the UI (matching the backend), so an `operator` — who is
+  usually the one actually clicking Send Invoice day to day — can't correct a wrong or missing
+  number themselves; they'd have to ask an admin/owner. Worth revisiting if this turns out to be
+  real friction in practice, but not changed here since it wasn't asked for and the backend route
+  itself would need a role-gate change too, not just the frontend.
+- The user's phrasing was "designated whatsapp *numbers*" (plural) — treated as phrasing, not a
+  request for multiple recipients per customer, since the schema (`customers.phone`, one column)
+  and every part of the existing WhatsApp flow only ever assumed one number. If the user actually
+  wants multi-recipient support (e.g. owner + accountant both notified), that's a real schema
+  change (a `customer_contacts` table or similar), not a small follow-up — flag and confirm scope
+  before building it rather than assuming.
