@@ -454,7 +454,7 @@ export default function BillingPage() {
     <div className="flex flex-1 flex-col">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold text-primary">Walk-in Billing</h1>
+          <h1 className="text-xl font-semibold text-primary">Just Billing</h1>
           <div className="flex items-center gap-3">
             {businessDate && (
               <span className="rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-sm">
@@ -489,7 +489,7 @@ export default function BillingPage() {
           <div>
             <SectionLabel>Sale Type</SectionLabel>
             <div className="flex gap-1 rounded-lg border border-border p-1 ">
-              {(["cash", "upi", "card", "credit"] as PaymentType[]).map((type) => (
+              {(["cash", "credit", "card", "upi"] as PaymentType[]).map((type) => (
                 <button
                   key={type}
                   onClick={() => selectPaymentType(type)}

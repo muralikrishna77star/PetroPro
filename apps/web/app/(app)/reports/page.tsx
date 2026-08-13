@@ -6,6 +6,7 @@ import {
   ApiError,
   downloadAuthed,
   type Granularity,
+  type Item,
   type ItemSalesRow,
   type CashierSalesRow,
   type GroupItemSalesRow,
@@ -76,6 +77,7 @@ export default function ReportsPage() {
   const [itemCode, setItemCode] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
   const [rows, setRows] = useState<unknown[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -84,6 +86,9 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!session) return;
     api.getBusinessDate(session.token).then((r) => setTo(r.date)).catch(() => undefined);
+    // Only needed to tell fuel items (Petrol/Diesel — 3-decimal litre quantities) apart from
+    // everything else when rounding Qty columns below.
+    api.listItems(session.token).then(setItems).catch(() => undefined);
   }, [session]);
 
   const needsGranularity =
@@ -157,7 +162,7 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex w-full flex-1 flex-col gap-6 px-4 py-8">
         <h1 className="text-xl font-semibold text-primary">Reports</h1>
 
         <Card color="violet" className="flex flex-wrap items-end gap-3">
@@ -268,19 +273,26 @@ export default function ReportsPage() {
         {error && <p className="text-sm text-error">{error}</p>}
 
         <Card color="violet">
-          <ReportTable reportType={reportType} rows={rows} />
+          <ReportTable reportType={reportType} rows={rows} items={items} />
         </Card>
       </div>
     </div>
   );
 }
 
-function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unknown[] }) {
+const FUEL_NAME_RE = /petrol|diesel/i;
+
+function ReportTable({ reportType, rows, items }: { reportType: ReportType; rows: unknown[]; items: Item[] }) {
   if (rows.length === 0) {
     return <p className="text-sm text-fg-muted">No data. Choose a report and click &ldquo;Run report&rdquo;.</p>;
   }
 
   const money = (n: number) => `₹${n.toFixed(2)}`;
+
+  // Petrol/Diesel are dispensed to three decimal places (litres); every other item's quantity
+  // is left as the API returns it. Keyed by item_code since that's what every report row carries.
+  const fuelCodes = new Set(items.filter((i) => FUEL_NAME_RE.test(i.name)).map((i) => i.code));
+  const qty = (n: number, itemCode: string) => (fuelCodes.has(itemCode) ? Math.round(n * 1000) / 1000 : n);
 
   switch (reportType) {
     case "sales-item": {
@@ -288,7 +300,7 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
       return (
         <Table
           headers={["Period", "Item", "Qty", "Amount", "Tax"]}
-          rows={data.map((r) => [r.bucket, `${r.item_name} (${r.item_code})`, r.qty, money(r.amount), money(r.tax_amount)])}
+          rows={data.map((r) => [r.bucket, `${r.item_name} (${r.item_code})`, qty(r.qty, r.item_code), money(r.amount), money(r.tax_amount)])}
         />
       );
     }
@@ -306,7 +318,7 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
         <GroupedTable
           rows={rows as GroupItemSalesRow[]}
           columns={[
-            { header: "Qty", value: (r) => r.qty },
+            { header: "Qty", value: (r) => qty(r.qty, r.item_code) },
             { header: "Amount", value: (r) => r.amount, format: money },
             { header: "Tax", value: (r) => r.tax_amount, format: money },
           ]}
@@ -334,7 +346,7 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
         <GroupedTable
           rows={rows as PurchaseGroupItemRow[]}
           columns={[
-            { header: "Qty", value: (r) => r.qty },
+            { header: "Qty", value: (r) => qty(r.qty, r.item_code) },
             { header: "Value", value: (r) => r.value, format: money },
           ]}
         />
@@ -381,10 +393,10 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
         <GroupedTable
           rows={rows as StockSummaryRow[]}
           columns={[
-            { header: "Opening", value: (r) => r.opening },
-            { header: "Purchases", value: (r) => r.purchases },
-            { header: "Consumption", value: (r) => r.consumption },
-            { header: "Closing", value: (r) => r.closing },
+            { header: "Opening", value: (r) => qty(r.opening, r.item_code) },
+            { header: "Purchases", value: (r) => qty(r.purchases, r.item_code) },
+            { header: "Consumption", value: (r) => qty(r.consumption, r.item_code) },
+            { header: "Closing", value: (r) => qty(r.closing, r.item_code) },
           ]}
         />
       );
@@ -394,7 +406,15 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
       return (
         <Table
           headers={["Item", "Date", "Opening", "Receipts", "Sales", "Closing", "Balance"]}
-          rows={data.map((r) => [r.item_code, r.sdate, r.opening, r.receipts, r.sales, r.closing, r.balance])}
+          rows={data.map((r) => [
+            r.item_code,
+            r.sdate,
+            qty(r.opening, r.item_code),
+            qty(r.receipts, r.item_code),
+            qty(r.sales, r.item_code),
+            qty(r.closing, r.item_code),
+            qty(r.balance, r.item_code),
+          ])}
         />
       );
     }
@@ -403,7 +423,7 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
       return (
         <Table
           headers={["Date", "Item", "Qty", "Value", "Invoice"]}
-          rows={data.map((r) => [r.pur_date, r.item_code, r.qty, money(r.value), r.invoice_no ?? "—"])}
+          rows={data.map((r) => [r.pur_date, r.item_code, qty(r.qty, r.item_code), money(r.value), r.invoice_no ?? "—"])}
         />
       );
     }
@@ -418,7 +438,7 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
             r.item_code,
             r.odometer_prev ?? "—",
             r.odometer_curr,
-            r.qty,
+            qty(r.qty, r.item_code),
             r.mileage !== null ? r.mileage.toFixed(2) : "—",
           ])}
         />
@@ -427,14 +447,30 @@ function ReportTable({ reportType, rows }: { reportType: ReportType; rows: unkno
   }
 }
 
+/** A cell reads as numeric if it's a raw number, or a string that's purely a formatted number
+ *  (money via the `money()` helper, a percent, a plain decimal) — used to right-align number
+ *  columns without threading per-column type metadata through every report's column list. */
+function isNumericCell(cell: string | number): boolean {
+  if (typeof cell === "number") return true;
+  return /^-?₹?[\d,]+(\.\d+)?%?$/.test(cell.trim());
+}
+
+/** A column is numeric if every cell in it is either numeric or the "—" placeholder used for
+ *  nulls — keeps the whole column's alignment consistent rather than flickering per row. */
+function isNumericColumn(rows: (string | number)[][], colIndex: number): boolean {
+  return rows.length > 0 && rows.every((r) => r[colIndex] === "—" || isNumericCell(r[colIndex]));
+}
+
 function Table({ headers, rows }: { headers: string[]; rows: (string | number)[][] }) {
+  const numericCols = headers.map((_, i) => isNumericColumn(rows, i));
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="border-b border-border ">
-            {headers.map((h) => (
-              <th key={h} className="py-2 pr-4 font-medium">
+            {headers.map((h, i) => (
+              <th key={h} className={`py-2 pr-4 font-medium ${numericCols[i] ? "text-right" : ""}`}>
                 {h}
               </th>
             ))}
@@ -444,7 +480,7 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
           {rows.map((row, i) => (
             <tr key={i} className="border-b border-border ">
               {row.map((cell, j) => (
-                <td key={j} className="py-2 pr-4">
+                <td key={j} className={`py-2 pr-4 ${numericCols[j] ? "text-right tabular-nums" : ""}`}>
                   {cell}
                 </td>
               ))}
@@ -498,7 +534,7 @@ function GroupedTable<T extends GroupedRow>({ rows, columns }: { rows: T[]; colu
             <th className="py-2 pr-4 font-medium">Period</th>
             <th className="py-2 pr-4 font-medium">Group / Item</th>
             {columns.map((c) => (
-              <th key={c.header} className="py-2 pr-4 font-medium">
+              <th key={c.header} className="py-2 pr-4 text-right font-medium">
                 {c.header}
               </th>
             ))}
@@ -513,7 +549,7 @@ function GroupedTable<T extends GroupedRow>({ rows, columns }: { rows: T[]; colu
                 {columns.map((c) => {
                   const total = group.items.reduce((sum, r) => sum + c.value(r), 0);
                   return (
-                    <td key={c.header} className="py-2 pr-4">
+                    <td key={c.header} className="py-2 pr-4 text-right tabular-nums">
                       {c.format ? c.format(total) : total}
                     </td>
                   );
@@ -529,7 +565,7 @@ function GroupedTable<T extends GroupedRow>({ rows, columns }: { rows: T[]; colu
                     {item.item_name} ({item.item_code})
                   </td>
                   {columns.map((c) => (
-                    <td key={c.header} className="py-1.5 pr-4">
+                    <td key={c.header} className="py-1.5 pr-4 text-right tabular-nums">
                       {c.format ? c.format(c.value(item)) : c.value(item)}
                     </td>
                   ))}

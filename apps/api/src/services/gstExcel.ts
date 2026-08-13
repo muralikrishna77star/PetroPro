@@ -10,14 +10,16 @@ export async function generateGstSummaryExcel(
 ): Promise<Buffer> {
   const rows = reportsRepo.gstSummary(from, to, granularity);
 
+  const currencyFmt = '"₹"#,##0.00';
+
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("GST Summary");
   sheet.columns = [
     { header: "Period", key: "bucket", width: 14 },
     { header: "Tax %", key: "tax_percent", width: 10 },
-    { header: "Taxable Value", key: "taxable_value", width: 16 },
-    { header: "Tax Amount", key: "tax_amount", width: 14 },
-    { header: "Total", key: "total", width: 14 },
+    { header: "Taxable Value", key: "taxable_value", width: 16, style: { numFmt: currencyFmt } },
+    { header: "Tax Amount", key: "tax_amount", width: 14, style: { numFmt: currencyFmt } },
+    { header: "Total", key: "total", width: 14, style: { numFmt: currencyFmt } },
   ];
   sheet.getRow(1).font = { bold: true };
 
