@@ -471,6 +471,40 @@ already verified for real in Session 16.
   part of this flow only ever supported one; treated as phrasing, not a multi-recipient request,
   since it wasn't confirmed otherwise.
 
+## Session 19 — env var documentation (reconstructed)
+
+**Not logged at the time** — reconstructed from commit `2c2400a` during a later session; see
+`AI_Handoff.md`'s Session 19 entry for the full reconstruction caveat (no verification record
+exists for this session beyond what the diff itself proves).
+
+- [x] **`apps/api/.env.example`** and **`apps/web/.env.example`** — every var each app's
+      `config.ts` reads, with local-dev defaults and a pointer to where the production value
+      actually gets set (Fly.io secrets / Vercel project env vars).
+- [x] **`apps/web/.gitignore`**: `!.env.example` exception to its blanket `.env*` rule, so the new
+      file isn't silently gitignored.
+- [x] **Gap found while backfilling this entry**: `apps/web/.env.example` was missing
+      `NEXT_PUBLIC_DESKTOP_CONTROL_PORT` (read by `components/DesktopTitleBar.tsx`, defaults to
+      `4098`) — added directly. `scripts/desktop/start.mjs`'s own `API_PORT`/`WEB_PORT`/
+      `DESKTOP_CONTROL_PORT` (no `NEXT_PUBLIC_` prefix, read by that standalone Node launcher
+      script, not either app) remain undocumented — that script sits outside both workspaces and
+      has no `.env.example` of its own today.
+
+## Session 20 — Billing/Reports polish (reconstructed)
+
+**Not logged at the time** — reconstructed from commit `e7354cc`; same caveat as Session 19.
+
+- [x] Billing page: "Walk-in Billing" → "Just Billing"; Sale Type buttons reordered to
+      Cash/Credit/Card/UPI.
+- [x] GST summary Excel export: Taxable Value/Tax Amount/Total columns now currency-formatted
+      (`"₹"#,##0.00`) instead of raw numbers.
+- [x] Reports page: fuel (Petrol/Diesel) Qty columns rounded to 3 decimals, keyed off the item
+      catalog (`/petrol|diesel/i` against `items.name`) rather than a hardcoded item list; all
+      numeric columns right-aligned with tabular figures; dropped the page's `max-w-4xl` cap so
+      wide reports (Mileage, HSN) use the full available width.
+
+No schema/route/test changes in either session — route count (22) and test count (78) are
+unchanged from Session 18.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo
@@ -485,10 +519,19 @@ already verified for real in Session 16.
 - **Google SSO and the desktop kiosk launcher (Session 14) are unverified beyond typecheck/lint/build**
   — no real Google OAuth credentials and no Chromium browser have been available in this environment
   to actually exercise either end-to-end.
-- **No `.env.example`** anywhere in the repo, despite a growing list of env vars read by `config.ts`
-  on both sides (`GOOGLE_CLIENT_ID`/`SECRET`, `WEB_APP_URL`, `DESKTOP_CONTROL_PORT`, etc.) — would
-  need to be grepped out of source today.
+- ~~No `.env.example` anywhere in the repo~~ — closed in Session 19 (`apps/api/.env.example`,
+  `apps/web/.env.example`). The desktop launcher script's own three env vars are still
+  undocumented (see Session 19 above) — a much smaller residual gap than the original.
+- **No verification record for Sessions 19–20** — both were reconstructed from `git show` after
+  the fact with no typecheck/lint/build/test pass confirmed to have happened at the time. Worth a
+  real pass (`npm run typecheck && npm run lint && npm run build && npm run test`) next time either
+  area (env config, billing page, reports page) is touched, to confirm nothing regressed silently.
 - See `Project_Status.md`'s "Known gaps" for smaller, accumulated items (date-range query pattern,
   floating-point rounding, `opening_balances` overwrite semantics, the destructured-dynamic-import
   gotcha, the `applyDueRateChanges()` stale-response-snapshot quirk, the `BILL_NO`-isn't-unique
   finding from this session, etc.) — still true, still worth reading before touching related code.
+- **`Project_Status.md` was not touched in this backfill pass** — it's the "current reality
+  snapshot" doc (not a session log) and was already stale before Sessions 19–20 (its summary line
+  still says "six post-roadmap sessions (8–13)" while the body separately covers up through
+  Session 18) — a pre-existing gap, not one this pass introduced, but worth a dedicated pass rather
+  than folding into this one.

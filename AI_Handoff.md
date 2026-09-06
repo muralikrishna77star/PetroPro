@@ -1339,3 +1339,72 @@ part of an open punch list.
   wants multi-recipient support (e.g. owner + accountant both notified), that's a real schema
   change (a `customer_contacts` table or similar), not a small follow-up — flag and confirm scope
   before building it rather than assuming.
+
+### 2026-08-13 — Session 19 (env var documentation) — reconstructed
+
+**This entry was not written at the time.** Sessions 19 and 20 landed as commits (`2c2400a`,
+`e7354cc`) with no matching handoff/Todo entries — the same gap Session 14 flagged about the
+pre-Session-14 sessions, now recurring. Reconstructed from `git show` on each commit during a
+later session; no first-hand verification record exists for either, so none is claimed below
+beyond what the diffs themselves prove.
+
+**Context:** "no `.env.example`" had been a flagged gap since Session 14, repeated in Sessions
+15–18's "notes for the next session" each time — neither app documented the growing list of env
+vars `config.ts` reads on either side.
+
+**Last completed task:** `apps/api/.env.example` (every var `apps/api/src/config.ts` reads:
+`PORT`, `HOST`, `JWT_SECRET`, `DB_PATH`, `API_PUBLIC_URL`, `WEB_APP_URL`, and the three optional
+Google Sign-In vars — `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_OAUTH_REDIRECT_URI`,
+documented as safe to leave blank, which disables the feature rather than erroring) and
+`apps/web/.env.example` (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_SSO_ENABLED`). Each file notes
+its local-dev default inline plus where the production equivalent is actually set (Fly.io secrets
+for the API, Vercel project env vars for web). Also added `!.env.example` to
+`apps/web/.gitignore`'s blanket `.env*` rule — without it the new file would have been silently
+gitignored and never actually committed (the API side has no such blanket rule, so needed no
+equivalent fix).
+
+**Gap found while reconstructing this entry, not caught at the time:** `apps/web`'s
+`.env.example` didn't include `NEXT_PUBLIC_DESKTOP_CONTROL_PORT`, which
+`components/DesktopTitleBar.tsx` reads (defaults to `4098`) to reach the desktop kiosk launcher's
+local control server. Fixed directly rather than just flagged, since it's a one-line omission in
+the exact file this session's whole purpose was to make complete. Still undocumented anywhere:
+`scripts/desktop/start.mjs`'s own `API_PORT`/`WEB_PORT`/`DESKTOP_CONTROL_PORT` (no `NEXT_PUBLIC_`
+prefix — read directly by that Node script, not by either Next.js/Fastify app), since that script
+lives outside both workspaces and has no `.env.example` of its own today.
+
+**State:** documentation-only; no application code touched by the original commit.
+
+**Next task:** none prescribed — this closed a standalone flagged gap.
+
+### 2026-08-13 — Session 20 (Billing/Reports polish) — reconstructed
+
+**Same caveat as Session 19 above** — reconstructed from commit `e7354cc`, not logged at the time.
+
+**Last completed task:** three small, unrelated polish items in one commit:
+- Billing page header retitled "Walk-in Billing" → "Just Billing"; Sale Type button order changed
+  from Cash/UPI/Card/Credit to Cash/Credit/Card/UPI (`app/(app)/billing/page.tsx`).
+- GST summary Excel export (`services/gstExcel.ts`): Taxable Value/Tax Amount/Total columns now
+  carry a `"₹"#,##0.00` `numFmt` instead of exporting raw unformatted numbers.
+- Reports page (`app/(app)/reports/page.tsx`): fuel (Petrol/Diesel) quantities are rounded to 3
+  decimals everywhere a Qty/quantity column appears, determined by matching the item catalog's
+  `name` against `/petrol|diesel/i` (a new `api.listItems()` call on page load) rather than a
+  hardcoded item-code list. All numeric table columns are now right-aligned with tabular figures
+  (new `isNumericCell`/`isNumericColumn` helpers infer "numeric" from cell shape — a raw number or
+  a money/percent/decimal-formatted string — rather than threading column-type metadata through
+  every report). The page's own `max-w-4xl` cap was dropped so wide reports (Mileage, HSN) use the
+  full width the shared app shell already allows.
+
+**State:** no schema, route, or test changes — pure frontend/formatting; route count and test
+count are unaffected (still 22 web routes, 78 tests as of Session 18).
+
+**Next task:** none prescribed.
+
+**Notes for the next session:**
+- No verification record exists for this session (see the reconstruction caveat above) — a fresh
+  `typecheck`/`lint`/`build` pass would be worth running before trusting these changes deeper than
+  a diff read, since none of that is confirmed to have happened at the time.
+- The fuel-quantity rounding is name-based (`/petrol|diesel/i` against `items.name`), not a
+  dedicated `items.is_fuel` flag. Fine while the catalog's only fuel products are literally named
+  "Petrol"/"Diesel"; would silently fall through to unrounded quantities (not error) for a fuel
+  product added later whose name doesn't contain either word — e.g. an abbreviated "MS"/"HSD" code
+  or a differently-branded fuel line.

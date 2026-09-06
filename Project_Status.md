@@ -16,9 +16,11 @@ Legend: ✅ done · 🚧 in progress · ⬜ planned (full detail in [docs/ROADMA
 | 4 — Offline sync & operations | ✅ |
 | 5 — Hardening | ✅ (scope adjusted — see `docs/ROADMAP.md`) |
 
-All five roadmap phases are complete, plus six post-roadmap sessions (8, 9, 10, 11, 12, 13). That
+All five roadmap phases are complete, plus thirteen post-roadmap sessions (8 through 20). That
 does not mean there's nothing left — read "Known gaps" below and `Todo.md` before assuming a feature
-is finished just because its phase is checked off.
+is finished just because its phase is checked off. **Sessions 19 and 20 were not logged at the
+time** (commits `2c2400a`/`e7354cc`, both 2026-08-13) — backfilled into `AI_Handoff.md`/`Todo.md`
+in a later session; this file's own catch-up is what you're reading now.
 
 **The dev database currently on disk (`apps/api/data/petropro.db`) has real legacy data loaded**:
 full master data (`npm run import:legacy`) plus 3 real months of transactions, 2019-04-01 through
@@ -39,6 +41,9 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
 - Root `package.json` (npm workspaces), `.github/workflows/ci.yml`, `docker-compose.yml`,
   `.dockerignore`
 - `CLAUDE.md`, `AI_Handoff.md`, `Project_Status.md`, `Todo.md` — AI-agent context/process docs
+- `apps/api/.env.example`, `apps/web/.env.example` — Session 19. Document every env var each
+  app's `config.ts` reads (previously undocumented, grep-only); `apps/web/.gitignore` got a
+  `!.env.example` exception to its blanket `.env*` rule so the file actually gets tracked.
 - `daily-prompts/` — informational chat-prompt log, not part of the application
 - `PetBro.zip` — original legacy application archive (source for `legacy/Workarea/`)
 - **`packages/shared-types`** — new this session. Wire-format types (`Item`, `Customer`, `Bill`,
@@ -66,10 +71,16 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   `POST`/`GET /communication/log`; see `docs/` note below, there's no `docs/MODULES.md` entry for
   this since it's net-new, not a legacy-menu item. **78 tests total** (was 46 as of Session 13; the
   jump includes the undocumented intermediate sessions' tests, not all added by Sessions 14-16).
-- **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **22 routes** (was
-  21 as of Session 16; `/i/[billNo]` is new in Session 17 — the QR-code public invoice page). Was 18
-  as of Session 13; `/login/callback` is new in Session 14, the rest from undocumented intermediate
-  sessions). Session 13: `NavBar` rebuilt as legacy-`MAINMENU.PRG`-style dropdown groups
+- **`apps/web`** — Next.js (App Router, Turbopack) + TypeScript + Tailwind PWA, **22 routes**
+  (unchanged since Session 17 — Sessions 18 and 20 both only edited existing pages). Session 20:
+  billing page retitled "Walk-in Billing" → "Just Billing" and its Sale Type buttons reordered to
+  Cash/Credit/Card/UPI; reports page now rounds fuel (Petrol/Diesel) quantities to 3 decimals
+  (matched off the item catalog's `name` via `/petrol|diesel/i`, not a hardcoded item list),
+  right-aligns all numeric table columns with tabular figures, and dropped its own `max-w-4xl` cap
+  so wide reports (Mileage, HSN) use the full width the app shell allows. (Route count: 18 as of
+  Session 13, 21 as of Session 16, 22 as of Session 17's `/i/[billNo]`, unchanged since — the rest
+  of this growth is from undocumented intermediate sessions.) Session 13: `NavBar` rebuilt as
+  legacy-`MAINMENU.PRG`-style dropdown groups
   (Maintenance/Bill/Reports/Search/Utilities, colored per group) showing the live tenant name instead
   of a hardcoded "PetroPro"; new shared `components/Card.tsx` (colored-left-border bordered panel,
   color matched to each page's NavBar group) applied across all 14 authenticated pages, replacing the
@@ -102,6 +113,8 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   `phone` (create form + a dedicated edit block, admin/owner-gated) — the backend always
   supported it, but no UI ever exposed it, so every credit customer's WhatsApp-invoice number was
   silently null. `SendInvoiceButton`/`WhatsAppCommunityProvider` themselves were unchanged.
+  Session 20: `services/gstExcel.ts`'s GST summary export now currency-formats its Taxable
+  Value/Tax Amount/Total columns (`"₹"#,##0.00` `numFmt`) instead of exporting raw numbers.
 
 - **`apps/api/src/dbf/importTransactions.ts`** — Session 11 (`npm run import:demo-transactions`
   from `apps/api`). Imports a fixed real 3-month window (2019-04 through mid-2019-06, the actual
@@ -176,7 +189,12 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   — `git log` shows commits (`6eb6f57`, `4b1e977`, `f17bd34`, `91630be`: mileage tracking, customer
   order portal, richer reporting, HSN codes, build-context exclusions) with no matching handoff
   entries. That history isn't reconstructable from these docs; Session 14 restarted the discipline
-  but didn't attempt to backfill what those sessions actually did or why.
+  but didn't attempt to backfill what those sessions actually did or why. **The same thing happened
+  again with Sessions 19–20** (`2c2400a`, `e7354cc`, both 2026-08-13) — unlike the earlier gap,
+  these were small, self-contained commits and *were* reconstructable from their diffs alone, and
+  have since been backfilled into `AI_Handoff.md`/`Todo.md` and this file. The reconstruction
+  caught one real gap the original Session 19 missed: `apps/web/.env.example` had omitted
+  `NEXT_PUBLIC_DESKTOP_CONTROL_PORT`, since fixed.
 - Any behavior actually gated by the new operational-settings flags (e.g. `FLEETCARDENTRY=NO`
   doesn't hide fleet-card fields anywhere) — the gap asked for a settings screen, not new gating
   logic, and `SETTINGS.PRG` doesn't survive in `legacy/Workarea/` to confirm what the legacy gating
