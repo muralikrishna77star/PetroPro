@@ -1,8 +1,0 @@
-*-------"!----------------------------------!"
-Header1="|TIN NO. 33221081084               |"
-*-------"|----------------------------------|"
-Header2="*   SRINIVASA AGENCIES       *"
-Header3="|        INDIAN OIL DEALERS        |"
-Header4="|        No.490, G.N.T. ROAD       |" 
-Header5="|     Thandalkalani, Chennai - 66  |" 
-*-------"|----------------------------------|" 

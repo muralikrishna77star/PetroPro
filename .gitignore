@@ -32,3 +32,6 @@ WorkareaTill29Mar2026.zip
 
 # Vercel CLI project link (machine-local, per Vercel's own convention)
 .vercel
+
+# Original FoxPro install - local reference only, never pushed
+legacy/Workarea/

@@ -1,1 +1,0 @@
-delete for bill_date!=ctod("08/08/2000")
