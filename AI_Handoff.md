@@ -1408,3 +1408,133 @@ count are unaffected (still 22 web routes, 78 tests as of Session 18).
   "Petrol"/"Diesel"; would silently fall through to unrounded quantities (not error) for a fuel
   product added later whose name doesn't contain either word — e.g. an abbreviated "MS"/"HSD" code
   or a differently-branded fuel line.
+
+### 2026-11-02 — Session 21 (Customer Statement report + QR "send to my WhatsApp" setting)
+
+**Context:** two user requests in one session.
+1. "Customer Report for Credit Customers is missing": a from-date/to-date statement that must
+   reproduce the legacy FoxPro report forms exactly. The forms are `CWS.FRT` (customer-wise
+   statement), `CWSWO.FRT` (with opening balance), and the vehicle-grouped pair `CWSG`/`CWSGWO`.
+   They are in `WorkareaTill29Mar2026/`, which is gitignored and local only. Treat it as read-only,
+   like `legacy/Workarea/`.
+2. The QR-scanned invoice page's "get the bill on WhatsApp" option should be a configuration
+   setting, used only when the customer chooses to.
+
+**How the legacy forms were read:**
+- FRX/FRT files are DBF tables plus an FPT memo. I dumped them with a scratch script, which is not
+  committed:
+  - OBJTYPE: 5 text, 8 field, 9 band, 18 variable.
+  - Band OBJCODE: 0 title, 1 page header, 3 group header, 4 detail, 5 group footer, 7 page footer,
+    8 summary.
+  - VPOS/HPOS are absolute row/column positions.
+- CWS.PRG itself survives only as the compiled `CWS.FXP`. Its strings still give:
+  - the prompts: customer, start/end date, vehicle no., group by vehicle, print opening & closing;
+  - the SQL: the customer's bill lines, `BETWEEN` dates, `ORDER BY bill_date, bill_no`, and
+    `alltrim(veh_no)=alltrim(vehno)`, which is a prefix match under `SET EXACT OFF`;
+  - the message "NO BILLS FOUND ON SPECIFIED RANGE".
+- Helper functions:
+  - `getname(1..4)` reads HEADINGS.DBF: `CNAME`, `ADDR1`, `ADDR2` and `ADDLINE`. `ADDLINE` is the
+    tagline, printed in the page footer.
+  - `getbals(1)` is the opening balance as on the start date.
+  - `getbals(3)` is receipts in the period.
+  - `getnobs()` is the distinct bill count.
+
+**Last completed task — Customer Statement:**
+- **`apps/api/src/services/customerStatement.ts` (new).** `getCustomerStatement(opts)` renders the
+  report as fixed-width text pages, column for column from the FRX positions.
+  - Two layouts: `wideLayout` (CWS/CWSWO, 130 columns × 66 lines) and `groupedLayout`
+    (CWSG/CWSGWO, 75 × 65).
+  - FoxPro-faithful helpers:
+    - `foxRound` rounds half away from zero.
+    - `pic()` formats numbers like a FoxPro PICTURE: `@Z` blanks zero, and commas appear only with
+      a digit to their left.
+    - `Row` writes text as an overlay: padding never erases existing text, character fields are
+      truncated to their width, and right-justified fields spill left.
+  - `paginate()` builds the pages:
+    - the heading line on every page, and the title band on page 1 only;
+    - the page footer pinned to the bottom, showing "Balance C/F" only when more rows follow, with
+      "Balance B/D" on the next page;
+    - an empty group-header row before each vehicle;
+    - the summary pushed to a new page if it doesn't fit.
+- **Data and totals.**
+  - Only credit bills that aren't cancelled, filtered with `date(bill_date) BETWEEN`.
+  - The vehicle filter is a case-insensitive prefix match (`LIKE UPPER(?)||'%'`).
+  - Opening balance and receipts come from `getCustomerLedger(code, from, to)`.
+  - Service charge = round2(total × sc% / 100).
+  - Net balance = total + service charge + opening − receipts. The net amount is rounded to the
+    rupee and the round-off is shown.
+  - Amount in words uses the legacy `moneyWords()`, which gives "Six hundred". The lowercase "h"
+    is kept from MONEY.PRG.
+- **`apps/api/src/services/customerStatementPdf.ts` (new).** A4 portrait in Courier, with the font
+  size fitted to the page width and one PDF page per text page.
+- **`routes/reports.ts`.**
+  - `GET /reports/customers/:code/statement` (JSON) and `.../statement.pdf`, both manager-only.
+  - Query parameters: `from`, `to`, `vehicle_no`, `group_by_vehicle`, `with_opening` (`1` or
+    `true`).
+  - Returns 400 for bad input or an unknown customer. The PDF route returns 404 "No bills found on
+    specified range" when there are no lines.
+- **`packages/shared-types`:** `CustomerStatement`, `CustomerStatementQuery`.
+- **Web: Reports → "Customer Statement (Credit)".**
+  - Controls: customer picker, optional vehicle no., and the **Group by vehicle** and **Opening &
+    closing amounts** checkboxes. The four combinations pick CWS, CWSWO, CWSG or CWSGWO.
+  - Output: a monospace on-screen preview of each page, plus **Print / PDF** and **Download PDF**.
+
+**Last completed task — QR WhatsApp setting:**
+- **Schema.**
+  - `communication_settings.qr_whatsapp_enabled` defaults to **0 (off)**, because the option hands
+    out a link that lasts days rather than the QR code's 30 minutes.
+  - `qr_whatsapp_link_days` defaults to 7. The repository accepts only 1–90.
+- **`routes/publicInvoice.ts`.**
+  - GET now also returns `whatsapp: {enabled, default_country_code, link_days}`.
+  - New `POST /public/invoice/:billNo/whatsapp?t=`.
+  - Errors: 401 for a bad token or one issued for another bill, 403 when the setting is off, 404
+    when the bill doesn't exist, 400 for a bad number.
+  - On success it issues an invoice token valid for `link_days` and returns a wa.me URL to the
+    customer's own number carrying the bill link.
+  - Each use is logged to `communication_log` with the remark "Customer self-service from QR
+    scan". The number is **not** saved to Customer Master.
+- **Web.**
+  - `/i/[billNo]` shows "Send this bill to my WhatsApp" only when the setting is on. The customer
+    enters a number, and WhatsApp opens.
+  - Settings → Communication has a "QR scan: send bill to customer's WhatsApp" YES/NO toggle, plus
+    the link validity in days.
+  - `SendInvoiceButton`'s QR panel mentions the option when it's on.
+
+**Verification performed this session:**
+- New tests in `customerStatement.test.ts` (5):
+  - CWS totals and column positions;
+  - CWSWO opening balance and receipts;
+  - the vehicle prefix filter;
+  - CWSG per-vehicle totals;
+  - 70-bill pagination with the C/F and B/D carry-forward.
+- New tests in `routes/publicInvoice.test.ts` (4):
+  - off by default, returning 403;
+  - when enabled, a wa.me URL, a 10-day token and a log row;
+  - a bad number returns 400, and a token for another bill returns 401;
+  - link days outside 1–90 are refused.
+- The full API suite passes **87/87**. `tsc` is clean for api and web, and eslint is clean on the
+  changed web files.
+- HTTP checks against a dev server:
+  - statement JSON returned 200 (CWSWO, 80 bills, 2 pages);
+  - the PDF returned 200 `application/pdf`;
+  - an empty range returned 404, and an unknown customer returned 400.
+- **Not done:** the PDF was never checked visually (there is no PDF renderer in this environment),
+  and neither feature was clicked through in a browser.
+
+**State:** all changes were uncommitted when this entry was written.
+
+**Next task:** the user checks both features in the app, ideally against a real FoxPro printout of
+CWS, CWSWO, CWSG and CWSGWO.
+
+**Notes for the next session (assumptions to confirm with the user):**
+- The "SALES REPORT OF <customer> From … To …" heading isn't in the FRX files. I inferred that it
+  comes from a `REPORT FORM … HEADING` clause in CWS.PRG and placed it as line 0 of every page. Its
+  exact position is a best guess.
+- The opening balance is the customer's opening balance plus credit bills minus receipts before the
+  From date. Service charge on earlier bills is not included.
+- Where FoxPro would print `****` for an overflowing number, the number prints in full and spills
+  left. Address lines that are too wide are centered rather than truncated.
+- The FXP names WOCWS.FRX, but that file isn't in the 2026 workarea. CWS-P is a 78-column print
+  variant. Only the four forms the user named were built.
+- The user may have meant a per-customer "willing to receive on WhatsApp" flag in Customer Master
+  rather than the customer opting in at scan time. If so, that's a follow-up.

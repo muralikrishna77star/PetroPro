@@ -505,6 +505,35 @@ exists for this session beyond what the diff itself proves).
 No schema/route/test changes in either session — route count (22) and test count (78) are
 unchanged from Session 18.
 
+## Session 21 — Customer Statement report (legacy CWS forms) + QR "send to my WhatsApp" setting
+
+Full detail in `AI_Handoff.md`'s Session 21 entry.
+
+- [x] **Customer Statement (Credit) report** on the Reports page.
+      - Inputs: from/to date, customer, optional vehicle no. (prefix match).
+      - The "Group by vehicle" and "Opening & closing amounts" checkboxes pick one of the four
+        legacy forms: CWS (130 columns), CWSWO (with opening balance), CWSG (75 columns, grouped by
+        vehicle) and CWSGWO.
+      - Output: fixed-width text laid out from the FRX positions, with B/D and C/F carry-forward
+        between pages, plus totals, service charge, round-off and amount in words. On-screen
+        preview and PDF.
+      - Code: `services/customerStatement.ts`, `services/customerStatementPdf.ts` and
+        `GET /reports/customers/:code/statement[.pdf]`.
+- [x] **QR scan → customer's own WhatsApp**, now a setting.
+      - Settings → Communication: a toggle (off by default) and link validity of 1–90 days
+        (default 7).
+      - The scanned page shows "Send this bill to my WhatsApp" only when the setting is on.
+      - Endpoint: `POST /public/invoice/:billNo/whatsapp`. Each send is logged to the
+        communication log, and the number is not saved to Customer Master.
+- [x] Tests: 9 new (5 for the statement, 4 for the public-invoice WhatsApp option). The full API
+      suite passes 87/87, and `tsc` is clean for api and web.
+- [ ] Check the statement PDF visually and compare all four forms against a real FoxPro printout.
+      The heading position, the opening-balance definition and the overflow behaviour are
+      assumptions.
+- [ ] Click through both features in a browser (not done this session).
+- [ ] Confirm with the user whether they want the customer to opt in at scan time or a
+      per-customer WhatsApp consent flag.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo

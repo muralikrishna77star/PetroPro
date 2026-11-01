@@ -336,6 +336,10 @@ export function applySchema(db: DatabaseSync): void {
   // side) — the same "retry-safe because the client_ref already exists" pattern
   // pending_transactions.client_ref already uses.
   ensureColumn(db, "bills", "client_ref", "TEXT");
+  // QR-scanned invoice page's optional "send to my WhatsApp" (routes/publicInvoice.ts). Off by
+  // default: it hands out a bill link that lives for days rather than the QR's 30 minutes.
+  ensureColumn(db, "communication_settings", "qr_whatsapp_enabled", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "communication_settings", "qr_whatsapp_link_days", "INTEGER NOT NULL DEFAULT 7");
 
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_transactions_client_ref ON pending_transactions(client_ref) WHERE client_ref IS NOT NULL",

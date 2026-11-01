@@ -23,6 +23,10 @@ export default function PublicInvoicePage() {
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [mobile, setMobile] = useState("");
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [whatsAppError, setWhatsAppError] = useState<string | null>(null);
 
   useEffect(() => {
     // window.location.search, not useSearchParams() — matches app/login/page.tsx's reasoning:
@@ -75,6 +79,26 @@ export default function PublicInvoicePage() {
       setSharing(false);
     }
   }
+
+  // Customer-initiated only (and only when the outlet has switched it on in Settings): the API
+  // mints a longer-lived bill link and hands back a wa.me URL for the customer's own number, so
+  // the bill lands in their WhatsApp ("message yourself") once they tap Send there.
+  async function handleSendToWhatsApp() {
+    if (!token) return;
+    setSendingWhatsApp(true);
+    setWhatsAppError(null);
+    try {
+      const { whatsappUrl } = await publicApi.sendToWhatsApp(billNo, token, mobile);
+      window.location.href = whatsappUrl;
+    } catch (err) {
+      setWhatsAppError(err instanceof ApiError ? err.message : "Couldn't open WhatsApp — try again");
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  }
+
+  const mobileDigits = mobile.replace(/\D/g, "");
+  const mobileLooksValid = mobileDigits.length >= 10 && mobileDigits.length <= 15;
 
   return (
     <div className="flex flex-1 items-start justify-center bg-bg px-4 py-8">
@@ -174,6 +198,50 @@ export default function PublicInvoicePage() {
               </Button>
             </div>
             {shareNotice && <p className="text-center text-xs text-fg-muted">{shareNotice}</p>}
+
+            {invoice.whatsapp?.enabled && (
+              <div className="border-t border-border pt-3">
+                {!showWhatsApp ? (
+                  <Button variant="outline" className="w-full" onClick={() => setShowWhatsApp(true)}>
+                    Send this bill to my WhatsApp
+                  </Button>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-medium text-fg-muted" htmlFor="wa-mobile">
+                      Your WhatsApp number
+                    </label>
+                    <input
+                      id="wa-mobile"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={mobile}
+                      onChange={(e) => setMobile(e.target.value)}
+                      placeholder="10-digit mobile number"
+                      className="w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm"
+                      autoFocus
+                    />
+                    <p className="text-xs text-fg-muted">
+                      Opens WhatsApp with a link to this bill — tap Send there to keep it. The link works for{" "}
+                      {invoice.whatsapp.link_days} day{invoice.whatsapp.link_days === 1 ? "" : "s"}.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1" onClick={() => setShowWhatsApp(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => void handleSendToWhatsApp()}
+                        disabled={sendingWhatsApp || !mobileLooksValid}
+                      >
+                        {sendingWhatsApp ? "Opening..." : "Open WhatsApp"}
+                      </Button>
+                    </div>
+                    {whatsAppError && <p className="text-center text-xs text-error">{whatsAppError}</p>}
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         )}
       </div>

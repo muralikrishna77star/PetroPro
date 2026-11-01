@@ -219,6 +219,7 @@ export function SendInvoiceButton({
               <p className="mt-2 text-xs text-fg-muted">
                 Customer scans this with their phone camera to view and download their own invoice — no app or
                 account needed. Link expires in 30 minutes.
+                {settings?.qr_whatsapp_enabled && " They can also choose to send the bill to their own WhatsApp from there."}
               </p>
               <button
                 onClick={() => void handleCopyLink()}

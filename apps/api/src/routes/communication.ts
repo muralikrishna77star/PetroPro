@@ -16,8 +16,13 @@ export default async function communicationRoutes(fastify: FastifyInstance) {
   fastify.put<{ Body: Partial<CommunicationSettings> }>(
     "/communication/settings",
     { preHandler: fastify.requireRole("super_admin", "owner") },
-    async (request) => {
-      const updated = communicationSettingsRepo.update(request.body ?? {});
+    async (request, reply) => {
+      let updated;
+      try {
+        updated = communicationSettingsRepo.update(request.body ?? {});
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
       auditLogsRepo.record({
         user_id: request.user.sub,
         action: "update_communication_settings",

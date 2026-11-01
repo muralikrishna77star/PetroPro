@@ -20,6 +20,9 @@ import {
   type StockSummaryRow,
   type Purchase,
   type MileageEntry,
+  type Customer,
+  type CustomerStatement,
+  type CustomerStatementQuery,
 } from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
@@ -37,7 +40,8 @@ type ReportType =
   | "stock"
   | "purchases"
   | "purchases-group"
-  | "mileage";
+  | "mileage"
+  | "customer-statement";
 
 const REPORT_LABELS: Record<ReportType, string> = {
   "sales-item": "Sales — Item-wise",
@@ -53,6 +57,7 @@ const REPORT_LABELS: Record<ReportType, string> = {
   purchases: "Purchases",
   "purchases-group": "Purchases — Group-wise",
   mileage: "Vehicle Mileage",
+  "customer-statement": "Customer Statement (Credit)",
 };
 
 const GRANULARITY_LABELS: Record<Granularity, string> = {
@@ -78,6 +83,11 @@ export default function ReportsPage() {
   const [vehicleNo, setVehicleNo] = useState("");
   const [rows, setRows] = useState<unknown[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerCode, setCustomerCode] = useState("");
+  const [groupByVehicle, setGroupByVehicle] = useState(false);
+  const [withOpening, setWithOpening] = useState(false);
+  const [statement, setStatement] = useState<CustomerStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -89,6 +99,7 @@ export default function ReportsPage() {
     // Only needed to tell fuel items (Petrol/Diesel — 3-decimal litre quantities) apart from
     // everything else when rounding Qty columns below.
     api.listItems(session.token).then(setItems).catch(() => undefined);
+    api.listCustomers(session.token).then(setCustomers).catch(() => undefined);
   }, [session]);
 
   const needsGranularity =
@@ -98,6 +109,14 @@ export default function ReportsPage() {
     reportType === "purchases-group";
   const needsItemFilter = reportType === "stock" || reportType === "stock-summary" || reportType === "purchases";
   const needsVehicle = reportType === "mileage";
+  const isStatement = reportType === "customer-statement";
+  const statementQuery: CustomerStatementQuery = {
+    from,
+    to,
+    vehicleNo: vehicleNo.trim() || undefined,
+    groupByVehicle,
+    withOpening,
+  };
 
   async function runReport() {
     if (!session) return;
@@ -149,10 +168,23 @@ export default function ReportsPage() {
           }
           setRows(await api.getMileageReport(session.token, vehicleNo));
           break;
+        case "customer-statement": {
+          setStatement(null);
+          if (!customerCode) {
+            setError("Choose a customer");
+            return;
+          }
+          const result = await api.getCustomerStatement(session.token, customerCode, statementQuery);
+          // Legacy CWS.PRG's own message when the query comes back empty.
+          if (result.lines.length === 0) setError("No bills found on specified range");
+          else setStatement(result);
+          break;
+        }
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Report failed");
       setRows([]);
+      setStatement(null);
     } finally {
       setLoading(false);
     }
@@ -174,6 +206,7 @@ export default function ReportsPage() {
               onChange={(e) => {
                 setReportType(e.target.value as ReportType);
                 setRows([]);
+                setStatement(null);
               }}
             >
               {Object.entries(REPORT_LABELS).map(([value, label]) => (
@@ -246,6 +279,42 @@ export default function ReportsPage() {
             </div>
           )}
 
+          {isStatement && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-fg-muted">Customer</label>
+                <select
+                  className="max-w-64 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                  value={customerCode}
+                  onChange={(e) => setCustomerCode(e.target.value)}
+                >
+                  <option value="">Select customer…</option>
+                  {customers.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-fg-muted">Vehicle no. (optional)</label>
+                <input
+                  className="w-36 rounded-lg border border-border px-3 py-1.5 text-sm uppercase  bg-bg-elevated"
+                  value={vehicleNo}
+                  onChange={(e) => setVehicleNo(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 py-1.5 text-sm">
+                <input type="checkbox" checked={groupByVehicle} onChange={(e) => setGroupByVehicle(e.target.checked)} />
+                Group by vehicle
+              </label>
+              <label className="flex items-center gap-2 py-1.5 text-sm">
+                <input type="checkbox" checked={withOpening} onChange={(e) => setWithOpening(e.target.checked)} />
+                Opening &amp; closing amounts
+              </label>
+            </>
+          )}
+
           <button
             onClick={runReport}
             disabled={loading}
@@ -268,12 +337,46 @@ export default function ReportsPage() {
               Download Excel
             </button>
           )}
+
+          {isStatement && statement && (
+            <>
+              <button
+                onClick={() =>
+                  downloadAuthed(
+                    api.customerStatementPdfUrl(statement.customer.code, statementQuery),
+                    session.token,
+                    `statement-${statement.customer.code}-${from}-to-${to}.pdf`,
+                    "open",
+                  ).catch(() => setError("Couldn't open the PDF"))
+                }
+                className="rounded-lg border border-border px-3 py-1.5 text-sm "
+              >
+                Print / PDF
+              </button>
+              <button
+                onClick={() =>
+                  downloadAuthed(
+                    api.customerStatementPdfUrl(statement.customer.code, statementQuery),
+                    session.token,
+                    `statement-${statement.customer.code}-${from}-to-${to}.pdf`,
+                  ).catch(() => setError("Couldn't download the PDF"))
+                }
+                className="rounded-lg border border-border px-3 py-1.5 text-sm "
+              >
+                Download PDF
+              </button>
+            </>
+          )}
         </Card>
 
         {error && <p className="text-sm text-error">{error}</p>}
 
         <Card color="violet">
-          <ReportTable reportType={reportType} rows={rows} items={items} />
+          {isStatement ? (
+            <StatementPreview statement={statement} />
+          ) : (
+            <ReportTable reportType={reportType} rows={rows} items={items} />
+          )}
         </Card>
       </div>
     </div>
@@ -281,6 +384,34 @@ export default function ReportsPage() {
 }
 
 const FUEL_NAME_RE = /petrol|diesel/i;
+
+/** The statement exactly as it prints — the API renders the legacy CWS/CWSWO/CWSG/CWSGWO form
+ *  layouts as fixed-width text, so this only lays the pages out in a monospace font. */
+function StatementPreview({ statement }: { statement: CustomerStatement | null }) {
+  if (!statement) {
+    return (
+      <p className="text-sm text-fg-muted">
+        Choose a customer and date range, then click &ldquo;Run report&rdquo;.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4 overflow-x-auto">
+      <p className="text-xs text-fg-muted">
+        Legacy form {statement.form} · {statement.pages.length} page{statement.pages.length === 1 ? "" : "s"} ·{" "}
+        {statement.bill_count} bill{statement.bill_count === 1 ? "" : "s"}
+      </p>
+      {statement.pages.map((page, i) => (
+        <pre
+          key={i}
+          className="w-max rounded-md border border-border bg-white p-4 font-mono text-[11px] leading-tight text-black"
+        >
+          {page.join("\n").trimEnd()}
+        </pre>
+      ))}
+    </div>
+  );
+}
 
 function ReportTable({ reportType, rows, items }: { reportType: ReportType; rows: unknown[]; items: Item[] }) {
   if (rows.length === 0) {

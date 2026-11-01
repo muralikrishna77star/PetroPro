@@ -428,6 +428,45 @@ function CommunicationSection({ token, editable }: { token: string; editable: bo
           </button>
         </div>
 
+        <div className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">QR scan: send bill to customer&apos;s WhatsApp</div>
+              <div className="text-xs text-fg-muted">
+                After scanning the &quot;Customer scans QR&quot; code, the customer can choose to send the bill to their
+                own WhatsApp number. Only happens if they tap it and enter their number.
+              </div>
+            </div>
+            <button
+              onClick={() => save({ qr_whatsapp_enabled: !settings.qr_whatsapp_enabled })}
+              disabled={!editable || saving}
+              className={`rounded-full px-3 py-1 text-xs font-medium disabled:opacity-50 ${
+                settings.qr_whatsapp_enabled ? "bg-success/15 text-success" : "bg-card-hover text-fg-muted bg-bg-elevated dark:text-zinc-400"
+              }`}
+            >
+              {settings.qr_whatsapp_enabled ? "YES" : "NO"}
+            </button>
+          </div>
+          {settings.qr_whatsapp_enabled && (
+            <label className="text-xs">
+              <span className="mr-2 text-fg-muted">Bill link in WhatsApp stays valid for</span>
+              <input
+                type="number"
+                min={1}
+                max={90}
+                defaultValue={settings.qr_whatsapp_link_days}
+                disabled={!editable}
+                onBlur={(e) => {
+                  const days = Number(e.target.value);
+                  if (days !== settings.qr_whatsapp_link_days) void save({ qr_whatsapp_link_days: days });
+                }}
+                className="w-16 rounded-lg border border-border px-2 py-1 text-sm bg-bg-elevated disabled:opacity-50"
+              />
+              <span className="ml-2 text-fg-muted">days (1–90)</span>
+            </label>
+          )}
+        </div>
+
         <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm opacity-60">
           <div>
             <div className="font-medium">WhatsApp Business API</div>

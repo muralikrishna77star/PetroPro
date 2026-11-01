@@ -295,6 +295,47 @@ export interface VehicleSalesRow {
   amount: number;
 }
 
+/** Legacy CWS "Customer Wise Sales Report" (apps/api services/customerStatement.ts). `pages` is
+ *  the print-ready fixed-width text, one string per line, `page_length` lines per page. */
+export interface CustomerStatement {
+  form: "CWS" | "CWSWO" | "CWSG" | "CWSGWO";
+  customer: { code: string; name: string; service_charge: number };
+  from: string;
+  to: string;
+  vehicle_no: string | null;
+  lines: {
+    bill_date: string;
+    bill_no: number;
+    order_no: string | null;
+    vehicle_no: string | null;
+    item_name: string;
+    qty: number;
+    rate: number;
+    amount: number;
+  }[];
+  bill_count: number;
+  total_qty: number;
+  total_amount: number;
+  service_charge_amount: number;
+  opening_balance: number;
+  receipts: number;
+  net_balance: number;
+  net_amount: number;
+  round_off: number;
+  amount_in_words: string;
+  width: number;
+  page_length: number;
+  pages: string[][];
+}
+
+export interface CustomerStatementQuery {
+  from: string;
+  to: string;
+  vehicleNo?: string;
+  groupByVehicle?: boolean;
+  withOpening?: boolean;
+}
+
 export interface FleetCardSalesRow {
   fleet_card: string;
   bill_count: number;
@@ -385,6 +426,10 @@ export interface CommunicationSettings {
   auto_open_whatsapp: boolean;
   /** Stored for the Professional-edition provider architecture; not read by any active code path. */
   business_api_enabled: boolean;
+  /** Offer "Send to my WhatsApp" on the QR-scanned invoice page (customer opts in there). */
+  qr_whatsapp_enabled: boolean;
+  /** Validity, in days, of the bill link sent that way (1-90). */
+  qr_whatsapp_link_days: number;
 }
 
 export interface CommunicationLogEntry {
@@ -420,4 +465,6 @@ export interface PublicInvoice {
     tagline: string | null;
     gst_no: string | null;
   };
+  /** Owner's Settings → Communication "QR: send to customer's WhatsApp" switch. */
+  whatsapp: { enabled: boolean; default_country_code: string; link_days: number };
 }

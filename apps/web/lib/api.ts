@@ -12,6 +12,8 @@ import type {
   CommunicationStatus,
   Customer,
   CustomerLoginResponse,
+  CustomerStatement,
+  CustomerStatementQuery,
   FinYear,
   FleetCardSalesRow,
   Granularity,
@@ -60,6 +62,8 @@ export type {
   CommunicationStatus,
   Customer,
   CustomerLoginResponse,
+  CustomerStatement,
+  CustomerStatementQuery,
   FinYear,
   FleetCardSalesRow,
   Granularity,
@@ -142,6 +146,14 @@ export async function downloadAuthed(
     link.click();
   }
   setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+}
+
+function statementParams(query: CustomerStatementQuery): URLSearchParams {
+  const params = new URLSearchParams({ from: query.from, to: query.to });
+  if (query.vehicleNo) params.set("vehicle_no", query.vehicleNo);
+  if (query.groupByVehicle) params.set("group_by_vehicle", "1");
+  if (query.withOpening) params.set("with_opening", "1");
+  return params;
 }
 
 export const api = {
@@ -334,6 +346,14 @@ export const api = {
     return request<LedgerEntry[]>(`/reports/customers/${code}/ledger?${params}`, { token });
   },
 
+  getCustomerStatement: (token: string, code: string, query: CustomerStatementQuery) =>
+    request<CustomerStatement>(`/reports/customers/${encodeURIComponent(code)}/statement?${statementParams(query)}`, {
+      token,
+    }),
+
+  customerStatementPdfUrl: (code: string, query: CustomerStatementQuery) =>
+    `${API_URL}/reports/customers/${encodeURIComponent(code)}/statement.pdf?${statementParams(query)}`,
+
   getStockReport: (token: string, from: string, to: string, itemCode?: string) => {
     const params = new URLSearchParams({ from, to });
     if (itemCode) params.set("item_code", itemCode);
@@ -495,4 +515,10 @@ export const publicApi = {
     request<PublicInvoice>(`/public/invoice/${billNo}?t=${encodeURIComponent(t)}`),
 
   invoicePdfUrl: (billNo: number, t: string) => `${API_URL}/public/invoice/${billNo}/pdf?t=${encodeURIComponent(t)}`,
+
+  sendToWhatsApp: (billNo: number, t: string, mobileNumber: string) =>
+    request<{ whatsappUrl: string; expiresInDays: number }>(
+      `/public/invoice/${billNo}/whatsapp?t=${encodeURIComponent(t)}`,
+      { method: "POST", body: { mobile_number: mobileNumber } },
+    ),
 };

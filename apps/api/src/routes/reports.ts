@@ -5,11 +5,21 @@ import { purchasesRepo } from "../repositories/purchases.js";
 import { mileageRepo } from "../repositories/mileage.js";
 import { getCustomerLedger } from "../services/ledger.js";
 import { generateGstSummaryExcel } from "../services/gstExcel.js";
+import { getCustomerStatement } from "../services/customerStatement.js";
+import { generateCustomerStatementPdf } from "../services/customerStatementPdf.js";
 
 interface RangeQuery {
   from?: string;
   to?: string;
   granularity?: string;
+}
+
+interface StatementQuery {
+  from?: string;
+  to?: string;
+  vehicle_no?: string;
+  group_by_vehicle?: string;
+  with_opening?: string;
 }
 
 const GRANULARITIES: Granularity[] = ["day", "week", "month", "quarter", "half-year", "year"];
@@ -138,6 +148,56 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     "/reports/customers/:code/ledger",
     { preHandler: managerOnly },
     async (request) => getCustomerLedger(request.params.code, request.query.from, request.query.to),
+  );
+
+  // Legacy CWS "Customer Wise Sales Report" — see services/customerStatement.ts for which of the
+  // four legacy forms (CWS/CWSWO/CWSG/CWSGWO) the two flags select.
+  const statementOptions = (code: string, query: StatementQuery) => {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      customerCode: code,
+      from: query.from ?? today,
+      to: query.to ?? today,
+      vehicleNo: query.vehicle_no,
+      groupByVehicle: query.group_by_vehicle === "1" || query.group_by_vehicle === "true",
+      withOpening: query.with_opening === "1" || query.with_opening === "true",
+    };
+  };
+
+  fastify.get<{ Params: { code: string }; Querystring: StatementQuery }>(
+    "/reports/customers/:code/statement",
+    { preHandler: managerOnly },
+    async (request, reply) => {
+      try {
+        return getCustomerStatement(statementOptions(request.params.code, request.query));
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    },
+  );
+
+  fastify.get<{ Params: { code: string }; Querystring: StatementQuery }>(
+    "/reports/customers/:code/statement.pdf",
+    { preHandler: managerOnly },
+    async (request, reply) => {
+      let statement;
+      try {
+        statement = getCustomerStatement(statementOptions(request.params.code, request.query));
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+      if (statement.lines.length === 0) {
+        return reply.code(404).send({ error: "No bills found on specified range" });
+      }
+      const buffer = await generateCustomerStatementPdf(statement);
+      return reply
+        .header("Content-Type", "application/pdf")
+        .header(
+          "Content-Disposition",
+          `inline; filename="statement-${statement.customer.code}-${statement.from}-to-${statement.to}.pdf"`,
+        )
+        .send(buffer);
+    },
   );
 
   fastify.get<{ Querystring: { vehicle_no: string } }>(
