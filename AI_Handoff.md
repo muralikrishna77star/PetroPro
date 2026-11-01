@@ -1521,7 +1521,21 @@ count are unaffected (still 22 web routes, 78 tests as of Session 18).
 - **Not done:** the PDF was never checked visually (there is no PDF renderer in this environment),
   and neither feature was clicked through in a browser.
 
-**State:** all changes were uncommitted when this entry was written.
+**State:** committed as `a6d0e8d` and pushed to `origin/master`. Deployed the same day:
+- **API:** `fly deploy --remote-only -a petropro-api`.
+  - Note: `fly auth login` needs an interactive terminal, so the user signed in from their own
+    VS Code terminal first.
+- **Web:** `vercel --prod` from the repo root, which is aliased to `petropro-demo.vercel.app`.
+  - Vercel isn't wired to deploy on git push here; web deploys are manual CLI runs.
+- **Deploy order:** API first, then web, because the new web screens call API routes that didn't
+  exist before.
+- **Live checks:**
+  - `/health` returned 200.
+  - `GET /reports/customers/:code/statement` returned 401, so the route exists.
+  - `POST /public/invoice/:billNo/whatsapp` with a bad token returned the expected 401 message.
+  - The live Reports bundle contains "Customer Statement (Credit)".
+- **Not done on production:** no one has logged in and run a statement or used the WhatsApp
+  option there.
 
 **Next task:** the user checks both features in the app, ideally against a real FoxPro printout of
 CWS, CWSWO, CWSG and CWSGWO.
