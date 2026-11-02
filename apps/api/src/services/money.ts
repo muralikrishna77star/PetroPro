@@ -44,7 +44,7 @@ export function moneyWords(innums: number): string {
   if (innums < 100000) {
     const d = digits(innums);
     const head = Number(d.slice(0, 2));
-    const rest = innums % 10000;
+    const rest = innums % 1000; // substr(..., 3, 4): digits after the 2-digit head
     return rest !== 0
       ? `${moneyWords(head)} Thousand ${moneyWords(rest)}`
       : `${moneyWords(head)} Thousand`;
@@ -59,7 +59,7 @@ export function moneyWords(innums: number): string {
   if (innums < 10000000) {
     const d = digits(innums);
     const head = Number(d.slice(0, 2));
-    const rest = innums % 1000000;
+    const rest = innums % 100000; // substr(..., 3, 5)
     return rest !== 0
       ? `${moneyWords(head)} Lakh ${moneyWords(rest)}`
       : `${moneyWords(head)} Lakh`;
@@ -74,7 +74,7 @@ export function moneyWords(innums: number): string {
   if (innums < 1000000000) {
     const d = digits(innums);
     const head = Number(d.slice(0, 2));
-    const rest = innums % 100000000;
+    const rest = innums % 10000000; // substr(..., 3, 7)
     return rest !== 0
       ? `${moneyWords(head)} Crore ${moneyWords(rest)}`
       : `${moneyWords(head)} Crore`;

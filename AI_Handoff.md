@@ -1552,3 +1552,49 @@ CWS, CWSWO, CWSG and CWSGWO.
   variant. Only the four forms the user named were built.
 - The user may have meant a per-customer "willing to receive on WhatsApp" flag in Customer Master
   rather than the customer opting in at scan time. If so, that's a follow-up.
+
+### 2026-11-02 — Session 22 (verification pass + amount-in-words bug fix)
+
+**Context:** the user said "just continue". Session 21's open items needed a person, a browser or
+real FoxPro printouts, so this session did the parts that could be done here.
+
+**Environment notes:**
+- This checkout had no `node_modules` and no `apps/api/data/petropro.db`. Ran `npm ci`.
+- `legacy/Workarea/` isn't on disk; it has been untracked since `bc0ce7a`. Legacy PRGs can still
+  be read from git history, e.g. `git show bc0ce7a^:legacy/Workarea/MONEY.PRG`.
+
+**Verification pass (closes the Sessions 19–20 gap in `Todo.md`):** `npm run typecheck`,
+`npm run lint`, `npm run build` and `npm run test` are all clean.
+
+**Statement PDFs checked visually.**
+- Rendered all four forms (CWS, CWSWO, CWSG, CWSGWO) from synthetic data: one customer, 70 credit
+  bills, 3 vehicles, an opening balance and a receipt.
+- To render them, ran a temporary script with `DB_PATH=:memory:`. The script was deleted
+  afterwards.
+- These look right:
+  - the layout;
+  - the B/D and C/F carry-forward between pages;
+  - the per-vehicle subtotals;
+  - the totals arithmetic.
+- On the WO forms, "Grand Total" includes the opening balance, while the service charge is on
+  the bill total only. This matches the FRX and is not a bug.
+
+**Bug found and fixed: `services/money.ts` `moneyWords`.**
+- The 5-digit, 7-digit and 9-digit branches took the remainder with one zero too many
+  (`% 10000`, `% 1000000`, `% 100000000`).
+- MONEY.PRG uses `substr(str, 3, n)`, which is only the digits after the 2-digit head.
+- Effect: 34,089 printed as "Thirty Four Thousand Four Thousand Eighty Nine".
+- Scope: affected every invoice's `amountInWords` from ₹10,000 to ₹99,999, and any amount with
+  10–99 lakh or 10–99 crore. That includes invoice PDFs, the cashier, billing and QR pages, and
+  statement totals.
+- The legacy FoxPro output was correct; only the port was wrong.
+- Fix: the remainder is now `% 1000`, `% 100000` and `% 10000000`.
+- Two new tests, which fail without the fix. The API suite passes **89/89**.
+
+**State:** committed locally. Not pushed and not deployed; the fix reaches production only after
+`fly deploy` of the API.
+
+**Next task:**
+- Push and deploy the API with the money-words fix.
+- The Session 21 items still need the user: compare against real FoxPro printouts, click through
+  in a browser, and decide on the WhatsApp consent model.

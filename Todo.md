@@ -534,6 +534,20 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [ ] Confirm with the user whether they want the customer to opt in at scan time or a
       per-customer WhatsApp consent flag.
 
+## Session 22 — verification pass + amount-in-words fix
+
+- [x] Full `typecheck` / `lint` / `build` / `test` pass. This closes the "no verification record
+      for Sessions 19–20" gap.
+- [x] Rendered all four statement PDFs from synthetic data with 70 bills and checked them
+      visually. The layout, the carry-forward between pages and the totals are correct.
+- [x] **Fixed `moneyWords`.**
+      - The 5-, 7- and 9-digit amounts doubled part of the words, e.g. 34,089 came out as
+        "Thirty Four Thousand Four Thousand Eighty Nine".
+      - Every invoice from ₹10,000 to ₹99,999 was affected.
+      - It was a porting error; MONEY.PRG itself is correct.
+      - 2 new tests. The suite passes 89/89.
+- [ ] Deploy the API so the fix reaches production.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo
@@ -551,7 +565,8 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - ~~No `.env.example` anywhere in the repo~~ — closed in Session 19 (`apps/api/.env.example`,
   `apps/web/.env.example`). The desktop launcher script's own three env vars are still
   undocumented (see Session 19 above) — a much smaller residual gap than the original.
-- **No verification record for Sessions 19–20** — both were reconstructed from `git show` after
+- ~~**No verification record for Sessions 19–20**~~ — closed in Session 22 (full pass clean).
+  Original note: — both were reconstructed from `git show` after
   the fact with no typecheck/lint/build/test pass confirmed to have happened at the time. Worth a
   real pass (`npm run typecheck && npm run lint && npm run build && npm run test`) next time either
   area (env config, billing page, reports page) is touched, to confirm nothing regressed silently.

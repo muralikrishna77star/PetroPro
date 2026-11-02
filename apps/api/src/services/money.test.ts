@@ -27,6 +27,25 @@ test("moneyWords: thousands, lakhs, crores", () => {
   assert.equal(moneyWords(10000000), "One Crore");
 });
 
+test("moneyWords: every digit-length branch takes only the digits after its head (MONEY.PRG substr)", () => {
+  assert.equal(moneyWords(5005), "Five Thousand Five");
+  assert.equal(moneyWords(12345), "Twelve Thousand Three hundred Fourty Five");
+  assert.equal(moneyWords(34089), "Thirty Four Thousand Eighty Nine");
+  assert.equal(moneyWords(34000), "Thirty Four Thousand");
+  assert.equal(moneyWords(134089), "One Lakh Thirty Four Thousand Eighty Nine");
+  assert.equal(moneyWords(1234567), "Twelve Lakh Thirty Four Thousand Five hundred Sixty Seven");
+  assert.equal(moneyWords(1200000), "Twelve Lakh");
+  assert.equal(moneyWords(12345678), "One Crore Twenty Three Lakh Fourty Five Thousand Six hundred Seventy Eight");
+  assert.equal(
+    moneyWords(123456789),
+    "Twelve Crore Thirty Four Lakh Fifty Six Thousand Seven hundred Eighty Nine",
+  );
+});
+
+test("amountInWords: five-digit invoice total", () => {
+  assert.equal(amountInWords(25750.5), "Rupees Twenty Five Thousand Seven hundred Fifty and Fifty Paise Only");
+});
+
 test("moneyWords: rejects values outside the legacy-supported range", () => {
   assert.throws(() => moneyWords(1000000001));
 });
