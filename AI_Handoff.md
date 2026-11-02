@@ -1656,10 +1656,10 @@ was already in the working tree; this session reviewed it, fixed it and finished
 - One `npm run test` run reported a single failure while other commands ran at the same time. Its name
   wasn't captured, and it did not recur in later full runs.
 
-**State:** committed on branch `feature/tech-subscriptions-dashboard`. Not pushed, not merged and
-**not deployed**: this machine has no `flyctl` or Vercel CLI and no login for either, and logging in
-needs the user in a browser. The branch also carries Session 22's unpushed `moneyWords` fix, so the
-next API deploy ships that too.
+**State:** committed as `03beeee`, merged to `master` and pushed to `origin/master`. **Not deployed**:
+this machine has no `flyctl` or Vercel CLI and no login for either, and logging in needs the user in a
+browser. Session 22's `moneyWords` fix went out in the same push and isn't deployed either, so the next
+API deploy ships it too.
 
 **Before the web deploy:** this checkout has no `.vercel` folder, so `vercel --prod` isn't linked to a
 project yet. Link it to the existing project first (the one aliased to `petropro-demo.vercel.app`), or

@@ -560,7 +560,7 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [ ] User: record real plan, owner, cost and renewal details on `/technology`.
 - [ ] User (optional): set `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`, `GITHUB_TOKEN` as Fly.io secrets, then
       run a real provider check. Only mocked responses have been tested.
-- [x] Committed on `feature/tech-subscriptions-dashboard`.
+- [x] Committed as `03beeee`, merged to `master` and pushed.
 - [ ] Install and log in to `flyctl` and the Vercel CLI (needs the user), link `.vercel` to the
       existing project, then deploy API first, then web. Cancel Bill only starts working after the
       web deploy. The API deploy also ships Session 22's `moneyWords` fix.
