@@ -548,6 +548,24 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
       - 2 new tests. The suite passes 89/89.
 - [ ] Deploy the API so the fix reaches production.
 
+## Session 23 — Technology & Subscription Dashboard
+
+- [x] `/technology` page, API routes and storage, Super Admin only in both UI and API.
+- [x] Audit trail of manual changes, shown per service. Hidden from owners on `GET /audit-logs`.
+- [x] Fixed the API client sending a JSON content type with no body, which made Cancel Bill,
+      rate-change delete and every other bodyless POST/DELETE fail with 400.
+- [x] Fixed the service worker answering failed API calls with cached HTML.
+- [x] Sidebar is a drawer on small screens, for every page.
+- [x] Verified: typecheck, lint and build clean; API tests 101/101; 53/53 browser checks at seven widths from 320 to 1920px.
+- [ ] User: record real plan, owner, cost and renewal details on `/technology`.
+- [ ] User (optional): set `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`, `GITHUB_TOKEN` as Fly.io secrets, then
+      run a real provider check. Only mocked responses have been tested.
+- [x] Committed on `feature/tech-subscriptions-dashboard`.
+- [ ] Install and log in to `flyctl` and the Vercel CLI (needs the user), link `.vercel` to the
+      existing project, then deploy API first, then web. Cancel Bill only starts working after the
+      web deploy. The API deploy also ships Session 22's `moneyWords` fix.
+- [ ] Fix `db.location` crash at the end of `apps/api/src/db/seed.ts` under Node 22.13.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo

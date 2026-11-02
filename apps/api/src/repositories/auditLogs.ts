@@ -19,7 +19,10 @@ export interface AuditLogInput {
 }
 
 export const auditLogsRepo = {
-  list(filter: { userId?: string; entityType?: string } = {}, limit = 200): AuditLog[] {
+  list(
+    filter: { userId?: string; entityType?: string; entityId?: string; excludeEntityTypes?: string[] } = {},
+    limit = 200,
+  ): AuditLog[] {
     const clauses: string[] = [];
     const params: string[] = [];
     if (filter.userId) {
@@ -30,9 +33,17 @@ export const auditLogsRepo = {
       clauses.push("entity_type = ?");
       params.push(filter.entityType);
     }
+    if (filter.entityId) {
+      clauses.push("entity_id = ?");
+      params.push(filter.entityId);
+    }
+    if (filter.excludeEntityTypes?.length) {
+      clauses.push(`entity_type NOT IN (${filter.excludeEntityTypes.map(() => "?").join(",")})`);
+      params.push(...filter.excludeEntityTypes);
+    }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     return db
-      .prepare(`SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT ?`)
+      .prepare(`SELECT * FROM audit_logs ${where} ORDER BY created_at DESC, id DESC LIMIT ?`)
       .all(...params, limit) as unknown as AuditLog[];
   },
 

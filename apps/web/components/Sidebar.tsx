@@ -81,6 +81,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/users", label: "Users", roles: ["super_admin"] },
       { href: "/audit-logs", label: "Audit Logs", roles: ["super_admin", "owner"] },
       { href: "/settings", label: "Settings", roles: ["super_admin", "owner"] },
+      { href: "/technology", label: "Tech & Subscriptions", roles: ["super_admin"] },
     ],
   },
 ];
@@ -170,7 +171,8 @@ function GroupSection({ group, items, pathname }: { group: NavGroup; items: NavL
   );
 }
 
-export function Sidebar({ session }: { session: Session }) {
+/** A fixed column from md up. Below that it's a drawer, opened from the Header's menu button. */
+export function Sidebar({ session, open, onClose }: { session: Session; open: boolean; onClose: () => void }) {
   const pathname = usePathname();
 
   const visibleGroups = NAV_GROUPS.map((group) => ({
@@ -181,43 +183,58 @@ export function Sidebar({ session }: { session: Session }) {
   const visibleUngrouped = UNGROUPED.filter((item) => item.roles.includes(session.role));
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-sidebar">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-          <Fuel size={18} />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate font-heading text-sm font-semibold text-fg">PetroPro</p>
-          <PortalBadge role={session.role} />
+    <>
+      {open && (
+        <button type="button" aria-label="Close menu" className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={onClose} />
+      )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex h-full w-64 shrink-0 flex-col border-r border-border bg-sidebar transition-transform md:static md:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex items-center gap-2 border-b border-border px-4 py-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
+            <Fuel size={18} />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-heading text-sm font-semibold text-fg">PetroPro</p>
+            <PortalBadge role={session.role} />
+          </div>
         </div>
-      </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <div className="mb-1 flex flex-col gap-0.5">
-          {visibleUngrouped.map((item) => {
-            const Icon = item.icon;
-            const itemActive = item.href === pathname;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  itemActive ? "bg-primary text-white" : "text-fg-muted hover:bg-card-hover hover:text-fg",
-                )}
-              >
-                <Icon size={16} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-        <div className="flex flex-col gap-1">
-          {visibleGroups.map(({ group, items }) => (
-            <GroupSection key={group.label} group={group} items={items} pathname={pathname} />
-          ))}
-        </div>
-      </nav>
-    </aside>
+        <nav
+          className="flex-1 overflow-y-auto px-2 py-3"
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest("a")) onClose();
+          }}
+        >
+          <div className="mb-1 flex flex-col gap-0.5">
+            {visibleUngrouped.map((item) => {
+              const Icon = item.icon;
+              const itemActive = item.href === pathname;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    itemActive ? "bg-primary text-white" : "text-fg-muted hover:bg-card-hover hover:text-fg",
+                  )}
+                >
+                  <Icon size={16} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+          <div className="flex flex-col gap-1">
+            {visibleGroups.map(({ group, items }) => (
+              <GroupSection key={group.label} group={group} items={items} pathname={pathname} />
+            ))}
+          </div>
+        </nav>
+      </aside>
+    </>
   );
 }

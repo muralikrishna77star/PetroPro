@@ -44,6 +44,11 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
 - `apps/api/.env.example`, `apps/web/.env.example` — Session 19. Document every env var each
   app's `config.ts` reads (previously undocumented, grep-only); `apps/web/.gitignore` got a
   `!.env.example` exception to its blanket `.env*` rule so the file actually gets tracked.
+- **Technology & Subscription Dashboard** (`/technology`, `super_admin` only) — Session 23. Technology
+  list from `apps/api/src/services/techCatalog.ts`, manual subscription records in
+  `tech_subscriptions`, provider plan checks in `tech_provider_checks`. Holds no real account details
+  until a super admin enters them. Provider checks need `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID` and
+  `GITHUB_TOKEN` on the API server.
 - `daily-prompts/` — informational chat-prompt log, not part of the application
 - `PetBro.zip` — original legacy application archive (source for `legacy/Workarea/`)
 - **`packages/shared-types`** — new this session. Wire-format types (`Item`, `Customer`, `Bill`,
@@ -262,6 +267,13 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   channel to do that with). Whoever creates the account or resets the password has to relay the
   temporary password out-of-band. An admin cannot deactivate their own account (blocked with 400)
   — there's no other in-app recovery path if the last admin got locked out.
+- The Technology dashboard's provider checks have only run against mocked API responses, since no
+  real tokens were available. They confirm the plan name only: subscription and billing status are
+  manual, so they are only as current as the last person who updated them.
+- A data reset (`services/dataReset.ts`) clears `audit_logs`, including the dashboard's change history.
+  It takes a backup first, and `tech_subscriptions` itself survives.
+- `npm run seed` crashes on its final log line under Node 22.13 (`db.location` isn't a function), after
+  the seeding itself has finished.
 
 ## Current blockers
 

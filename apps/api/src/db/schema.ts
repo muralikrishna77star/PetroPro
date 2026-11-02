@@ -315,6 +315,37 @@ export function applySchema(db: DatabaseSync): void {
       remarks TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Technology & Subscription Dashboard (routes/techDashboard.ts, super_admin only). The
+    -- service list itself is code (services/techCatalog.ts); these hold only what a super admin
+    -- typed in, and what a provider API last said. Kept apart so "verified" never gets mixed up
+    -- with "manually recorded". No credentials or card details are ever stored here.
+    CREATE TABLE IF NOT EXISTS tech_subscriptions (
+      service_id TEXT PRIMARY KEY,
+      plan TEXT,
+      account_owner TEXT,
+      subscription_status TEXT NOT NULL DEFAULT 'unknown',
+      billing_status TEXT NOT NULL DEFAULT 'unknown',
+      billing_frequency TEXT NOT NULL DEFAULT 'unknown',
+      amount REAL,
+      currency TEXT,
+      next_payment_date TEXT,
+      renewal_date TEXT,
+      auto_renew TEXT NOT NULL DEFAULT 'unknown',
+      notes TEXT,
+      updated_by TEXT REFERENCES users(user_id),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS tech_provider_checks (
+      service_id TEXT PRIMARY KEY,
+      integration TEXT NOT NULL,
+      checked_at TEXT NOT NULL DEFAULT (datetime('now')),
+      ok INTEGER NOT NULL,
+      plan TEXT,
+      account TEXT,
+      error TEXT
+    );
   `);
 
   ensureColumn(db, "bills", "cancelled_by", "TEXT REFERENCES users(user_id)");

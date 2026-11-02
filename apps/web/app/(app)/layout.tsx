@@ -13,6 +13,7 @@ import { ColorStyleProvider } from "@/components/ColorStyleProvider";
  *  lets the page's own hook redirect to /login. */
 export default function AppShellLayout({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bridging from localStorage, an external system
@@ -26,11 +27,11 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
   return (
     <ColorStyleProvider>
       <div className="flex h-screen overflow-hidden bg-bg">
-        <Sidebar session={session} />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Header session={session} />
+        <Sidebar session={session} open={menuOpen} onClose={() => setMenuOpen(false)} />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Header session={session} onOpenMenu={() => setMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
+            <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">{children}</div>
           </main>
         </div>
       </div>

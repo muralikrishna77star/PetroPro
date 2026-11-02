@@ -47,9 +47,33 @@ import type {
   StockSummaryRow,
   Tenant,
   VehicleSalesRow,
+  TechDashboard,
+  TechService,
+  TechAlert,
+  TechSubscriptionInput,
+  TechSubscriptionRecord,
+  TechProviderCheck,
+  SubscriptionStatus,
+  BillingStatus,
+  BillingFrequency,
+  AutoRenew,
+  TechCategory,
+  TechCostModel,
 } from "@petropro/shared-types";
 
 export type {
+  TechDashboard,
+  TechService,
+  TechAlert,
+  TechSubscriptionInput,
+  TechSubscriptionRecord,
+  TechProviderCheck,
+  SubscriptionStatus,
+  BillingStatus,
+  BillingFrequency,
+  AutoRenew,
+  TechCategory,
+  TechCostModel,
   AppUser,
   AuditLog,
   BackupFile,
@@ -112,7 +136,8 @@ async function request<T>(
   const res = await fetch(`${API_URL}${path}`, {
     method: options.method ?? "GET",
     headers: {
-      "Content-Type": "application/json",
+      // Only with a body: Fastify answers 400 to a JSON content type on an empty DELETE.
+      ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -504,6 +529,33 @@ export const customerApi = {
 
   cancelOrder: (token: string, orderNo: number) =>
     request<Order>(`/customer/orders/${orderNo}/cancel`, { method: "POST", token, body: {} }),
+};
+
+export const techApi = {
+  getDashboard: (token: string) => request<TechDashboard>("/tech-dashboard", { token }),
+
+  getHistory: (token: string, serviceId: string) =>
+    request<AuditLog[]>(`/tech-dashboard/services/${encodeURIComponent(serviceId)}/history`, { token }),
+
+  saveSubscription: (token: string, serviceId: string, body: TechSubscriptionInput) =>
+    request<TechSubscriptionRecord>(`/tech-dashboard/services/${encodeURIComponent(serviceId)}/subscription`, {
+      method: "PUT",
+      token,
+      body,
+    }),
+
+  clearSubscription: (token: string, serviceId: string) =>
+    request<{ ok: true }>(`/tech-dashboard/services/${encodeURIComponent(serviceId)}/subscription`, {
+      method: "DELETE",
+      token,
+    }),
+
+  verify: (token: string, serviceId: string) =>
+    request<TechProviderCheck>(`/tech-dashboard/services/${encodeURIComponent(serviceId)}/verify`, {
+      method: "POST",
+      token,
+      body: {},
+    }),
 };
 
 /** The QR-code invoice flow's client (apps/web/app/i/[billNo]/page.tsx) — no session token at

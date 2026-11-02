@@ -1598,3 +1598,73 @@ real FoxPro printouts, so this session did the parts that could be done here.
 - Push and deploy the API with the money-words fix.
 - The Session 21 items still need the user: compare against real FoxPro printouts, click through
   in a browser, and decide on the WhatsApp consent model.
+
+### 2026-11-02 — Session 23 (Technology & Subscription Dashboard)
+
+**Context:** the user asked for a Super Admin dashboard covering the technologies PetroPro runs on,
+subscription and billing status, and alerts. An uncommitted draft of the API side and part of the UI
+was already in the working tree; this session reviewed it, fixed it and finished it.
+
+**What was added:**
+- `/technology` page (`apps/web/app/(app)/technology/`): summary cards, recurring cost by currency,
+  alerts, a searchable and filterable service list (table from `xl`, cards below), and a details
+  panel with the manual record form, provider check and change history.
+- API (`routes/techDashboard.ts`, all `super_admin` only): `GET /tech-dashboard`,
+  `GET .../services/:id/history`, `PUT`/`DELETE .../subscription`, `POST .../verify`.
+- `services/techCatalog.ts`: the technology list, written from the repo. `techCatalog.test.ts` fails
+  if its versions, file paths or fly.toml facts drift from the repo.
+- Tables `tech_subscriptions` (manual) and `tech_provider_checks` (what an API said), kept apart so
+  verified and manually recorded can't be mixed up.
+
+**Decisions:**
+- Provider APIs only ever confirm the plan name. Neither Vercel's nor GitHub's documented API used
+  here reports payment state, so subscription and billing status are always manual and always
+  labelled so. No code path derives a status from a service responding.
+- A GitHub plan counts as verified only if the token's account owns the repository
+  (`GITHUB_REPO_OWNER`), because `GET /user` reports the token holder's plan.
+- Usage-based services count toward recurring cost using the recorded amount as a typical month, and
+  are labelled as estimates. Otherwise Fly.io, which bills by usage, would be left out of the total.
+- Entries with `entity_type = tech_subscription` are hidden from owners on `GET /audit-logs`. Owners
+  can read that log, and these entries contain plans and amounts.
+
+**Bugs found on the way, all fixed:**
+- `apps/web/lib/api.ts` `request()` sent a JSON `Content-Type` even with no body, and Fastify answers
+  that with 400 `FST_ERR_CTP_EMPTY_JSON_BODY`. This broke **every bodyless POST/DELETE in the app**:
+  Cancel Bill in the Billing screen (`api.cancelBill`), rate-change delete, and this dashboard's Clear
+  record. API tests use `app.inject` and don't go through this client, so they never caught it.
+  Cancel Bill will start working on the next web deploy.
+- `apps/web/public/sw.js` answered failed API GETs with the cached `/` HTML and status 200, so
+  `request()` resolved with `undefined` when the API was down. It now falls back only for page loads;
+  API calls fail normally. Cache bumped to `petropro-shell-v6`, `/technology` added to the shell.
+- The app shell had no small-screen mode: a fixed 256px sidebar on every page. Below `md` it's now a
+  drawer opened from a menu button in `Header`. Desktop is unchanged.
+
+**Verified:**
+- `typecheck`, `lint`, `test` and `build`: see the Session 23 entry in `Todo.md` for the final counts.
+- Drove the real app in headless Chrome (playwright-core from the scratchpad, against a throwaway
+  `DB_PATH`, not committed): 53 checks across 320, 390, 768, 1024, 1280, 1440 and 1920px, covering
+  recording, refusing a pasted secret, clearing, filters, alerts, and the loading, empty, unavailable
+  and expired-session states, plus owner access. A separate script failed the service worker's own
+  network request and confirmed the failure states.
+- **Not verified:** a real Vercel or GitHub API call (no tokens here, so those use mocked responses),
+  and the portal links while signed in. Logged out, `github.com/settings/billing` returns 404, though
+  GitHub's docs give that URL.
+
+**Environment notes:**
+- `npm run seed` seeds correctly, then crashes on its last line under Node 22.13: `db.location` isn't
+  a function (`apps/api/src/db/seed.ts:58`). Not fixed; unrelated to this work.
+- One `npm run test` run reported a single failure while other commands ran at the same time. Its name
+  wasn't captured, and it did not recur in later full runs.
+
+**State:** committed on branch `feature/tech-subscriptions-dashboard`. Not pushed, not merged and
+**not deployed**: this machine has no `flyctl` or Vercel CLI and no login for either, and logging in
+needs the user in a browser. The branch also carries Session 22's unpushed `moneyWords` fix, so the
+next API deploy ships that too.
+
+**Before the web deploy:** this checkout has no `.vercel` folder, so `vercel --prod` isn't linked to a
+project yet. Link it to the existing project first (the one aliased to `petropro-demo.vercel.app`), or
+the CLI may offer to create a new one.
+
+**Next task:** the user records real account details on `/technology`, and sets `VERCEL_API_TOKEN`,
+`VERCEL_TEAM_ID` and `GITHUB_TOKEN` as Fly.io secrets if they want plan verification. Deploy API first,
+then web.

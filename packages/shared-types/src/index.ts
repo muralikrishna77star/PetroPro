@@ -468,3 +468,142 @@ export interface PublicInvoice {
   /** Owner's Settings → Communication "QR: send to customer's WhatsApp" switch. */
   whatsapp: { enabled: boolean; default_country_code: string; link_days: number };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Technology & Subscription Dashboard (super_admin only — apps/api's routes/techDashboard.ts).
+// ---------------------------------------------------------------------------------------------
+
+export type TechCategory =
+  | "frontend"
+  | "backend"
+  | "database"
+  | "hosting"
+  | "deployment"
+  | "source_control"
+  | "authentication"
+  | "storage"
+  | "monitoring"
+  | "messaging"
+  | "domains"
+  | "documents"
+  | "desktop";
+
+/** How a component is paid for, as far as the codebase shows. Only `managed_service` can carry a
+ *  subscription; the others are never billed by a provider. */
+export type TechCostModel = "open_source" | "built_in" | "self_hosted" | "free_service" | "managed_service" | "not_in_use";
+
+export type SubscriptionStatus = "active" | "trial" | "expired" | "cancelled" | "unknown";
+export type BillingStatus = "paid" | "due" | "overdue" | "not_applicable" | "unknown";
+export type BillingFrequency = "monthly" | "quarterly" | "annual" | "usage_based" | "one_time" | "none" | "unknown";
+export type AutoRenew = "yes" | "no" | "unknown";
+
+/** Which provider API, if any, can confirm part of a service's subscription. */
+export type TechProviderIntegration = "vercel" | "github";
+
+export interface TechServiceLink {
+  label: string;
+  url: string;
+}
+
+/** A super admin's manual record of a service's subscription. Every field is nullable — blank
+ *  means "not recorded", shown as Unknown / Not configured, never guessed. */
+export interface TechSubscriptionRecord {
+  plan: string | null;
+  account_owner: string | null;
+  subscription_status: SubscriptionStatus;
+  billing_status: BillingStatus;
+  billing_frequency: BillingFrequency;
+  amount: number | null;
+  currency: string | null;
+  next_payment_date: string | null;
+  renewal_date: string | null;
+  auto_renew: AutoRenew;
+  notes: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export type TechSubscriptionInput = Omit<TechSubscriptionRecord, "updated_by" | "updated_at">;
+
+/** Last result of asking the provider's API. `plan` is the only field any supported API
+ *  confirms; subscription and billing status always stay manual. */
+export interface TechProviderCheck {
+  integration: TechProviderIntegration;
+  checked_at: string;
+  ok: boolean;
+  plan: string | null;
+  account: string | null;
+  error: string | null;
+}
+
+export type TechAlertKind =
+  | "overdue_payment"
+  | "payment_due"
+  | "payment_date_passed"
+  | "upcoming_payment"
+  | "upcoming_renewal"
+  | "renewal_date_passed"
+  | "no_auto_renew"
+  | "trial_expiring"
+  | "trial_ended"
+  | "trial_no_end_date"
+  | "inactive_critical"
+  | "unrecorded_critical"
+  | "plan_mismatch"
+  | "provider_check_failed";
+
+export interface TechAlert {
+  service_id: string;
+  service_name: string;
+  kind: TechAlertKind;
+  severity: "critical" | "warning" | "info";
+  message: string;
+  date: string | null;
+}
+
+export interface TechService {
+  id: string;
+  name: string;
+  category: TechCategory;
+  provider: string;
+  cost_model: TechCostModel;
+  critical: boolean;
+  version: string | null;
+  /** Where `version` came from: the running API process, or a package.json declaration. */
+  version_source: "runtime" | "package.json" | "fly.toml" | null;
+  purpose: string;
+  used_in: string[];
+  impact_if_unavailable: string;
+  links: TechServiceLink[];
+  /** Deployment facts read from config/env (region, app name, configured yes/no) — never secrets. */
+  facts: { label: string; value: string }[];
+  integration: { provider: TechProviderIntegration; configured: boolean; missing: string[]; verifies: string } | null;
+  /** Catalog id of the service whose invoice this is charged on (e.g. the Fly volume → Fly.io). */
+  billed_with: string | null;
+  /** Whether a super admin can keep a subscription record for it (managed or free services
+   *  that aren't billed with another entry). */
+  can_record: boolean;
+  subscription: TechSubscriptionRecord | null;
+  provider_check: TechProviderCheck | null;
+}
+
+export interface TechCostTotal {
+  currency: string;
+  monthly: number;
+  annual: number;
+  service_count: number;
+  /** How many of service_count are usage-based, so their amount is an estimate of a typical month. */
+  usage_based_count: number;
+}
+
+export interface TechDashboard {
+  generated_at: string;
+  today: string;
+  services: TechService[];
+  alerts: TechAlert[];
+  costs: {
+    by_currency: TechCostTotal[];
+    /** Active managed services whose cost can't be turned into a recurring estimate. */
+    excluded: { service_id: string; service_name: string; reason: string }[];
+  };
+}

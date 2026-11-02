@@ -15,4 +15,9 @@ export const config = {
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   googleRedirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? `${apiPublicUrl}/auth/google/callback`,
+  // Technology dashboard provider checks (services/techDashboard.ts) — all optional, read-only,
+  // and never sent to the browser. Blank means that check shows "Not configured".
+  vercelApiToken: process.env.VERCEL_API_TOKEN ?? "",
+  vercelTeamId: process.env.VERCEL_TEAM_ID ?? "",
+  githubToken: process.env.GITHUB_TOKEN ?? "",
 };

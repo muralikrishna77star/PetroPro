@@ -1,4 +1,4 @@
-const CACHE_NAME = "petropro-shell-v5";
+const CACHE_NAME = "petropro-shell-v6";
 const SHELL_URLS = [
   "/",
   "/login",
@@ -15,6 +15,7 @@ const SHELL_URLS = [
   "/users",
   "/dashboard",
   "/settings",
+  "/technology",
   "/manifest.json",
 ];
 
@@ -50,6 +51,12 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached ?? caches.match("/"))),
+      // Only a page load falls back to the shell. Answering an API call with cached HTML would
+      // look like a successful response with no data, instead of the failure it is.
+      .catch(() =>
+        caches
+          .match(request)
+          .then((cached) => cached ?? (request.mode === "navigate" ? caches.match("/") : Response.error())),
+      ),
   );
 });
