@@ -1656,14 +1656,25 @@ was already in the working tree; this session reviewed it, fixed it and finished
 - One `npm run test` run reported a single failure while other commands ran at the same time. Its name
   wasn't captured, and it did not recur in later full runs.
 
-**State:** committed as `03beeee`, merged to `master` and pushed to `origin/master`. **Not deployed**:
-this machine has no `flyctl` or Vercel CLI and no login for either, and logging in needs the user in a
-browser. Session 22's `moneyWords` fix went out in the same push and isn't deployed either, so the next
-API deploy ships it too.
+**State:** committed as `03beeee`, merged to `master`, pushed to `origin/master` and deployed on
+2026-11-02. Session 22's `moneyWords` fix shipped in the same deploy.
+- **API:** `fly deploy --remote-only -a petropro-api`, now release `v9`. Roll back to `v8` if needed.
+- **Web:** `vercel --prod` from the repo root, Vercel project `petropro`, now deployment
+  `dpl_GoQnDrXZ84vpF3UaMiWuysqqr2g7`. Previous: `dpl_BNaVmEBvr36xwv6728ZPZdfQXTTb`.
+- **Live checks:** API health OK, `/tech-dashboard` routes answer 401 signed out, the production
+  database file is still in place, the site serves service worker `v6`, and a signed-out visit to
+  `/technology` lands on `/login`.
+- **Not checked live:** anything needing a signed-in session, including `/technology` itself and Cancel
+  Bill. No production password was available.
 
-**Before the web deploy:** this checkout has no `.vercel` folder, so `vercel --prod` isn't linked to a
-project yet. Link it to the existing project first (the one aliased to `petropro-demo.vercel.app`), or
-the CLI may offer to create a new one.
+**Deploy notes for this machine:**
+- `flyctl` came from `winget` (`Fly-io.flyctl`), and its install folder may not be on the Bash PATH. The
+  Vercel CLI came from `npm i -g vercel`.
+- Link with `vercel link --project petropro --yes`. This account also has an unrelated project named
+  `web`. The link creates a root `.env.local` holding a `VERCEL_OIDC_TOKEN` and adds `.env*` to
+  `.gitignore`. Neither is needed for deploying, so both were removed. Don't keep the `.gitignore` line:
+  it would hide future `.env.example` files.
+- The Vercel account is on the Hobby plan, which may not suit commercial use. For the user to review.
 
 **Next task:** the user records real account details on `/technology`, and sets `VERCEL_API_TOKEN`,
 `VERCEL_TEAM_ID` and `GITHUB_TOKEN` as Fly.io secrets if they want plan verification. Deploy API first,

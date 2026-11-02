@@ -546,7 +546,7 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
       - Every invoice from ₹10,000 to ₹99,999 was affected.
       - It was a porting error; MONEY.PRG itself is correct.
       - 2 new tests. The suite passes 89/89.
-- [ ] Deploy the API so the fix reaches production.
+- [x] Deploy the API so the fix reaches production (done in Session 23, release `v9`).
 
 ## Session 23 — Technology & Subscription Dashboard
 
@@ -561,9 +561,11 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [ ] User (optional): set `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`, `GITHUB_TOKEN` as Fly.io secrets, then
       run a real provider check. Only mocked responses have been tested.
 - [x] Committed as `03beeee`, merged to `master` and pushed.
-- [ ] Install and log in to `flyctl` and the Vercel CLI (needs the user), link `.vercel` to the
-      existing project, then deploy API first, then web. Cancel Bill only starts working after the
-      web deploy. The API deploy also ships Session 22's `moneyWords` fix.
+- [x] Deployed API (`v9`) and web (`dpl_GoQnDrXZ84vpF3UaMiWuysqqr2g7`), including Session 22's
+      `moneyWords` fix.
+- [ ] User: sign in to production and check `/technology` and Cancel Bill, which couldn't be tested
+      without a production login. Check the attendant screen on a phone.
+- [ ] User: review whether Vercel's Hobby plan suits commercial use.
 - [ ] Fix `db.location` crash at the end of `apps/api/src/db/seed.ts` under Node 22.13.
 
 ## Real remaining gaps (not phase-blocking, carried forward)
