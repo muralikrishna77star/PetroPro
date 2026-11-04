@@ -22,7 +22,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-10 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-8">
         {session && (
           <>
             <TenantSection token={session.token} />
@@ -99,7 +99,7 @@ function PumpsSection({ token }: { token: string }) {
         />
         <input
           placeholder="Name (e.g. Pump 1)"
-          className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm bg-bg-elevated"
+          className="min-w-0 flex-1 rounded-lg border border-border px-3 py-1.5 text-sm bg-bg-elevated"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -192,40 +192,40 @@ function TenantSection({ token }: { token: string }) {
       <h1 className="mb-1 text-xl font-semibold text-primary">Tenant / Company Profile</h1>
       <p className="mb-4 text-sm text-fg-muted">Shown in the nav bar and on the letterhead of every printed invoice.</p>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <input
           placeholder="Company name"
-          className="rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-bg-elevated md:col-span-2"
           value={profile.name}
           onChange={(e) => setProfile({ ...profile, name: e.target.value })}
           required
         />
         <input
           placeholder="Address line 1"
-          className="rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
           value={profile.address_line1 ?? ""}
           onChange={(e) => setProfile({ ...profile, address_line1: e.target.value })}
         />
         <input
           placeholder="Address line 2"
-          className="rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
           value={profile.address_line2 ?? ""}
           onChange={(e) => setProfile({ ...profile, address_line2: e.target.value })}
         />
         <input
           placeholder="Tagline (optional)"
-          className="rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
           value={profile.tagline ?? ""}
           onChange={(e) => setProfile({ ...profile, tagline: e.target.value })}
         />
         <input
           placeholder="GSTIN"
-          className="rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm  bg-bg-elevated"
           value={profile.gst_no ?? ""}
           onChange={(e) => setProfile({ ...profile, gst_no: e.target.value })}
         />
 
-        <div className="rounded-lg border border-border p-3">
+        <div className="rounded-lg border border-border p-3 md:col-span-2">
           <label className="mb-2 block text-sm font-medium">Payment QR Code</label>
           <p className="mb-3 text-xs text-fg-muted">
             Upload an image of the outlet&apos;s existing UPI/payment QR code — it&apos;s shown as-is
@@ -255,12 +255,12 @@ function TenantSection({ token }: { token: string }) {
           </div>
         </div>
 
-        {error && <p className="text-sm text-error">{error}</p>}
-        {message && <p className="text-sm text-success">{message}</p>}
+        {error && <p className="text-sm text-error md:col-span-2">{error}</p>}
+        {message && <p className="text-sm text-success md:col-span-2">{message}</p>}
 
         <button
           disabled={saving}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50 md:col-span-2 md:justify-self-start"
         >
           {saving ? "Saving..." : "Save"}
         </button>

@@ -115,7 +115,7 @@ export default function UsersPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
         <h1 className="text-xl font-semibold text-primary">Users</h1>
 
         <Card color="teal" as="form" onSubmit={handleCreate} className="flex flex-wrap gap-2">

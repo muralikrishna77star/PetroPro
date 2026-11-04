@@ -230,7 +230,7 @@ export function ServicePanel({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-border bg-bg shadow-xl outline-none"
+        className="relative flex h-full w-full max-w-4xl flex-col overflow-y-auto border-l border-border bg-bg shadow-xl outline-none"
       >
         <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-border bg-bg px-5 py-4">
           <div className="flex-1">

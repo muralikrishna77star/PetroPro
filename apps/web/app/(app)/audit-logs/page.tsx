@@ -23,7 +23,7 @@ export default function AuditLogsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-8">
         <h1 className="text-xl font-semibold text-primary">Audit Logs</h1>
 
         <div className="flex gap-2">
