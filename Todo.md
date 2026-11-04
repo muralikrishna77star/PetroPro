@@ -586,9 +586,10 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [x] Deactivation and password reset end all of a user's sessions at once. All of it audited.
 - [x] Offline queue keeps sales through 401s and server errors.
 - [x] Verified: typecheck, lint and build clean; API tests 141/141 on three runs; 51/51 browser checks on a production build; 26 security rules each removed and caught.
-- [ ] User: run the production email review. See `docs/DEPLOY_AUTH_SESSIONS.md`.
-- [ ] User: choose a low-traffic window. Then deploy by that runbook.
-- [ ] After deploying: real Google sign-in, and the cookie through Vercel. Neither can be tested before.
+- [x] Deployed 2026-11-04: API `v10`, web `dpl_GeBGePUCRvgfBNQ4CnmdBVfPuwNj`. About 6 seconds of restart.
+- [ ] User: sign in and check the runbook's "Check straight after" list. Real Google and the refresh cookie
+      through Vercel have not been confirmed with a real login.
+- [ ] Check whether the station's connection also sees intermittent timeouts to `petropro-api.fly.dev`.
 - [ ] Decide: customer portal tokens never expire; password login has no attempt limit; temporary
       passwords have no forced change.
 

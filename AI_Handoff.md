@@ -1779,4 +1779,22 @@ for the user to run. The `--fly-app` path itself hasn't been run; the local path
 - A temporary password has no forced change, and staff have no self-service password change.
 - Restoring a backup restores the sessions as they were then.
 
-**State:** committed on `feature/google-linking-sessions`. Not pushed, not merged, not deployed.
+**State:** committed as `56ec51e`, merged to `master`, pushed and deployed on 2026-11-04, around 12:20 IST,
+by `docs/DEPLOY_AUTH_SESSIONS.md`. The user confirmed the email review, backup and device checks beforehand.
+- **API:** release `v10`. Roll back to `v9`. The process was stopped for about 6 seconds (Fly logs: SIGINT at
+  06:50:13Z, listening at 06:50:19Z).
+- **Web:** `dpl_GeBGePUCRvgfBNQ4CnmdBVfPuwNj`, promoted 22 seconds after the API was up. Previous:
+  `dpl_GoQnDrXZ84vpF3UaMiWuysqqr2g7`.
+- **Live checks, signed out only:** API health, new routes answering, Google redirect has PKCE and nonce,
+  the refresh route through Vercel returns 401 with the correct cookie attributes, an old-style session is
+  sent to sign in, and no errors logged.
+- **Not checked live, needs a real login:** the refresh cookie actually being kept through Vercel, renewal
+  after 15 minutes, a real Google sign-in, linking, Cancel Bill, deactivation.
+
+**Network note:** from the development machine, requests straight to `petropro-api.fly.dev` time out about
+a third of the time, and IPv6 to it failed every time. `fly.io` itself behaves the same from there, and it
+began before the restart, so it isn't this release. Requests through Vercel succeeded 8 out of 8. Browsers
+call the API directly for everything but session routes, so check this if the station's connection is the same.
+
+Git note: the saved GitHub login's name is lowercase. Pushing with a capitalized username in the URL makes
+Git Credential Manager wait for a sign-in forever, and it holds any pipe open.

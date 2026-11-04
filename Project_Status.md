@@ -159,9 +159,9 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   has actually been run (no Docker in this dev environment). The repo is on git now (Session 14
   found it already initialized, on branch `master`) but hasn't been pushed anywhere a real Actions
   run could happen — still blocked on both fronts.
-- **Google sign-in and revocable sessions (Sessions 24 and 25) aren't deployed.** Production still runs the
-  older sign-in and never-expiring staff tokens. Deploy by `docs/DEPLOY_AUTH_SESSIONS.md`. Tested against a
-  fake Google, not real Google, and the refresh cookie through Vercel is unconfirmed until deployed.
+- **Google sign-in and revocable sessions (Sessions 24 and 25) are deployed** (API `v10`, 2026-11-04), but have
+  only been checked live while signed out. A real Google sign-in and the refresh cookie being kept through
+  Vercel still need confirming with a real login.
 - Customer portal tokens never expire, password login has no attempt limit, and temporary passwords
   have no forced change.
 - **The desktop kiosk launcher (Session 14) is still unverified beyond a clean
