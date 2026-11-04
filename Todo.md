@@ -587,6 +587,7 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [x] Offline queue keeps sales through 401s and server errors.
 - [x] Verified: typecheck, lint and build clean; API tests 141/141 on three runs; 51/51 browser checks on a production build; 26 security rules each removed and caught.
 - [x] Deployed 2026-11-04: API `v10`, web `dpl_GeBGePUCRvgfBNQ4CnmdBVfPuwNj`. About 6 seconds of restart.
+- [x] Utilities input screens widened to 1072px and deployed 2026-11-04: web `dpl_58cTFY9a8wYtWvhwbc3xpG46ggn7`.
 - [ ] User: sign in and check the runbook's "Check straight after" list. Real Google and the refresh cookie
       through Vercel have not been confirmed with a real login.
 - [ ] Check whether the station's connection also sees intermittent timeouts to `petropro-api.fly.dev`.

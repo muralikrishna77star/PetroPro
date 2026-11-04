@@ -1798,3 +1798,27 @@ call the API directly for everything but session routes, so check this if the st
 
 Git note: the saved GitHub login's name is lowercase. Pushing with a capitalized username in the URL makes
 Git Credential Manager wait for a sign-in forever, and it holds any pipe open.
+
+### 2026-11-04 — Session 26 (wider Utilities input screens)
+
+**Context:** the user asked for more width on the input screens under Utilities, and chose the workspace's
+existing cap (1072px on large monitors) over filling the whole workspace.
+
+**Changed:** Users, Audit Logs and Settings went from 640-736px to `max-w-6xl`, which is the same cap as Billing
+and Customers. The Tech & Subscriptions panel went from `max-w-2xl` to `max-w-4xl`. Company Profile fields sit in
+two columns from `md`, and its Save button is no longer full width. The Pumps form's name field gained `min-w-0`,
+because its Add button ran off the screen on a phone (older than this change).
+
+**Verified:** typecheck and lint clean. In Chrome at 1920, 1366, 768 and 390px on a scratch database: no sideways
+overflow, no page errors, adding a user and saving the Company Profile both work.
+
+**State:** committed as `0de9c56`, merged to `master`, pushed and deployed on 2026-11-04, around 19:28 IST. Web
+only, so the API didn't restart.
+- **Web:** `dpl_58cTFY9a8wYtWvhwbc3xpG46ggn7`. Previous: `dpl_GeBGePUCRvgfBNQ4CnmdBVfPuwNj`.
+- **Live checks, signed out only:** the live JavaScript contains the new layout and not the old width, the pages
+  answer 200, API health is 200, and the refresh route through Vercel answers 401.
+- **Not checked live, needs a real login:** the screens themselves on production.
+
+**Deploy note:** `vercel deploy --prod --yes` needed an explicit allow rule in Claude Code's permissions. A chat
+approval doesn't lift that block. The user added the rule, and it stays until they remove it. A user's report of a
+deploy should be checked against the live site: the first attempt here hadn't reached production.
