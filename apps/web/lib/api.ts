@@ -396,6 +396,9 @@ export const api = {
 
   getCustomer: (token: string, code: string) => request<Customer>(`/customers/${code}`, { token }),
 
+  setCustomerReportStyle: (token: string, code: string, report_style: "legacy" | "modern") =>
+    request<Customer>(`/customers/${encodeURIComponent(code)}/report-style`, { method: "PUT", token, body: { report_style } }),
+
   createCustomer: (
     token: string,
     body: {
@@ -666,6 +669,7 @@ export const api = {
 /** The customer portal's own client — kept separate from `api` above since it authenticates
  *  with a customer session token (lib/customerAuth.ts), never a staff one. */
 export interface CustomerReport {
+  report_style: "legacy" | "modern";
   customer: { code: string; name: string };
   from: string;
   to: string;
@@ -677,6 +681,9 @@ export interface CustomerReport {
 }
 
 export const customerApi = {
+  setReportStyle: (token: string, report_style: "legacy" | "modern") =>
+    request<{ report_style: "legacy" | "modern" }>("/customer/report-style", { method: "PUT", token, body: { report_style } }),
+
   getStatement: (token: string, query: CustomerStatementQuery) =>
     request<CustomerStatement>(`/customer/reports/statement?${statementParams(query)}`, { token }),
   statementPdfUrl: (query: CustomerStatementQuery) => `${API_URL}/customer/reports/statement.pdf?${statementParams(query)}`,

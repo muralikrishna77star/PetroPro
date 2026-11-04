@@ -36,6 +36,8 @@ export default function CustomersPage() {
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
+  const [savingStyle, setSavingStyle] = useState(false);
+  const [styleError, setStyleError] = useState<string | null>(null);
   const [settingPassword, setSettingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export default function CustomersPage() {
   async function selectCustomer(customer: Customer) {
     if (!session) return;
     setSelected(customer);
+    setStyleError(null);
     setLedger(null);
     setReceiptMessage(null);
     setLastReceipt(null);
@@ -71,6 +74,14 @@ export default function CustomersPage() {
         setLedger([]);
       }
     }
+  }
+
+  async function saveReportStyle(style: "legacy" | "modern") {
+    if (!session || !selected) return;
+    setSavingStyle(true); setStyleError(null);
+    try { const updated = await api.setCustomerReportStyle(session.token, selected.code, style); setSelected(updated); refreshCustomers(session.token); }
+    catch (err) { setStyleError(err instanceof Error ? err.message : "Could not save reporting style"); }
+    finally { setSavingStyle(false); }
   }
 
   async function handleCreateCustomer(e: React.FormEvent) {
@@ -265,6 +276,15 @@ export default function CustomersPage() {
               </div>
 
               {(session.role === "super_admin" || session.role === "owner") && (
+                <>
+                <div className="rounded-lg border border-border p-3">
+                  <label htmlFor="customer-report-style" className="mb-1 block text-sm font-medium">Default reporting style</label>
+                  <select id="customer-report-style" className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm" value={selected.report_style ?? "legacy"} disabled={savingStyle} onChange={e => void saveReportStyle(e.target.value as "legacy" | "modern")}>
+                    <option value="legacy">Legacy</option><option value="modern">Modern</option>
+                  </select>
+                  <p className="mt-2 text-xs text-fg-muted">Existing/imported customers start with Legacy; new customers start with Modern. Customers may change their own preference.</p>
+                  {styleError && <p role="alert" className="mt-2 text-sm text-error">{styleError}</p>}
+                </div>
                 <form onSubmit={handleSavePhone} className="rounded-lg border border-border p-3 ">
                   <h3 className="mb-2 text-sm font-medium">WhatsApp / mobile number</h3>
                   <p className="mb-2 text-xs text-fg-muted">
@@ -283,6 +303,7 @@ export default function CustomersPage() {
                   {phoneError && <p className="mt-2 text-sm text-error">{phoneError}</p>}
                   {phoneMessage && <p className="mt-2 text-sm text-success">{phoneMessage}</p>}
                 </form>
+                </>
               )}
 
               <form onSubmit={handleRecordReceipt} className="rounded-lg border border-border p-3 ">

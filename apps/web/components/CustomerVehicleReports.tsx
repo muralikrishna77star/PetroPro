@@ -10,10 +10,10 @@ const money = (v: number) => new Intl.NumberFormat("en-IN", { style: "currency",
 type Mileage = MileageEntry & { bill_date: string; item_name: string };
 const cell = (v: unknown) => { const s = String(v ?? ""); return `"${(typeof v === "string" && /^\s*[=+\-@]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`; };
 
-export function CustomerVehicleReports({ token, from, to, mode, customerCode, initialVehicle = "" }: { token: string; from: string; to: string; mode: "statement" | "mileage"; customerCode?: string; initialVehicle?: string }) {
+export function CustomerVehicleReports({ token, from, to, mode, customerCode, initialVehicle = "", reportStyle = "modern", initialGroup = true, initialOpening = true }: { token: string; from: string; to: string; mode: "statement" | "mileage"; customerCode?: string; initialVehicle?: string; reportStyle?: "legacy" | "modern"; initialGroup?: boolean; initialOpening?: boolean }) {
   const [vehicle, setVehicle] = useState(initialVehicle);
-  const [group, setGroup] = useState(true);
-  const [opening, setOpening] = useState(true);
+  const [group, setGroup] = useState(initialGroup);
+  const [opening, setOpening] = useState(initialOpening);
   const [statement, setStatement] = useState<CustomerStatement | null>(null);
   const [mileage, setMileage] = useState<Mileage[] | null>(null);
   const [applied, setApplied] = useState<CustomerStatementQuery | null>(null);
@@ -32,7 +32,7 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
     setBusy(true); setError(null); setStatement(null); setMileage(null); setApplied(null);
     try {
       if (mode === "statement") {
-        const result = await customerApi.getStatement(token, query);
+        const result = await (customerCode ? api.getCustomerStatement(token, customerCode, query) : customerApi.getStatement(token, query));
         if (id === sequence.current) setStatement(result);
       } else {
         const result = await (customerCode ? api.getCustomerMileage(token, customerCode, query) : customerApi.getMileage(token, query));
@@ -45,12 +45,12 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
   useEffect(() => {
     // Fetch once when the user opens this report; filters are applied by its form.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load({ from, to, vehicleNo: initialVehicle || undefined, groupByVehicle: true, withOpening: true });
+    void load({ from, to, vehicleNo: initialVehicle || undefined, groupByVehicle: initialGroup, withOpening: initialOpening });
     // This is a request generation counter, not a DOM ref; invalidate the latest pending response.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { sequence.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, from, to, mode, customerCode, initialVehicle]);
+  }, [token, from, to, mode, customerCode, initialVehicle, initialGroup, initialOpening]);
 
   const groups: { vehicle: string; lines: CustomerStatement["lines"] }[] = [];
   if (statement) {
@@ -82,7 +82,7 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
   }
   async function pdf() {
     if (!applied) return;
-    try { await downloadAuthed(customerApi.statementPdfUrl(applied), token, `my-credit-statement-${from}-${to}.pdf`); }
+    try { await downloadAuthed((customerCode ? api.customerStatementPdfUrl(customerCode, applied) : customerApi.statementPdfUrl(applied)), token, `my-credit-statement-${from}-${to}.pdf`); }
     catch (err) { fail(err); }
   }
   const headers = statement ? ["Date", "Bill", "Order", "Vehicle", "Item", "Quantity", "Rate", "Amount"] : ["Date", "Vehicle", "Bill", "Item", "Previous km", "Current km", "Quantity", "Mileage km/unit"];
@@ -100,17 +100,23 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
     {busy && <p role="status" className="my-3 text-sm">Loading your report…</p>}
     {applied && <>
       <p className="my-3 text-sm text-fg-muted">{from} to {to} · Vehicle: {applied.vehicleNo || "All vehicles"}</p>
-      <div className="mb-4 flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={csv}>Download CSV</Button>{statement && <Button variant="outline" onClick={() => void pdf()}>Download statement PDF</Button>}<Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm">
+      <div className="mb-4 flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={csv}>Download CSV</Button>{statement && <Button variant="outline" onClick={() => void pdf()}>{reportStyle === "modern" ? "Download legacy PDF" : "Download statement PDF"}</Button>}<Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>
+      {reportStyle === "legacy" ? <div className="overflow-x-auto">
+        {statement ? statement.pages.map((page, i) => <pre key={i} className="mb-6 whitespace-pre font-mono text-xs leading-relaxed print:break-after-page">{page.join("\n")}</pre>) : <pre className="whitespace-pre font-mono text-xs leading-relaxed">{[
+          "VEHICLE MILEAGE STATEMENT", `${from} TO ${to}`, `VEHICLE: ${applied.vehicleNo || "ALL"}`,
+          ["DATE", "VEHICLE", "BILL", "ITEM", "PREV KM", "CURR KM", "QTY", "KM/UNIT"].map(v => v.padEnd(16)).join(""),
+          ...(mileage ?? []).map(m => [m.bill_date, m.vehicle_no, m.bill_no, m.item_name, m.odometer_prev ?? "-", m.odometer_curr, m.qty.toFixed(3), m.mileage === null ? "-" : m.mileage.toFixed(2)].map(v => String(v).padEnd(16)).join("")),
+        ].join("\n")}</pre>}
+      </div> : <div className="overflow-x-auto"><table className="w-full text-left text-sm">
         <thead><tr>{headers.map(h => <th className="whitespace-nowrap border-b border-border p-2" scope="col" key={h}>{h}</th>)}</tr></thead>
         <tbody>{statement ? groups.map((g, index) => <Fragment key={index}>
           {applied.groupByVehicle && <tr className="bg-bg-elevated font-semibold"><th colSpan={8} scope="rowgroup" className="p-2">{g.vehicle}</th></tr>}
           {g.lines.map((l, i) => <tr key={i}>{[l.bill_date, l.bill_no, l.order_no || "—", l.vehicle_no || "—", l.item_name, l.qty.toFixed(3), money(l.rate), money(l.amount)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}
           {applied.groupByVehicle && <tr className="font-semibold"><td colSpan={7} className="p-2">Vehicle subtotal — {g.vehicle}</td><td className="p-2">{money(g.lines.reduce((s, l) => s + l.amount, 0))}</td></tr>}
         </Fragment>) : mileage?.map(m => <tr key={m.id}>{[m.bill_date, m.vehicle_no, m.bill_no, m.item_name, m.odometer_prev ?? "—", m.odometer_curr, m.qty.toFixed(3), m.mileage === null ? "—" : m.mileage.toFixed(2)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}</tbody>
-      </table></div>
+      </table></div>}
       {((statement && !statement.lines.length) || (mileage && !mileage.length)) && <p className="py-5 text-center text-sm text-fg-muted">No records for this period and vehicle.</p>}
-      {statement && <>
+      {statement && reportStyle === "modern" && <>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
           {[["Sales total", statement.total_amount], ["Service charge", statement.service_charge_amount], ...(applied.withOpening ? [["Account opening balance", statement.opening_balance], ["Account receipts", statement.receipts]] : []), ["Round off", statement.round_off], [applied.withOpening ? "Closing amount" : "Net sales amount", statement.net_amount]].map(([label, amount]) => <div key={label}><p className="text-fg-muted">{label}</p><p className="font-semibold">{money(Number(amount))}</p></div>)}
         </div>

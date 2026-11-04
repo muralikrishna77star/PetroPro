@@ -24,8 +24,10 @@ export default function CustomerReportsPage() {
   const router = useRouter();
   const [from, setFrom] = useState(() => today().slice(0, 8) + "01");
   const [to, setTo] = useState(today);
+  const [reportStyle, setReportStyle] = useState<"legacy" | "modern">("legacy");
+  const [savingStyle, setSavingStyle] = useState(false);
   const [report, setReport] = useState<CustomerReport | null>(null);
-  const [tab, setTab] = useState<"purchases" | "ledger" | "statement" | "mileage">("purchases");
+  const [tab, setTab] = useState<"purchases" | "ledger" | "statement" | "mileage">("statement");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +41,7 @@ export default function CustomerReportsPage() {
     setError(null);
     if (!from || !to || from > to) { setError("Choose valid dates with From on or before To."); return; }
     setLoading(true);
-    try { setReport(await customerApi.getReport(session.token, from, to)); }
+    try { const data = await customerApi.getReport(session.token, from, to); setReport(data); setReportStyle(data.report_style ?? "legacy"); }
     catch (err) {
       if (err instanceof ApiError && err.status === 401) { signOut(); return; }
       setError(err instanceof Error ? err.message : "Unable to fetch reports. Please try again.");
@@ -53,6 +55,13 @@ export default function CustomerReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
+  async function changeReportStyle(style: "legacy" | "modern") {
+    if (!session) return;
+    setSavingStyle(true); setError(null);
+    try { const saved = await customerApi.setReportStyle(session.token, style); setReportStyle(saved.report_style); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not save reporting preference"); }
+    finally { setSavingStyle(false); }
+  }
   function download() {
     if (!report) return;
     const rows: unknown[][] = [
@@ -97,6 +106,11 @@ export default function CustomerReportsPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[["Purchases in period", report.purchases.reduce((s, p) => s + p.grand_total, 0)], ["Credit opening balance", report.opening_balance], ["Payments in period", report.ledger.reduce((s, e) => s + e.credit, 0)], ["Credit closing balance", report.closing_balance]].map(([label, value]) => <Card key={label} color="emerald"><p className="text-xs text-fg-muted">{label}</p><p className="mt-1 text-xl font-semibold">{money(Number(value))}</p></Card>)}
         </div>
+        <label className="flex flex-wrap items-center gap-3 text-sm print:hidden">My reporting style
+          <select value={reportStyle} disabled={savingStyle} onChange={e => void changeReportStyle(e.target.value as "legacy" | "modern")} className="rounded-lg border border-border bg-bg-elevated px-3 py-2">
+            <option value="legacy">Legacy — familiar printed statements</option><option value="modern">Modern — tables and summaries</option>
+          </select><span className="text-xs text-fg-muted">Saved to your account. You can switch either way.</span>
+        </label>
         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
           <div className="flex flex-wrap gap-2" aria-label="Report type">
             <Button variant={tab === "purchases" ? "primary" : "outline"} onClick={() => setTab("purchases")}>Purchase history</Button>
@@ -106,7 +120,7 @@ export default function CustomerReportsPage() {
           </div>
           {(tab === "purchases" || tab === "ledger") && <div className="flex gap-2"><Button variant="outline" onClick={download}>Download CSV</Button><Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>}
         </div>
-        {(tab === "statement" || tab === "mileage") ? <CustomerVehicleReports key={`${tab}-${report.from}-${report.to}`} token={session.token} from={report.from} to={report.to} mode={tab} /> : <Card color="violet">
+        {(tab === "statement" || tab === "mileage") ? <CustomerVehicleReports key={`${tab}-${report.from}-${report.to}`} token={session.token} from={report.from} to={report.to} mode={tab} reportStyle={reportStyle} /> : <Card color="violet">
           <h2 className="mb-3 text-lg font-semibold">{tab === "purchases" ? "Purchase history" : "Account ledger"}</h2>
           <div className="overflow-x-auto"><table className="w-full text-left text-sm">
             <thead><tr className="border-b border-border">{(tab === "purchases" ? ["Date", "Bill", "Vehicle", "Payment", "Amount"] : ["Date", "Description", "Debit", "Credit", "Balance"]).map(h => <th key={h} scope="col" className="whitespace-nowrap p-2">{h}</th>)}</tr></thead>

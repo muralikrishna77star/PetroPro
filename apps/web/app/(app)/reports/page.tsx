@@ -89,6 +89,7 @@ export default function ReportsPage() {
   const [customerCode, setCustomerCode] = useState("");
   const [groupByVehicle, setGroupByVehicle] = useState(false);
   const [withOpening, setWithOpening] = useState(false);
+  const [reportStyle, setReportStyle] = useState<"legacy" | "modern">("legacy");
   const [mileageStatement, setMileageStatement] = useState(false);
   const [customerMileage, setCustomerMileage] = useState<{ code: string; from: string; to: string; vehicle: string; run: number } | null>(null);
   const [statement, setStatement] = useState<CustomerStatement | null>(null);
@@ -296,7 +297,7 @@ export default function ReportsPage() {
                 <select
                   className="max-w-64 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
                   value={customerCode}
-                  onChange={(e) => setCustomerCode(e.target.value)}
+                  onChange={(e) => { setCustomerCode(e.target.value); setReportStyle(customers.find(c => c.code === e.target.value)?.report_style ?? "legacy"); setStatement(null); setCustomerMileage(null); }}
                 >
                   <option value="">Select customer…</option>
                   {customers.map((c) => (
@@ -314,6 +315,11 @@ export default function ReportsPage() {
                   onChange={(e) => setVehicleNo(e.target.value)}
                 />
               </div>
+              <label className="text-sm">Report style
+                <select className="ml-2 rounded-lg border border-border bg-bg-elevated px-3 py-1.5" value={reportStyle} onChange={e => setReportStyle(e.target.value as "legacy" | "modern")}>
+                  <option value="legacy">Legacy</option><option value="modern">Modern</option>
+                </select>
+              </label>
               <label className="flex items-center gap-2 py-1.5 text-sm">
                 <input type="checkbox" checked={mileageStatement} onChange={e => { setMileageStatement(e.target.checked); setStatement(null); setCustomerMileage(null); }} />
                 Mileage statement
@@ -389,8 +395,8 @@ export default function ReportsPage() {
           {isStatement ? (
             mileageStatement ? (customerMileage ? <>
               <p className="mb-3 text-sm font-medium">{customers.find(c => c.code === customerMileage.code)?.name ?? customerMileage.code} ({customerMileage.code})</p>
-              <CustomerVehicleReports key={customerMileage.run} token={session.token} customerCode={customerMileage.code} initialVehicle={customerMileage.vehicle} from={customerMileage.from} to={customerMileage.to} mode="mileage" />
-            </> : <p className="text-sm text-fg-muted">Select a customer and dates, then run the mileage statement.</p>) : <StatementPreview statement={statement} />
+              <CustomerVehicleReports key={customerMileage.run} token={session.token} customerCode={customerMileage.code} initialVehicle={customerMileage.vehicle} from={customerMileage.from} to={customerMileage.to} mode="mileage" reportStyle={reportStyle} />
+            </> : <p className="text-sm text-fg-muted">Select a customer and dates, then run the mileage statement.</p>) : (reportStyle === "modern" && statement ? <CustomerVehicleReports key={`${statement.customer.code}-${statement.from}-${statement.to}-${statement.form}-${statement.vehicle_no}`} token={session.token} customerCode={statement.customer.code} initialVehicle={statement.vehicle_no ?? ""} from={statement.from} to={statement.to} mode="statement" reportStyle="modern" initialGroup={statement.form.includes("G")} initialOpening={statement.form.endsWith("WO")} /> : <StatementPreview statement={statement} />)
           ) : (
             <ReportTable reportType={reportType} rows={rows} items={items} />
           )}

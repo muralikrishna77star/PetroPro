@@ -429,6 +429,8 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "pending_transactions", "pump_code", "TEXT REFERENCES pumps(code)");
   ensureColumn(db, "tenants", "payment_qr_code", "TEXT");
   ensureColumn(db, "users", "active", "INTEGER NOT NULL DEFAULT 1");
+  // Existing customers keep legacy output; application-created customers explicitly use modern.
+  ensureColumn(db, "customers", "report_style", "TEXT NOT NULL DEFAULT 'legacy' CHECK (report_style IN ('legacy', 'modern'))");
   ensureColumn(db, "customers", "email", "TEXT");
   ensureColumn(db, "customers", "password_hash", "TEXT");
   ensureColumn(db, "customers", "google_sub", "TEXT");

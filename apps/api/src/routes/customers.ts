@@ -38,6 +38,23 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // The customer can change only their own display preference; staff can manage it in Customer Master.
+  fastify.put<{ Body: { report_style?: string } }>("/customer/report-style", { preHandler: fastify.authenticateCustomer }, async (request, reply) => {
+    const style = request.body?.report_style;
+    if (style !== "legacy" && style !== "modern") return reply.code(400).send({ error: "Choose legacy or modern reporting" });
+    const customer = customersRepo.setReportStyle(request.user.sub, style);
+    if (!customer) return reply.code(404).send({ error: "Customer not found" });
+    return reply.header("Cache-Control", "no-store").send({ report_style: customer.report_style });
+  });
+  fastify.put<{ Params: { code: string }; Body: { report_style?: string } }>("/customers/:code/report-style", { preHandler: fastify.requireRole("super_admin", "owner") }, async (request, reply) => {
+    const style = request.body?.report_style;
+    if (style !== "legacy" && style !== "modern") return reply.code(400).send({ error: "Choose legacy or modern reporting" });
+    const customer = customersRepo.setReportStyle(request.params.code, style);
+    if (!customer) return reply.code(404).send({ error: "Customer not found" });
+    auditLogsRepo.record({ user_id: request.user.sub, action: "set_customer_report_style", entity_type: "customer", entity_id: customer.code, details: { report_style: style } });
+    return customer;
+  });
+
   // Provisions/resets a customer's Order Entry login (routes/customerAuth.ts). No self-signup —
   // staff generate a temp password here and relay it to the customer, mirroring reset-password
   // for staff users (routes/users.ts).

@@ -1,6 +1,9 @@
 import { db } from "../db/client.js";
 
+export type ReportStyle = "legacy" | "modern";
+
 export interface Customer {
+  report_style: ReportStyle;
   code: string;
   joined_on: string | null;
   name: string;
@@ -17,12 +20,12 @@ export interface Customer {
 
 export type CustomerWithAuth = Customer & { password_hash: string | null; google_sub: string | null };
 
-export type CustomerInput = Omit<Customer, "due_amount"> & { due_amount?: number };
+export type CustomerInput = Omit<Customer, "due_amount" | "report_style"> & { due_amount?: number; report_style?: ReportStyle };
 
 /** Explicit column list (never `SELECT *`) so `password_hash` never rides along on a plain
  *  `get()`/`list()` and leaks into a JSON response the way `usersRepo` guards against too. */
 const CUSTOMER_COLUMNS =
-  "code, joined_on, name, address, print_name, phone, due_amount, credit_limit, service_charge, tin_no, gst_no, email";
+  "code, joined_on, name, address, print_name, phone, due_amount, credit_limit, service_charge, tin_no, gst_no, email, report_style";
 
 export const customersRepo = {
   list(): Customer[] {
@@ -50,8 +53,8 @@ export const customersRepo = {
     db.prepare(
       `INSERT INTO customers (
         code, joined_on, name, address, print_name, phone, due_amount, credit_limit,
-        service_charge, tin_no, gst_no, email
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        service_charge, tin_no, gst_no, email, report_style
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.code,
       input.joined_on ?? null,
@@ -65,6 +68,7 @@ export const customersRepo = {
       input.tin_no ?? null,
       input.gst_no ?? null,
       input.email ?? null,
+      input.report_style ?? "modern",
     );
     return customersRepo.get(input.code) as Customer;
   },
@@ -88,6 +92,11 @@ export const customersRepo = {
       input.email ?? null,
       code,
     );
+    return customersRepo.get(code);
+  },
+
+  setReportStyle(code: string, style: ReportStyle): Customer | undefined {
+    db.prepare("UPDATE customers SET report_style = ? WHERE code = ?").run(style, code);
     return customersRepo.get(code);
   },
 
