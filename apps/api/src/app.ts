@@ -26,6 +26,7 @@ import userRoutes from "./routes/users.js";
 import orderRoutes from "./routes/orders.js";
 import customerGoogleRoutes from "./routes/customerGoogle.js";
 import customerAuthRoutes from "./routes/customerAuth.js";
+import customerVehicleReports from "./routes/customerVehicleReports.js";
 import customerReportRoutes from "./routes/customerReports.js";
 import customerOrderRoutes from "./routes/customerOrders.js";
 import communicationRoutes from "./routes/communication.js";
@@ -69,6 +70,7 @@ export async function buildApp() {
   await app.register(customerGoogleRoutes);
   await app.register(customerOrderRoutes);
   await app.register(customerReportRoutes);
+  await app.register(customerVehicleReports);
   await app.register(communicationRoutes);
   await app.register(publicInvoiceRoutes);
   await app.register(techDashboardRoutes);

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { customerApi, ApiError, type CustomerReport } from "@/lib/api";
 import { useRequireCustomerSession } from "@/lib/useCustomerSession";
 import { clearCustomerSession } from "@/lib/customerAuth";
+import { CustomerVehicleReports } from "@/components/CustomerVehicleReports";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -24,7 +25,7 @@ export default function CustomerReportsPage() {
   const [from, setFrom] = useState(() => today().slice(0, 8) + "01");
   const [to, setTo] = useState(today);
   const [report, setReport] = useState<CustomerReport | null>(null);
-  const [tab, setTab] = useState<"purchases" | "ledger">("purchases");
+  const [tab, setTab] = useState<"purchases" | "ledger" | "statement" | "mileage">("purchases");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,21 +98,23 @@ export default function CustomerReportsPage() {
           {[["Purchases in period", report.purchases.reduce((s, p) => s + p.grand_total, 0)], ["Credit opening balance", report.opening_balance], ["Payments in period", report.ledger.reduce((s, e) => s + e.credit, 0)], ["Credit closing balance", report.closing_balance]].map(([label, value]) => <Card key={label} color="emerald"><p className="text-xs text-fg-muted">{label}</p><p className="mt-1 text-xl font-semibold">{money(Number(value))}</p></Card>)}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-          <div className="flex gap-2" aria-label="Report type">
+          <div className="flex flex-wrap gap-2" aria-label="Report type">
             <Button variant={tab === "purchases" ? "primary" : "outline"} onClick={() => setTab("purchases")}>Purchase history</Button>
-            <Button variant={tab === "ledger" ? "primary" : "outline"} onClick={() => setTab("ledger")}>Credit statement</Button>
+            <Button variant={tab === "ledger" ? "primary" : "outline"} onClick={() => setTab("ledger")}>Account ledger</Button>
+            <Button variant={tab === "statement" ? "primary" : "outline"} onClick={() => setTab("statement")}>Credit sales statement</Button>
+            <Button variant={tab === "mileage" ? "primary" : "outline"} onClick={() => setTab("mileage")}>Vehicle mileage</Button>
           </div>
-          <div className="flex gap-2"><Button variant="outline" onClick={download}>Download CSV</Button><Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>
+          {(tab === "purchases" || tab === "ledger") && <div className="flex gap-2"><Button variant="outline" onClick={download}>Download CSV</Button><Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>}
         </div>
-        <Card color="violet">
-          <h2 className="mb-3 text-lg font-semibold">{tab === "purchases" ? "Purchase history" : "Credit statement"}</h2>
+        {(tab === "statement" || tab === "mileage") ? <CustomerVehicleReports key={`${tab}-${report.from}-${report.to}`} token={session.token} from={report.from} to={report.to} mode={tab} /> : <Card color="violet">
+          <h2 className="mb-3 text-lg font-semibold">{tab === "purchases" ? "Purchase history" : "Account ledger"}</h2>
           <div className="overflow-x-auto"><table className="w-full text-left text-sm">
             <thead><tr className="border-b border-border">{(tab === "purchases" ? ["Date", "Bill", "Vehicle", "Payment", "Amount"] : ["Date", "Description", "Debit", "Credit", "Balance"]).map(h => <th key={h} scope="col" className="whitespace-nowrap p-2">{h}</th>)}</tr></thead>
             <tbody>{tab === "purchases" ? report.purchases.map(p => <tr key={p.bill_no} className="border-b border-border"><td className="p-2 whitespace-nowrap">{p.bill_date.slice(0, 10)}</td><td className="p-2">#{p.bill_no}</td><td className="p-2">{p.vehicle_no || "—"}</td><td className="p-2">{p.payment_type}</td><td className="p-2 whitespace-nowrap">{money(p.grand_total)}</td></tr>) : report.ledger.map((e, i) => <tr key={i} className="border-b border-border"><td className="p-2 whitespace-nowrap">{e.date.slice(0, 10)}</td><td className="p-2">{e.description}</td><td className="p-2 whitespace-nowrap">{money(e.debit)}</td><td className="p-2 whitespace-nowrap">{money(e.credit)}</td><td className="p-2 whitespace-nowrap">{money(e.balance)}</td></tr>)}</tbody>
           </table></div>
           {tab === "purchases" && !report.purchases.length && <p className="py-6 text-center text-sm text-fg-muted">No purchases in this period.</p>}
           {tab === "ledger" && <p className="mt-3 text-xs text-fg-muted">Credit bills and receipts only. Cash and digital purchases appear in Purchase history.</p>}
-        </Card>
+        </Card>}
       </>}
     </main>
   );
