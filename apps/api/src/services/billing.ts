@@ -4,6 +4,7 @@ import { pendingTransactionsRepo } from "../repositories/pendingTransactions.js"
 import { billsRepo, type Bill, type BillLine, type NewBillLine } from "../repositories/bills.js";
 import { customersRepo } from "../repositories/customers.js";
 import { stockRepo } from "../repositories/stock.js";
+import { config } from "../config.js";
 import { businessDateRepo } from "../repositories/businessDate.js";
 import { mileageRepo } from "../repositories/mileage.js";
 import { ordersRepo } from "../repositories/orders.js";
@@ -74,6 +75,12 @@ function billTimestamp(businessDate: string): string {
   return `${businessDate} ${time}`;
 }
 
+/** The station's own clock, for the printed receipt. bill_date's time stays in UTC because shifts
+ *  compare it with UTC timestamps to work out each shift's cash. */
+function stationTime(): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: config.stationTimeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date());
+}
+
 function buildLine(itemCode: string, qty: number, orderLineId?: number): NewBillLine {
   const item = itemsRepo.get(itemCode);
   if (!item) throw new Error(`Unknown item code: ${itemCode}`);
@@ -129,6 +136,7 @@ export function settlePendingTransaction(input: SettleInput): SettleResult {
     payment_type: input.paymentType,
     pump_code: pending.pump_code,
     bill_date: billTimestamp(businessDate),
+    local_time: stationTime(),
     lines,
   });
 
@@ -225,6 +233,7 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
     order_no: input.orderNo ?? null,
     pump_code: input.pumpCode ?? null,
     bill_date: billTimestamp(businessDate),
+    local_time: stationTime(),
     client_ref: input.clientRef ?? null,
     lines,
   });

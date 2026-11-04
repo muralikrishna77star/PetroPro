@@ -178,6 +178,35 @@ export function applySchema(db: DatabaseSync): void {
       cashier_id TEXT REFERENCES users(user_id)
     );
 
+    -- Thermal receipts. A print job is about paper only: a bill is final before one exists, and
+    -- nothing here touches sales, stock or dues. One original per bill, enforced below.
+    CREATE TABLE IF NOT EXISTS print_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      settings TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS print_terminals (
+      terminal_id TEXT PRIMARY KEY,
+      settings TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS print_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bill_no INTEGER NOT NULL REFERENCES bills(bill_no),
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      terminal_id TEXT,
+      connection TEXT NOT NULL,
+      copies INTEGER NOT NULL DEFAULT 1,
+      attempts INTEGER NOT NULL DEFAULT 1,
+      error TEXT,
+      request_key TEXT NOT NULL UNIQUE,
+      created_by TEXT NOT NULL REFERENCES users(user_id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Phase 3: mileage tracking + printed-invoice letterhead.
 
     CREATE TABLE IF NOT EXISTS mileage_log (
@@ -402,6 +431,8 @@ export function applySchema(db: DatabaseSync): void {
   // side) — the same "retry-safe because the client_ref already exists" pattern
   // pending_transactions.client_ref already uses.
   ensureColumn(db, "bills", "client_ref", "TEXT");
+  ensureColumn(db, "bills", "local_time", "TEXT");
+  ensureColumn(db, "bills", "legacy_bill_no", "INTEGER");
   // QR-scanned invoice page's optional "send to my WhatsApp" (routes/publicInvoice.ts). Off by
   // default: it hands out a bill link that lives for days rather than the QR's 30 minutes.
   ensureColumn(db, "communication_settings", "qr_whatsapp_enabled", "INTEGER NOT NULL DEFAULT 0");
@@ -415,6 +446,9 @@ export function applySchema(db: DatabaseSync): void {
   );
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_print_jobs_original ON print_jobs(bill_no) WHERE kind = 'original'",
   );
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_bills_client_ref ON bills(client_ref) WHERE client_ref IS NOT NULL",

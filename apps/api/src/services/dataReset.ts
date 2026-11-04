@@ -20,6 +20,7 @@ const TRANSACTIONAL_TABLES = [
   "bill_lines",
   "pending_transactions",
   "mileage_log",
+  "print_jobs",
   "bills",
   "order_lines",
   "orders",
@@ -41,6 +42,7 @@ const AUTOINCREMENT_TABLES = [
   "shifts",
   "order_lines",
   "orders",
+  "print_jobs",
 ];
 
 /**

@@ -29,6 +29,8 @@ import customerOrderRoutes from "./routes/customerOrders.js";
 import communicationRoutes from "./routes/communication.js";
 import publicInvoiceRoutes from "./routes/publicInvoice.js";
 import techDashboardRoutes from "./routes/techDashboard.js";
+import legacyImportRoutes from "./routes/legacyImport.js";
+import printingRoutes from "./routes/printing.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -66,6 +68,8 @@ export async function buildApp() {
   await app.register(communicationRoutes);
   await app.register(publicInvoiceRoutes);
   await app.register(techDashboardRoutes);
+  await app.register(legacyImportRoutes);
+  await app.register(printingRoutes);
 
   return app;
 }

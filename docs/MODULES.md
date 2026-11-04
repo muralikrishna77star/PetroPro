@@ -45,7 +45,7 @@ Source-availability key: 🟢 program source survives · 🟡 report layout only
 | Cancel Bill | `billcnc` | ⚪ | `/billing` bill lookup + cancel, `POST /bills/:billNo/cancel` | 2 |
 | Receipts (Add/Delete) | `rec_ad`/`rec_de` | ⚪ | `/customers` per-customer receipt form, `POST /receipts` — no delete/void | 2 |
 | Close Stock/Date | `datestoc` | ⚪ | `POST /stock/close` (no dedicated UI button outside the API — flagged in `Project_Status.md` as advisory-only, not enforced) | 2 |
-| Print Previous Bill / Duplicate Bill | `lastbil`/`bildup` | ⚪ | `GET /bills/last`, `GET /bills/:billNo/pdf` | 2/3 |
+| Print Previous Bill / Duplicate Bill | `lastbil`/`bildup` | ⚪ | `POST /bills/:billNo/print-jobs`, Look up on Billing. See `docs/THERMAL_PRINTING.md` | 2/3 |
 | Print Previous/Duplicate Receipt | `lastrec`/`recdup` | ⚪ | **Not built** — receipts have no print/PDF output at all, only the JSON record | — |
 
 ### Reports

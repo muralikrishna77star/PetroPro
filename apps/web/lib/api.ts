@@ -60,6 +60,12 @@ import type {
   AutoRenew,
   TechCategory,
   TechCostModel,
+  LegacyImportReport,
+  PrintJob,
+  PrintJobStatus,
+  PrintPayload,
+  ReceiptSettings,
+  TerminalPrinterSettings,
 } from "@petropro/shared-types";
 
 export type {
@@ -247,6 +253,19 @@ export async function downloadAuthed(
     link.click();
   }
   setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+}
+
+/** The raw file is the request body, so a whole table isn't re-encoded on its way up. */
+async function sendLegacyFile(path: string, token: string, file: File, params: Record<string, string> = {}): Promise<LegacyImportReport> {
+  const query = new URLSearchParams({ filename: file.name, ...params });
+  const res = await authedFetch(`${API_URL}/legacy-import/${path}?${query}`, token, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+  const data = await res.json().catch(() => undefined);
+  if (!res.ok) throw new ApiError((data as { error?: string })?.error ?? res.statusText, res.status);
+  return data as LegacyImportReport;
 }
 
 function statementParams(query: CustomerStatementQuery): URLSearchParams {
@@ -556,6 +575,44 @@ export const api = {
 
   bulkTaxChange: (token: string, body: { tax_percent: number; group_code?: string }) =>
     request<Item[]>("/items/bulk-tax-change", { method: "POST", token, body }),
+
+  previewLegacyFile: (token: string, file: File) => sendLegacyFile("preview", token, file),
+
+  commitLegacyFile: (token: string, file: File, withBackup: boolean) =>
+    sendLegacyFile("commit", token, file, withBackup ? { backup: "1" } : {}),
+
+  getReceiptSettings: (token: string) => request<ReceiptSettings>("/print/settings", { token }),
+
+  saveReceiptSettings: (token: string, body: ReceiptSettings) =>
+    request<ReceiptSettings>("/print/settings", { method: "PUT", token, body }),
+
+  getTerminalPrinter: (token: string, terminalId: string) =>
+    request<TerminalPrinterSettings>(`/print/terminals/${terminalId}`, { token }),
+
+  saveTerminalPrinter: (token: string, terminalId: string, body: TerminalPrinterSettings) =>
+    request<TerminalPrinterSettings>(`/print/terminals/${terminalId}`, { method: "PUT", token, body }),
+
+  listPrintTerminals: (token: string) =>
+    request<{ terminal_id: string; settings: TerminalPrinterSettings; updated_at: string }[]>("/print/terminals", { token }),
+
+  testPrint: (token: string, settings: TerminalPrinterSettings) =>
+    request<PrintPayload>("/print/test", { method: "POST", token, body: { settings } }),
+
+  previewReceipt: (token: string, billNo: number, terminalId: string) =>
+    request<PrintPayload>(`/bills/${billNo}/receipt?terminal_id=${terminalId}`, { token }),
+
+  billReceiptPdfUrl: (billNo: number, terminalId: string) => `${API_URL}/bills/${billNo}/receipt.pdf?terminal_id=${terminalId}`,
+
+  listBillPrintJobs: (token: string, billNo: number) => request<PrintJob[]>(`/bills/${billNo}/print-jobs`, { token }),
+
+  requestPrint: (token: string, billNo: number, body: { request_key: string; terminal_id: string }) =>
+    request<PrintPayload>(`/bills/${billNo}/print-jobs`, { method: "POST", token, body }),
+
+  retryPrintJob: (token: string, jobId: number, body: { terminal_id: string; connection?: string }) =>
+    request<PrintPayload>(`/print-jobs/${jobId}/retry`, { method: "POST", token, body }),
+
+  reportPrintJob: (token: string, jobId: number, status: PrintJobStatus, error: string | null) =>
+    request<PrintJob>(`/print-jobs/${jobId}`, { method: "PATCH", token, body: { status, error: error ?? undefined } }),
 
   listBackups: (token: string) => request<BackupFile[]>("/backup", { token }),
 

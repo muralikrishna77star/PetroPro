@@ -142,11 +142,10 @@ are a separate running-total table, not per-month ranges — skipped.
 Result on the real dataset: 11,716 of 11,824 mileage rows matched (99.1%) — the rest are accepted
 as normal data noise (see "Data quality" below), not investigated further.
 
-**`STATUS` (`'C'`/`'R'`) on bill rows is *not* payment type — a real trap.** A sample row had
-`STATUS='C'` with a blank `CUST_CODE`; `BILSEK`'s `'C'`/`'R'` split sizes don't line up with
-credit-vs-cash bill counts either. It's almost certainly which of the two `BILSEK` counters
-assigned that `BILL_NO`. `payment_type` is still derived the existing way (customer_code present
-→ credit); `STATUS` is only used as part of the mileage-matching key above.
+**`STATUS` is the bill type: `'C'` cash, `'R'` credit, `'K'` kerosene.** `PRINTBIL` and `BILLEN` say so
+directly, each type has its own counter in `BILLNO.DBF`, and in every row of April to June 2019 an `'R'` has a
+customer and a `'C'` doesn't. An earlier version of these notes called this a trap and said `STATUS` wasn't
+payment type, which was wrong. `payment_type` is still derived from the customer, which gives the same answer.
 
 **Purchases/receipts are nearly empty in this window** — `PURCH25.DBF`/`PURCH26.DBF`: 0 rows.
 `RECPT25.DBF`: exactly 1 row. Imported anyway (cheap), same "not a bug" precedent as the demo
@@ -219,3 +218,42 @@ This importer was tested against the actual files in `legacy/Workarea/` (not syn
 completing in about 15 seconds. See `AI_Handoff.md`'s Phase 5 session log for the specific
 verification steps (spot-checked imported records via the API, confirmed a migrated user can log
 in with the temporary password, confirmed the FK-fallback behavior on the real "MKKLS" gap above).
+
+## Uploading Petbill files (Utilities → Legacy Import)
+
+Super Admins upload `<MON>BIL<YY>.DBF`, `<MON>STK<YY>.DBF` and `PURCH<YY>.DBF` in the app
+(`services/legacyImport.ts`). `<YY>` is a calendar year. Each file is previewed first and imported
+all or nothing, and one backup is taken per batch. The rules, and why:
+
+- **Names are strict.** Stale copies such as `ANOVBIL25.DBF` are refused. A file whose dates all fall
+  outside its name's period is refused too, since the suffix isn't always reliable.
+- **Re-uploading is safe.** Bills match by date and time, vehicle, customer and lines, counted so that
+  two identical sales stay two. This needs no legacy key, so it also recognises data from
+  `import:fy2025`, and bills cancelled since import aren't brought back.
+- **Bills group by date, STATUS, BILL_NO and BTIME.** The command-line importers use only BILL_NO and
+  BTIME, which merges two sales when both counters issue one number in the same second.
+- **Bills are held whole, not imported short.** An unknown item would understate the sale, and an
+  unknown customer would turn credit into cash. Add the code and upload again.
+- **Stock on or after the business date is refused, and so are days PetroPro hasn't closed.** An
+  imported row is closed, and one closed row closes the whole day: that stops billing, and moves the
+  business date.
+- **Purchases start at the latest `pur_date` in PetroPro.** Older rows are reported and skipped. That
+  day itself is compared row by row, because it may have been incomplete when last copied. A purchase
+  entered live therefore moves the starting point forward.
+- **Receipts (`RECPT<YY>`) are compared across the whole year,** by date, customer, amount, mode and
+  cheque number, with no starting point: a receipt entered late in Petbill is money received and must
+  still arrive. They appear on the customer ledger. Only `CSHORCHQ = 'CQ'` reads as a cheque, as in
+  `import:fy2025`; the preview lists any other codes read as cash, so check them on the first real file.
+- **Nothing posts onward.** Customer dues aren't changed by bills or receipts, because moving dues for
+  only one of them would be wrong. Stock comes only from STK files, whose
+  RECEIPTS and SALES already include these purchases and bills. So a month's purchases or sales
+  without its STK file don't show in the stock book.
+- **Imported bills and receipts take the next numbers,** so live numbering jumps past them. A bill's legacy
+  BILL_NO is kept in `legacy_bill_no` and printed on its receipt. Bills imported earlier by `import:fy2025` don't
+  have it. REC_NO isn't kept.
+- **Not handled here:** mileage (`MAGE`) and cancelled bills (`BILLCNCS`).
+
+Tested on real files: the April to June 2019 tables in commit `77bb4b0`, on a scratch database, gave 3,606 bills,
+4,047 lines, 5,313 stock rows and 114 purchases, the same counts `import:demo-transactions` recorded, and uploading
+them again added nothing. Its one held bill is a blank row with no item and no amount. Those files hold no receipts,
+so `RECPT` has only been tested on generated files, as have files from other years.

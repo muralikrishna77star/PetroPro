@@ -81,6 +81,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/users", label: "Users", roles: ["super_admin"] },
       { href: "/audit-logs", label: "Audit Logs", roles: ["super_admin", "owner"] },
       { href: "/settings", label: "Settings", roles: ["super_admin", "owner"] },
+      { href: "/printer-settings", label: "Printer Settings", roles: ["super_admin", "owner"] },
+      { href: "/legacy-import", label: "Legacy Import", roles: ["super_admin"] },
       { href: "/technology", label: "Tech & Subscriptions", roles: ["super_admin"] },
     ],
   },

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadAuthed, type Item, type PendingTransaction, type SettleResponse, type Tenant } from "@/lib/api";
+import { api, ApiError, type Item, type PendingTransaction, type SettleResponse, type Tenant } from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
 import { PaymentQrPanel } from "@/components/PaymentQrPanel";
 import { printReferenceSlip } from "@/lib/printSlip";
+import { BillPrintActions } from "@/components/BillPrintActions";
 
 export default function CashierPage() {
   const session = useRequireSession(["super_admin", "owner", "operator"]);
@@ -207,19 +208,7 @@ export default function CashierPage() {
           <p>Tax: ₹{invoice.bill.tax_total.toFixed(2)}</p>
           <p className="font-semibold">Grand total: ₹{invoice.bill.grand_total.toFixed(2)}</p>
           <p className="mt-2 italic">{invoice.amountInWords}</p>
-          <button
-            onClick={() =>
-              downloadAuthed(
-                api.invoicePdfUrl(invoice.bill.bill_no),
-                session.token,
-                `invoice-${invoice.bill.bill_no}.pdf`,
-                "open",
-              )
-            }
-            className="mt-3 rounded-lg border border-success px-3 py-1.5 text-sm text-success "
-          >
-            Print Bill
-          </button>
+          <BillPrintActions key={invoice.bill.bill_no} billNo={invoice.bill.bill_no} token={session.token} justFinalized />
         </div>
       )}
       </div>

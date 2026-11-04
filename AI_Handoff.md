@@ -1822,3 +1822,71 @@ only, so the API didn't restart.
 **Deploy note:** `vercel deploy --prod --yes` needed an explicit allow rule in Claude Code's permissions. A chat
 approval doesn't lift that block. The user added the rule, and it stays until they remove it. A user's report of a
 deploy should be checked against the live site: the first attempt here hadn't reached production.
+
+### 2026-11-04 — Session 27 (uploading legacy Petbill files)
+
+**Context:** the user wants old Petbill data imported by uploading monthly `DECBIL25.DBF` and `DECSTK22.DBF`
+files and annual `PURCH25.DBF` and `RECPT26.DBF`, whose suffix is a calendar year and changes each year, with
+purchases picked up from the last one made.
+
+**Built:** Utilities → Legacy Import, Super Admin only: `services/legacyImport.ts`, `routes/legacyImport.ts`,
+`parseDbf` in `dbf/reader.ts`, `app/(app)/legacy-import/page.tsx`. No schema change. The raw file is the request
+body, limited to 32 MB. The rules and their reasons are in `docs/MIGRATION_NOTES.md`. `CLAUDE.md` and the data
+dictionary called the suffix a financial year, and are corrected.
+
+**Verified:** API tests 168/168. 32 deliberate
+breaks were all caught, one only after adding a case. Real browser against a production build on a scratch
+database: all checks pass, including re-upload, wrong names, and phone width. A 60,000-row file (7.2 MB, about
+13 times a real month) took about 6 seconds to preview and 8 to import on this machine. The API can't answer
+during that, so large batches belong in a quiet period.
+
+**Not verified:** real Petbill files, as none are on this machine (`legacy/Workarea/` and
+`WorkareaTill29Mar2026/` are absent). Older files may have different columns, which the screen would report.
+
+**Later:** real 2019 files turned up in git history and passed. See `docs/MIGRATION_NOTES.md`.
+
+**State:** on `feature/legacy-file-import`, uncommitted. Not merged, not deployed.
+
+### 2026-11-04 — Session 28 (thermal bill printing)
+
+**Context:** the user asked for Petbill's bill printing to be migrated to 80 mm ESC/POS printers, with print,
+preview, reprint, PDF, test print, settings per terminal, and a local bridge. Everything is in
+`docs/THERMAL_PRINTING.md`: legacy analysis, field mapping, setup, and what's unverified.
+
+**Legacy source:** `PRINTBIL.PRG` isn't in the repo's history. `legacy/Workarea/` is gone from disk but is in commit
+`77bb4b0`: `PRINTBIL.BAK`, `BILLEN.BAK`, `Petbill.exe` and a real receipt, `X.TXT`.
+
+**Security finding, not acted on, needs the user:** that commit is on GitHub with real customer data, and an anonymous
+request for `legacy/Workarea/CUSTOMER.DBF` at that commit returned HTTP 200. `bc0ce7a` only stopped tracking it.
+
+**Built:** `services/receipt.ts`, `escpos.ts`, `billReceiptPdf.ts`, `printing.ts`; `repositories/printing.ts`;
+`routes/printing.ts`; tables `print_settings`, `print_terminals`, `print_jobs`; `apps/print-bridge/`;
+`lib/printing.ts`, `components/BillPrintActions.tsx`, `ReceiptPreview.tsx`, `app/(app)/printer-settings/page.tsx`;
+Billing, Cashier and Attendant use the new actions, and the A5 invoice stays one click away.
+
+**Time on bills:** `billTimestamp` stores UTC, so live bills show a time 5:30 behind. Fixing it there broke shift cash
+totals, because `shifts.ts` compares `bill_date` with `datetime('now')`, and the test suite caught it. So `bill_date` is
+unchanged, and a new `bills.local_time` (`STATION_TIME_ZONE`, default `Asia/Kolkata`) is what receipts print. Older
+bills fall back to `bill_date`. Other screens and the A5 invoice still show UTC: seen, not changed. `todayDateOnly` is
+also UTC, so "today" lags until 05:30 IST: seen, not changed.
+
+**Also corrected:** `STATUS` is the bill type, which the migration notes and my importer comment had wrong.
+
+**Decisions by the user, 2026-11-04:** the receipt prints the stored sub total rather than Petbill's formula, so its
+figures add up. Imported bills keep their Petbill number in `legacy_bill_no`. Kerosene bills aren't migrated, as
+PetroPro has no such type.
+
+**Verified:** API tests 207/207 on two of three runs. The third failed only `pruneOldBackups`, the temp-folder race
+already in `Project_Status.md`. Bridge tests 12/12. 38 deliberate breaks: 37 caught, three of them only after adding
+tests. The other, removing the role check for QR-link tokens, changes nothing because `applyLiveSession` refuses them
+too. Browser check 43/43 with the real bridge process and a fake LAN printer, four runs in a row on the final logic:
+print, reprint, printer off and back, PetroPro unreachable, browser fallback, two terminals, 58 mm, phone width.
+
+**Compared with Petbill:** the real April to June 2019 files in a scratch database. Legacy bill 3101, the saved form of
+the sale in `X.TXT`, matches on every figure, customer, vehicle and cashier. Across all 3,606 bills, totals and tax match
+the stored bill, the base differs on one bill by 0.01, and no line exceeds 48 characters. Imported bills get new numbers,
+so legacy 3101 reprints as a different bill number.
+
+**Not verified:** anything on a real printer. See section 5 of the doc.
+
+**State:** uncommitted, on `feature/legacy-file-import`, together with Session 27. Not deployed.

@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadAuthed, type Item, type Pump, type SettleResponse, type Tenant } from "@/lib/api";
+import { api, ApiError, type Item, type Pump, type SettleResponse, type Tenant } from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
 import { PaymentQrPanel } from "@/components/PaymentQrPanel";
 import { queueEntry, getQueuedEntries, flushQueue } from "@/lib/offlineQueue";
 import { printReferenceSlip } from "@/lib/printSlip";
+import { BillPrintActions } from "@/components/BillPrintActions";
 
 type Mode = "queue" | "settle";
 type SettlePaymentType = "cash" | "upi" | "card";
@@ -329,20 +330,7 @@ export default function AttendantPage() {
                 </button>
               )}
               {message.kind === "ok" && mode === "settle" && settledInvoice && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadAuthed(
-                      api.invoicePdfUrl(settledInvoice.bill.bill_no),
-                      session.token,
-                      `invoice-${settledInvoice.bill.bill_no}.pdf`,
-                      "open",
-                    )
-                  }
-                  className="mt-2 rounded-lg border border-success px-3 py-1.5 text-sm text-success"
-                >
-                  Print Bill
-                </button>
+                <BillPrintActions key={settledInvoice.bill.bill_no} billNo={settledInvoice.bill.bill_no} token={session.token} justFinalized />
               )}
             </div>
           )}

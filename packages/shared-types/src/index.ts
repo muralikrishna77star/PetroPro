@@ -609,3 +609,119 @@ export interface TechDashboard {
     excluded: { service_id: string; service_name: string; reason: string }[];
   };
 }
+
+export type LegacyImportKind = "sales" | "stock" | "purchases" | "receipts";
+
+export interface LegacyImportSkip {
+  reason: string;
+  count: number;
+  /** A few distinct codes or dates to act on, not every occurrence. */
+  examples: string[];
+}
+
+/** What an uploaded Petbill file holds against PetroPro, or what importing it did. */
+export interface LegacyImportReport {
+  filename: string;
+  kind: LegacyImportKind | null;
+  period: string | null;
+  /** Why the whole file can't be imported, such as a wrong name or a damaged table. */
+  blocked: string | null;
+  rows: number;
+  /** Bills for a sales file, otherwise rows. */
+  to_import: number;
+  to_import_lines: number;
+  to_import_amount: number;
+  already_present: number;
+  skipped: LegacyImportSkip[];
+  notes: string[];
+  imported: boolean;
+  backup: string | null;
+}
+
+export type PrinterConnection = "browser" | "bridge_lan" | "bridge_usb" | "webusb" | "bluetooth";
+export type PrinterEncoding = "ascii" | "cp437" | "cp858";
+export type PrintKind = "original" | "duplicate";
+export type PrintJobStatus = "pending" | "sent" | "failed";
+
+export interface ReceiptLogo {
+  width: number;
+  height: number;
+  /** One bit per dot, row by row, as ESC/POS GS v 0 takes it. */
+  raster_base64: string;
+  preview_data_url: string;
+}
+
+/** What every receipt from this bunk says. */
+export interface ReceiptSettings {
+  /** Contact and statutory lines under the address. Nothing is assumed: an empty list prints nothing. */
+  header_lines: string[];
+  show_tagline: boolean;
+  show_gstin: boolean;
+  footer_text: string;
+  logo: ReceiptLogo | null;
+  qr_link_days: number;
+  show_customer: boolean;
+  show_vehicle: boolean;
+  show_cashier: boolean;
+  show_mileage: boolean;
+  show_tax_breakup: boolean;
+  festival_greetings: boolean;
+  qty_decimals: number;
+}
+
+/** What one billing terminal prints on. */
+export interface TerminalPrinterSettings {
+  terminal_name: string;
+  printer_name: string;
+  printer_model: string;
+  connection: PrinterConnection;
+  host: string;
+  port: number;
+  windows_printer: string;
+  paper_mm: 58 | 80;
+  printable_mm: number;
+  chars_per_line: number;
+  encoding: PrinterEncoding;
+  show_logo: boolean;
+  show_qr: boolean;
+  auto_cut: boolean;
+  auto_print: boolean;
+  copies: number;
+}
+
+export type ReceiptBlock =
+  | { kind: "text"; text: string; align: "left" | "center" | "right"; bold?: boolean; double?: boolean }
+  | { kind: "rule" }
+  | { kind: "logo" }
+  | { kind: "qr"; data: string };
+
+export interface ReceiptDocument {
+  width: number;
+  blocks: ReceiptBlock[];
+}
+
+export interface PrintJob {
+  id: number;
+  bill_no: number;
+  kind: PrintKind;
+  status: PrintJobStatus;
+  terminal_id: string | null;
+  connection: string;
+  copies: number;
+  attempts: number;
+  error: string | null;
+  request_key: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrintPayload {
+  /** Null for a preview or test page, which aren't print jobs. */
+  job: PrintJob | null;
+  document: ReceiptDocument;
+  text: string;
+  escpos_base64: string;
+  settings: TerminalPrinterSettings;
+  logo_preview: string | null;
+}

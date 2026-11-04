@@ -16,6 +16,10 @@ export interface Bill {
   order_no: string | null;
   pump_code: string | null;
   client_ref: string | null;
+  /** The time on the station's clock, for receipts. Empty on bills made before this column existed. */
+  local_time: string | null;
+  /** The number Petbill gave an imported bill. PetroPro's own bill_no is a new one. */
+  legacy_bill_no: number | null;
 }
 
 export interface BillLine {
@@ -57,6 +61,7 @@ export interface NewBill {
   /** Defaults to the DB's `datetime('now')` when omitted (see schema.ts) — pass explicitly to
    *  stamp a bill against the running business date rather than the wall-clock date. */
   bill_date?: string;
+  local_time?: string | null;
   /** Idempotency key for offline-queued submissions (see web's lib/offlineQueue.ts) — a retried
    *  sync attempt with the same client_ref must not create a second bill. Same shape as
    *  pending_transactions.client_ref. */
@@ -127,6 +132,7 @@ export const billsRepo = {
               input.client_ref ?? null,
             );
       const billNo = Number(billResult.lastInsertRowid);
+      if (input.local_time) db.prepare("UPDATE bills SET local_time = ? WHERE bill_no = ?").run(input.local_time, billNo);
 
       const insertLine = db.prepare(
         `INSERT INTO bill_lines (

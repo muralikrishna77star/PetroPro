@@ -10,6 +10,8 @@ export const config = {
   // Where the browser lands after Google sign-in (see routes/googleAuth.ts) — the web app's own
   // origin, not the API's.
   webAppUrl: process.env.WEB_APP_URL ?? "http://localhost:3000",
+  /** The station's own clock, which bills and printed receipts show. The server itself runs in UTC. */
+  stationTimeZone: process.env.STATION_TIME_ZONE ?? "Asia/Kolkata",
   // Google Sign-In is entirely optional — routes/googleAuth.ts checks these are both set before
   // doing anything, so a deployment that never configures Google just doesn't offer the button.
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",

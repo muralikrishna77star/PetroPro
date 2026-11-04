@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
-  downloadAuthed,
   type Bill,
   type Customer,
   type Item,
@@ -15,6 +14,7 @@ import {
   type Tenant,
 } from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
+import { BillPrintActions } from "@/components/BillPrintActions";
 import { Card } from "@/components/Card";
 import { Combobox } from "@/components/ui/Combobox";
 import { PaymentQrPanel } from "@/components/PaymentQrPanel";
@@ -46,6 +46,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export default function BillingPage() {
   const session = useRequireSession(["super_admin", "owner", "operator"]);
+  const [printOnSave, setPrintOnSave] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [pumps, setPumps] = useState<Pump[]>([]);
@@ -352,12 +353,10 @@ export default function BillingPage() {
         lines: billLines,
       });
       setInvoice(result);
+      setPrintOnSave(autoPrint);
       setInvoiceCustomer(paymentType === "credit" ? customerInfo : null);
       resetForm();
       refreshRecentBills();
-      if (autoPrint) {
-        downloadAuthed(api.invoicePdfUrl(result.bill.bill_no), session.token, `invoice-${result.bill.bill_no}.pdf`, "open");
-      }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -858,19 +857,7 @@ export default function BillingPage() {
             </h2>
             <p className="font-semibold">Grand total: ₹{invoice.bill.grand_total.toFixed(2)}</p>
             <p className="mt-1 italic">{invoice.amountInWords}</p>
-            <button
-              onClick={() =>
-                downloadAuthed(
-                  api.invoicePdfUrl(invoice.bill.bill_no),
-                  session.token,
-                  `invoice-${invoice.bill.bill_no}.pdf`,
-                  "open",
-                )
-              }
-              className="mt-3 rounded-lg border border-success px-3 py-1.5 text-sm text-success "
-            >
-              Print Bill
-            </button>
+            <BillPrintActions key={invoice.bill.bill_no} billNo={invoice.bill.bill_no} token={session.token} justFinalized autoPrint={printOnSave} />
             <SendInvoiceButton
               key={invoice.bill.bill_no}
               token={session.token}
@@ -922,20 +909,8 @@ export default function BillingPage() {
                   </li>
                 ))}
               </ul>
-              <div className="flex gap-2">
-                <button
-                  onClick={() =>
-                    downloadAuthed(
-                      api.invoicePdfUrl(lookupResult.bill.bill_no),
-                      session.token,
-                      `invoice-${lookupResult.bill.bill_no}.pdf`,
-                      "open",
-                    )
-                  }
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm "
-                >
-                  Print Bill
-                </button>
+              <BillPrintActions key={lookupResult.bill.bill_no} billNo={lookupResult.bill.bill_no} token={session.token} />
+              <div className="mt-2 flex gap-2">
                 {lookupResult.bill.status !== "cancelled" && lookupCustomer !== undefined && (
                   <SendInvoiceButton
                     key={lookupResult.bill.bill_no}

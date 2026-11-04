@@ -3,8 +3,8 @@
 Reverse-engineered from the legacy FoxPro 2.6 DBF tables in `legacy/Workarea/`. Field notation:
 `type len[,dec]` where C=Character, N=Numeric, D=Date, L=Logical, M=Memo.
 
-The legacy design splits transactions into **per-month, per-financial-year tables** (e.g. `JANBIL18`,
-`FEBBIL18` … where `18` = FY 2018-19). The modern schema consolidates these into single tables with
+The legacy design splits transactions into **monthly tables** (e.g. `JANBIL18`, `FEBBIL18` … where
+`18` = calendar year 2018; `BILSEK<YY>` and `MAGE<YY>` are the fiscal-year-numbered exceptions). The modern schema consolidates these into single tables with
 proper date columns and a `fin_year` dimension.
 
 ---
@@ -112,7 +112,7 @@ One row per item on a bill.
 | BILL_NO      | N10   | bill_no       | groups lines into a bill |
 | VEH_NO       | C13   | vehicle_no    |       |
 | BILL_DATE    | D     | bill_date     |       |
-| STATUS       | C1    | status        | e.g. active/cancelled |
+| STATUS       | C1    | payment_type  | bill type: C cash, R credit, K kerosene, each with its own BILL_NO counter |
 | ICODE        | C3    | item_code (FK)| |
 | QTY          | N9,3  | qty           | litres / units |
 | RATE         | N10,2 | rate          | tax-inclusive unit rate |

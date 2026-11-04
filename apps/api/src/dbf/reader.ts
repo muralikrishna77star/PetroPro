@@ -86,6 +86,50 @@ function parseValue(raw: string, field: DbfField): DbfValue {
   }
 }
 
+/** Reads an uploaded file from memory, refusing anything that isn't a complete table: unlike a file
+ *  already sitting in the legacy folder, an upload can be anything. Field names come back uppercase. */
+export function parseDbf(buf: Buffer): { table: DbfTable; rows: () => Generator<DbfRow> } {
+  if (buf.length < 65) throw new Error("the file is too short");
+  const recordCount = buf.readUInt32LE(4);
+  const headerSize = buf.readUInt16LE(8);
+  const recordSize = buf.readUInt16LE(10);
+
+  const fields: DbfField[] = [];
+  let offset = 32;
+  while (offset < headerSize && offset + 32 <= buf.length && buf[offset] !== 0x0d) {
+    fields.push({
+      name: buf.toString("latin1", offset, offset + 11).split("\0")[0].trim().toUpperCase(),
+      type: String.fromCharCode(buf[offset + 11]) as DbfFieldType,
+      length: buf[offset + 16],
+      decimals: buf[offset + 17],
+    });
+    offset += 32;
+  }
+  if (fields.length === 0 || buf[offset] !== 0x0d || 1 + fields.reduce((sum, f) => sum + f.length, 0) !== recordSize) {
+    throw new Error("its header is damaged");
+  }
+  if (buf.length < headerSize + recordCount * recordSize) {
+    throw new Error(`it should hold ${recordCount} rows but is cut short. Copy it again from the Petbill folder`);
+  }
+
+  return {
+    table: { fields, recordCount, headerSize, recordSize },
+    *rows() {
+      for (let i = 0; i < recordCount; i++) {
+        const start = headerSize + i * recordSize;
+        if (buf[start] === 0x2a) continue; // deleted
+        const row: DbfRow = {};
+        let fieldOffset = start + 1;
+        for (const field of fields) {
+          row[field.name] = parseValue(buf.toString("latin1", fieldOffset, fieldOffset + field.length), field);
+          fieldOffset += field.length;
+        }
+        yield row;
+      }
+    },
+  };
+}
+
 /** Reads every non-deleted record. Deleted rows (leading 0x2A marker) are skipped — they were
  *  never meant to be visible to the running FoxPro app either. */
 export function* readDbfRows(path: string): Generator<DbfRow> {

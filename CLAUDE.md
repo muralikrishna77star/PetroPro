@@ -56,8 +56,8 @@ raw ORM mapping); local users/roles with JWT auth; PDF/Excel report generation.
 
 **Legacy → modern schema mapping** — read [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) before
 touching any billing/inventory logic. Key structural difference: the legacy system stored
-transactions in **per-month, per-financial-year DBF tables** (`JANBIL18`, `FEBBIL18`, … where `18` =
-FY2018-19); the modern schema consolidates all of these into single tables with real date columns and
+transactions in **monthly DBF tables** (`JANBIL18`, `FEBBIL18`, … where `18` = calendar year 2018,
+as are `<MON>STK<YY>` and annual `PURCH<YY>`); the modern schema consolidates all of these into single tables with real date columns and
 a `fin_year` dimension. Prices/rates exist in both before-tax (`*BTX`) and tax-inclusive (`*TAX`)
 forms — fuel is priced tax-inclusive by convention.
 
