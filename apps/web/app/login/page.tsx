@@ -156,6 +156,7 @@ export default function LoginPage() {
             </a>
           </>
         )}
+        <a href="/customer/login" className="mt-5 block text-center text-sm text-primary hover:underline">Customer login — view your reports</a>
       </form>
     </div>
   );

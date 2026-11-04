@@ -22,7 +22,7 @@ export default function CustomerLoginPage() {
     try {
       const { token, customer } = await customerApi.login(email, password);
       saveCustomerSession({ token, customerCode: customer.code, name: customer.name });
-      router.push("/customer/orders");
+      router.push("/customer/reports");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed");
     } finally {
@@ -45,12 +45,14 @@ export default function CustomerLoginPage() {
           </span>
           <div>
             <h1 className="font-heading text-xl font-semibold text-fg">PetroPro</h1>
-            <p className="text-xs text-fg-muted">Order Entry</p>
+            <p className="text-xs text-fg-muted">Customer Portal</p>
           </div>
         </div>
 
-        <label className="mb-1 block text-sm font-medium text-fg-muted">Email</label>
+        <p className="mb-4 text-sm text-fg-muted">View your purchases, credit statement and payments online.</p>
+        <label htmlFor="customer-email" className="mb-1 block text-sm font-medium text-fg-muted">Email</label>
         <Input
+          id="customer-email"
           type="email"
           className="mb-4"
           value={email}
@@ -59,8 +61,9 @@ export default function CustomerLoginPage() {
           required
         />
 
-        <label className="mb-1 block text-sm font-medium text-fg-muted">Password</label>
+        <label htmlFor="customer-password" className="mb-1 block text-sm font-medium text-fg-muted">Password</label>
         <Input
+          id="customer-password"
           type="password"
           className="mb-6"
           value={password}
