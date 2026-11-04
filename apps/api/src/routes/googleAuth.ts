@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { customerGoogleCallback } from "../services/customerGoogle.js";
 import { config } from "../config.js";
 import { auditLogsRepo } from "../repositories/auditLogs.js";
 import { googleTicketsRepo } from "../repositories/googleTickets.js";
@@ -30,6 +31,12 @@ function googleConfigured(): boolean {
  * and a matching email alone never links: the first time also takes that user's PetroPro password.
  */
 export default async function googleAuthRoutes(fastify: FastifyInstance) {
+  fastify.get("/auth/google/customer", async (_request, reply) => {
+    if (!googleConfigured()) return reply.code(501).send({ error: "Google Sign-In is not configured on this server" });
+    const { authUrl, cookie } = startFlow("customer");
+    return reply.header("Set-Cookie", cookie).redirect(authUrl);
+  });
+
   fastify.get("/auth/google", async (_request, reply) => {
     if (!googleConfigured()) {
       return reply.code(501).send({ error: "Google Sign-In is not configured on this server" });
@@ -47,16 +54,18 @@ export default async function googleAuthRoutes(fastify: FastifyInstance) {
         return reply.code(501).send({ error: "Google Sign-In is not configured on this server" });
       }
       reply.header("Set-Cookie", clearedFlowCookie());
-      const fail = (reason: string) => reply.redirect(`${config.webAppUrl}/login?error=${reason}`);
+      const flow = readFlow(request.headers.cookie, request.query.state);
+      const loginPath = flow?.audience === "customer" ? "/customer/login" : "/login";
+      const fail = (reason: string) => reply.redirect(`${config.webAppUrl}${loginPath}?error=${reason}`);
 
-      const { code, state, error } = request.query;
-      const flow = readFlow(request.headers.cookie, state);
+      const { code, error } = request.query;
       if (!flow) return fail("google_failed");
       if (error) return fail(error === "access_denied" ? "google_cancelled" : "google_failed");
       if (!code) return fail("google_failed");
 
       try {
         const identity = await verifyIdToken(await exchangeCode(code, flow.verifier), flow.nonce);
+        if (flow.audience === "customer") return customerGoogleCallback(reply, identity);
         const result = resolveGoogleUser(identity);
         if ("denied" in result) {
           auditLogsRepo.record({

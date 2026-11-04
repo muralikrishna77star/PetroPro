@@ -402,3 +402,51 @@ test("password login is untouched for a user with a Google link", async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().user.user_id, "cash1");
 });
+
+async function customerTrip(sub: string, email: string, verified = true) {
+  const res = await app.inject({ method: "GET", url: "/auth/google/customer" });
+  const location = new URL(res.headers.location as string);
+  nextIdToken = await idToken({ sub, email, email_verified: verified, nonce: location.searchParams.get("nonce") });
+  const callback = await app.inject({ method: "GET", url: `/auth/google/callback?code=customer-code&state=${location.searchParams.get("state")}`, headers: { cookie: String(res.headers["set-cookie"]).split(";")[0] } });
+  return new URL(callback.headers.location as string);
+}
+const customerComplete = (ticket: string | null, kind: string | null, password?: string) => app.inject({ method: "POST", url: "/customer/auth/google/complete", payload: { ticket, kind, password } });
+
+test("customer Google linking requires own password, preserves identity and never grants staff access", async () => {
+  db.prepare("INSERT INTO customers (code, name, email, password_hash) VALUES ('CG1', 'Customer One', 'customer@gmail.com', ?)").run(hash);
+  const first = await customerTrip("customer-sub", "CUSTOMER@gmail.com");
+  assert.equal(first.pathname, "/customer/login/callback");
+  const params = fragmentOf(first);
+  assert.equal(params.get("kind"), "link");
+  assert.equal((await exchange(params.get("ticket"))).statusCode, 400);
+  assert.equal((await customerComplete(params.get("ticket"), "link", "wrong")).statusCode, 401);
+  const linked = await customerComplete(params.get("ticket"), "link", PASSWORD);
+  assert.equal(linked.statusCode, 200, linked.body);
+  assert.equal(linked.json().customer.code, "CG1");
+  const claims = app.jwt.decode(linked.json().token) as { role: string; sub: string };
+  assert.equal(claims.role, "customer");
+  assert.equal(claims.sub, "CG1");
+  const staff = await app.inject({ method: "GET", url: "/users", headers: { authorization: `Bearer ${linked.json().token}` } });
+  assert.equal(staff.statusCode, 403);
+  assert.equal((await customerComplete(params.get("ticket"), "link", PASSWORD)).statusCode, 400);
+  const second = fragmentOf(await customerTrip("customer-sub", "customer@gmail.com"));
+  assert.equal(second.get("kind"), "login");
+  assert.equal((await customerComplete(second.get("ticket"), "login")).statusCode, 200);
+  assert.equal((await customerComplete(second.get("ticket"), "login")).statusCode, 400);
+});
+
+test("customer Google sign-in rejects unknown, duplicate and unverified addresses", async () => {
+  assert.equal(errorOf(await customerTrip("unknown-sub", "unknown@gmail.com")), "google_not_registered");
+  db.prepare("INSERT INTO customers (code, name, email, password_hash) VALUES ('CD1', 'Duplicate 1', 'dupe@gmail.com', ?), ('CD2', 'Duplicate 2', ' DUPE@gmail.com ', ?)").run(hash, hash);
+  assert.equal(errorOf(await customerTrip("duplicate-sub", "dupe@gmail.com")), "google_not_registered");
+  const unverified = await customerTrip("unverified", "customer@gmail.com", false);
+  assert.equal(unverified.pathname, "/customer/login");
+  assert.equal(errorOf(unverified), "email_unverified");
+});
+
+test("changing registered email before first-link completion prevents linking", async () => {
+  db.prepare("INSERT INTO customers (code, name, email, password_hash) VALUES ('CG2', 'Changed email', 'old@gmail.com', ?)").run(hash);
+  const params = fragmentOf(await customerTrip("changed-sub", "old@gmail.com"));
+  db.prepare("UPDATE customers SET email = 'new@gmail.com' WHERE code = 'CG2'").run();
+  assert.equal((await customerComplete(params.get("ticket"), "link", PASSWORD)).statusCode, 401);
+});

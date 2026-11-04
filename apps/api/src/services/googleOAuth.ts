@@ -15,6 +15,7 @@ const FLOW_TTL_MS = 5 * 60 * 1000;
 
 /** What ties one sign-in attempt to the browser that started it. */
 interface Flow {
+  audience?: "staff" | "customer";
   state: string;
   nonce: string;
   verifier: string;
@@ -46,8 +47,8 @@ export function clearedFlowCookie(): string {
 }
 
 /** Starts a sign-in: the authorization URL to redirect to, and the cookie binding it to this browser. */
-export function startFlow(): { authUrl: string; cookie: string } {
-  const flow: Flow = { state: randomToken(), nonce: randomToken(), verifier: randomToken(), expires: Date.now() + FLOW_TTL_MS };
+export function startFlow(audience: "staff" | "customer" = "staff"): { authUrl: string; cookie: string } {
+  const flow: Flow = { audience, state: randomToken(), nonce: randomToken(), verifier: randomToken(), expires: Date.now() + FLOW_TTL_MS };
   const params = new URLSearchParams({
     client_id: config.googleClientId,
     redirect_uri: config.googleRedirectUri,

@@ -15,7 +15,7 @@ export interface Customer {
   email: string | null;
 }
 
-export type CustomerWithAuth = Customer & { password_hash: string | null };
+export type CustomerWithAuth = Customer & { password_hash: string | null; google_sub: string | null };
 
 export type CustomerInput = Omit<Customer, "due_amount"> & { due_amount?: number };
 
