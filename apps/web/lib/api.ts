@@ -509,6 +509,9 @@ export const api = {
       { token },
     ),
 
+  getCustomerMileage: (token: string, code: string, query: CustomerStatementQuery) =>
+    request<{ from: string; to: string; vehicle_no: string | null; rows: (MileageEntry & { bill_date: string; item_name: string })[] }>(`/reports/customers/${encodeURIComponent(code)}/mileage?${statementParams(query)}`, { token }),
+
   getMileageReport: (token: string, vehicleNo: string) =>
     request<MileageEntry[]>(`/reports/mileage?vehicle_no=${vehicleNo}`, { token }),
 
@@ -674,6 +677,12 @@ export interface CustomerReport {
 }
 
 export const customerApi = {
+  getStatement: (token: string, query: CustomerStatementQuery) =>
+    request<CustomerStatement>(`/customer/reports/statement?${statementParams(query)}`, { token }),
+  statementPdfUrl: (query: CustomerStatementQuery) => `${API_URL}/customer/reports/statement.pdf?${statementParams(query)}`,
+  getMileage: (token: string, query: CustomerStatementQuery) =>
+    request<{ from: string; to: string; vehicle_no: string | null; rows: (MileageEntry & { bill_date: string; item_name: string })[] }>(`/customer/reports/mileage?${statementParams(query)}`, { token }),
+
   googleComplete: (ticket: string, kind: string, password?: string) =>
     request<CustomerLoginResponse>("/customer/auth/google/complete", { method: "POST", body: { ticket, kind, password } }),
 

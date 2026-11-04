@@ -1,5 +1,7 @@
 "use client";
 
+import { CustomerVehicleReports } from "@/components/CustomerVehicleReports";
+
 import { Fragment, useEffect, useState } from "react";
 import {
   api,
@@ -87,6 +89,8 @@ export default function ReportsPage() {
   const [customerCode, setCustomerCode] = useState("");
   const [groupByVehicle, setGroupByVehicle] = useState(false);
   const [withOpening, setWithOpening] = useState(false);
+  const [mileageStatement, setMileageStatement] = useState(false);
+  const [customerMileage, setCustomerMileage] = useState<{ code: string; from: string; to: string; vehicle: string; run: number } | null>(null);
   const [statement, setStatement] = useState<CustomerStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -174,6 +178,12 @@ export default function ReportsPage() {
             setError("Choose a customer");
             return;
           }
+          if (mileageStatement) {
+            if (!from || !to || from > to) { setError("Choose valid From and To dates"); return; }
+            setCustomerMileage({ code: customerCode, from, to, vehicle: vehicleNo.trim(), run: Date.now() });
+            break;
+          }
+          setCustomerMileage(null);
           const result = await api.getCustomerStatement(session.token, customerCode, statementQuery);
           // Legacy CWS.PRG's own message when the query comes back empty.
           if (result.lines.length === 0) setError("No bills found on specified range");
@@ -305,11 +315,15 @@ export default function ReportsPage() {
                 />
               </div>
               <label className="flex items-center gap-2 py-1.5 text-sm">
-                <input type="checkbox" checked={groupByVehicle} onChange={(e) => setGroupByVehicle(e.target.checked)} />
+                <input type="checkbox" checked={mileageStatement} onChange={e => { setMileageStatement(e.target.checked); setStatement(null); setCustomerMileage(null); }} />
+                Mileage statement
+              </label>
+              <label className="flex items-center gap-2 py-1.5 text-sm">
+                <input disabled={mileageStatement} type="checkbox" checked={groupByVehicle} onChange={(e) => setGroupByVehicle(e.target.checked)} />
                 Group by vehicle
               </label>
               <label className="flex items-center gap-2 py-1.5 text-sm">
-                <input type="checkbox" checked={withOpening} onChange={(e) => setWithOpening(e.target.checked)} />
+                <input disabled={mileageStatement} type="checkbox" checked={withOpening} onChange={(e) => setWithOpening(e.target.checked)} />
                 Opening &amp; closing amounts
               </label>
             </>
@@ -338,7 +352,7 @@ export default function ReportsPage() {
             </button>
           )}
 
-          {isStatement && statement && (
+          {isStatement && !mileageStatement && statement && (
             <>
               <button
                 onClick={() =>
@@ -373,7 +387,10 @@ export default function ReportsPage() {
 
         <Card color="violet">
           {isStatement ? (
-            <StatementPreview statement={statement} />
+            mileageStatement ? (customerMileage ? <>
+              <p className="mb-3 text-sm font-medium">{customers.find(c => c.code === customerMileage.code)?.name ?? customerMileage.code} ({customerMileage.code})</p>
+              <CustomerVehicleReports key={customerMileage.run} token={session.token} customerCode={customerMileage.code} initialVehicle={customerMileage.vehicle} from={customerMileage.from} to={customerMileage.to} mode="mileage" />
+            </> : <p className="text-sm text-fg-muted">Select a customer and dates, then run the mileage statement.</p>) : <StatementPreview statement={statement} />
           ) : (
             <ReportTable reportType={reportType} rows={rows} items={items} />
           )}
