@@ -662,7 +662,21 @@ export const api = {
 
 /** The customer portal's own client — kept separate from `api` above since it authenticates
  *  with a customer session token (lib/customerAuth.ts), never a staff one. */
+export interface CustomerReport {
+  customer: { code: string; name: string };
+  from: string;
+  to: string;
+  credit_limit: number;
+  opening_balance: number;
+  closing_balance: number;
+  ledger: LedgerEntry[];
+  purchases: { bill_no: number; bill_date: string; vehicle_no: string | null; payment_type: string; grand_total: number }[];
+}
+
 export const customerApi = {
+  getReport: (token: string, from: string, to: string) =>
+    request<CustomerReport>(`/customer/reports?${new URLSearchParams({ from, to })}`, { token }),
+
   login: (email: string, password: string) =>
     request<CustomerLoginResponse>("/customer/auth/login", { method: "POST", body: { email, password } }),
 

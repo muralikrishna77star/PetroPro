@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, customerApi, ApiError, type Item, type Order } from "@/lib/api";
@@ -107,6 +108,7 @@ export default function CustomerOrdersPage() {
           <h1 className="text-xl font-semibold text-primary">
             Order Entry <span className="text-sm font-normal text-fg-muted">— {session.name}</span>
           </h1>
+          <Link href="/customer/reports" className="text-sm font-medium text-primary hover:underline">My reports</Link>
           <button
             onClick={handleLogout}
             className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium"
