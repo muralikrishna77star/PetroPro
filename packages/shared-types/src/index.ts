@@ -108,6 +108,7 @@ export interface SettleResponse {
 }
 
 export interface Customer {
+  report_style?: "legacy" | "modern";
   code: string;
   name: string;
   address: string | null;

@@ -92,6 +92,7 @@ function importCustomers(): ImportSummary {
       continue;
     }
     customersRepo.create({
+      report_style: "legacy",
       code,
       joined_on: (row.DOJ as string | null) ?? null,
       name: str(row, "NAME") || code,

@@ -27,6 +27,7 @@ export default async function customerReportRoutes(app: FastifyInstance) {
       const ledger = getCustomerLedger(customer.code, from, to);
       return {
         customer: { code: customer.code, name: customer.name }, from, to,
+        report_style: customer.report_style,
         credit_limit: customer.credit_limit,
         opening_balance: ledger[0]?.balance ?? 0,
         closing_balance: ledger.at(-1)?.balance ?? 0,
