@@ -1,3 +1,4 @@
+import { authedFetch } from "@/lib/api";
 import type {
   CommunicationProviderContext,
   CommunicationResult,
@@ -19,7 +20,7 @@ export class SharePdfProvider implements ICommunicationProvider {
 
   async send(request: CommunicationSendRequest, ctx: CommunicationProviderContext): Promise<CommunicationResult> {
     try {
-      const res = await fetch(request.pdfUrl, { headers: { Authorization: `Bearer ${ctx.token}` } });
+      const res = await authedFetch(request.pdfUrl, ctx.token);
       if (!res.ok) throw new Error("PDF fetch failed");
       const blob = await res.blob();
       const file = new File([blob], request.pdfFilename, { type: "application/pdf" });

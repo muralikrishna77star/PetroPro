@@ -568,6 +568,30 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [ ] User: review whether Vercel's Hobby plan suits commercial use.
 - [ ] Fix `db.location` crash at the end of `apps/api/src/db/seed.ts` under Node 22.13.
 
+## Session 24 — Google Sign-In: account linking and hardening
+
+- [x] PKCE, nonce, browser-bound state, server-side ID token validation, `email_verified` required.
+- [x] Link by `users.google_sub`. First sign-in through an admin-entered verified email. Never creates a
+      user. Changing the email drops the link, and admins can unlink on the Users screen.
+- [x] "Continue with Google" with loading state and a message for each refusal. Audit trail of it all.
+- [x] Verified: typecheck, lint and build clean; API tests 115/115; 33/33 browser checks against a fake
+      Google; 16 security rules each removed and checked.
+- [x] The user decided the linking question directly, in Session 25.
+- [x] Superseded by the Session 25 list below it.
+
+## Session 25 — password-confirmed Google linking and revocable staff sessions
+
+- [x] First Google sign-in needs the PetroPro password. Later ones don't. Recovery through the admin.
+- [x] 15-minute access tokens, rotating refresh sessions, checked in the database on every request.
+- [x] Deactivation and password reset end all of a user's sessions at once. All of it audited.
+- [x] Offline queue keeps sales through 401s and server errors.
+- [x] Verified: typecheck, lint and build clean; API tests 141/141 on three runs; 51/51 browser checks on a production build; 26 security rules each removed and caught.
+- [ ] User: run the production email review. See `docs/DEPLOY_AUTH_SESSIONS.md`.
+- [ ] User: choose a low-traffic window. Then deploy by that runbook.
+- [ ] After deploying: real Google sign-in, and the cookie through Vercel. Neither can be tested before.
+- [ ] Decide: customer portal tokens never expire; password login has no attempt limit; temporary
+      passwords have no forced change.
+
 ## Real remaining gaps (not phase-blocking, carried forward)
 
 - **Full** historical transactional migration (every fiscal year, not just the one 3-month demo
@@ -579,9 +603,8 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - Real-world verification of the Docker packaging and CI workflow (Dockerfiles updated Session 10
   for the shared-types build step, but neither has actually been run — no Docker in this dev
   environment; the repo is now on git, per Session 14, but a real Actions run still hasn't happened).
-- **Google SSO and the desktop kiosk launcher (Session 14) are unverified beyond typecheck/lint/build**
-  — no real Google OAuth credentials and no Chromium browser have been available in this environment
-  to actually exercise either end-to-end.
+- **The desktop kiosk launcher (Session 14) is unverified beyond typecheck/lint/build.** Google sign-in
+  has now been tested in a real browser against a fake Google (Session 24), but not yet against real Google.
 - ~~No `.env.example` anywhere in the repo~~ — closed in Session 19 (`apps/api/.env.example`,
   `apps/web/.env.example`). The desktop launcher script's own three env vars are still
   undocumented (see Session 19 above) — a much smaller residual gap than the original.

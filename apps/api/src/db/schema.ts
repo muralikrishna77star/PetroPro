@@ -316,6 +316,38 @@ export function applySchema(db: DatabaseSync): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Staff login sessions (services/sessions.ts). Holds only hashes of refresh tokens; times are
+    -- epoch milliseconds.
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(user_id),
+      refresh_hash TEXT NOT NULL,
+      previous_hash TEXT,
+      rotated_at INTEGER NOT NULL,
+      login_method TEXT NOT NULL,
+      user_agent TEXT,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      revoke_reason TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+
+    -- Single-use hand-over from the Google callback to the web app (repositories/googleTickets.ts).
+    CREATE TABLE IF NOT EXISTS google_tickets (
+      hash TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('login', 'link')),
+      user_id TEXT NOT NULL REFERENCES users(user_id),
+      google_sub TEXT NOT NULL,
+      email TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      consumed_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_google_tickets_user ON google_tickets(user_id);
+
     -- Technology & Subscription Dashboard (routes/techDashboard.ts, super_admin only). The
     -- service list itself is code (services/techCatalog.ts); these hold only what a super admin
     -- typed in, and what a provider API last said. Kept apart so "verified" never gets mixed up
@@ -363,6 +395,9 @@ export function applySchema(db: DatabaseSync): void {
   // Optional Google SSO identity for a staff user — see routes/googleAuth.ts. Nullable so
   // user-id/password login keeps working for anyone with no email on file.
   ensureColumn(db, "users", "email", "TEXT");
+  // The Google account linked to this user: Google's stable `sub`, which unlike an email can't
+  // pass to someone else. Set once the user confirms their password, see routes/googleAuth.ts.
+  ensureColumn(db, "users", "google_sub", "TEXT");
   // Idempotency key for offline-queued bill submissions (see lib/offlineQueue.ts on the web
   // side) — the same "retry-safe because the client_ref already exists" pattern
   // pending_transactions.client_ref already uses.
@@ -377,6 +412,9 @@ export function applySchema(db: DatabaseSync): void {
   );
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL",
   );
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_bills_client_ref ON bills(client_ref) WHERE client_ref IS NOT NULL",

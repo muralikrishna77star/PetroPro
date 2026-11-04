@@ -15,6 +15,11 @@ export const config = {
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   googleRedirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? `${apiPublicUrl}/auth/google/callback`,
+  // Staff sessions (services/sessions.ts): a short-lived access token, renewed by a refresh cookie
+  // until the session has been idle this long or reached its absolute limit.
+  accessTokenTtlSeconds: Number(process.env.ACCESS_TOKEN_TTL_SECONDS ?? 15 * 60),
+  sessionIdleDays: Number(process.env.SESSION_IDLE_DAYS ?? 7),
+  sessionAbsoluteDays: Number(process.env.SESSION_ABSOLUTE_DAYS ?? 30),
   // Technology dashboard provider checks (services/techDashboard.ts) — all optional, read-only,
   // and never sent to the browser. Blank means that check shows "Not configured".
   vercelApiToken: process.env.VERCEL_API_TOKEN ?? "",

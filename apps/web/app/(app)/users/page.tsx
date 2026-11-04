@@ -85,6 +85,20 @@ export default function UsersPage() {
     }
   }
 
+  async function unlinkGoogle(user: AppUser) {
+    if (!session) return;
+    if (!window.confirm(`Unlink the Google account from ${user.user_id}? Their next Google sign-in will need to link again.`)) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await api.unlinkGoogle(session.token, user.user_id);
+      setNotice(`Google account unlinked from ${user.user_id}.`);
+      refresh(session.token);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not unlink the Google account");
+    }
+  }
+
   async function resetPassword(user: AppUser) {
     if (!session) return;
     setError(null);
@@ -121,7 +135,7 @@ export default function UsersPage() {
           />
           <input
             type="email"
-            placeholder="Email (optional — enables Google sign-in)"
+            placeholder="Email (optional, allows Google sign-in)"
             className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -209,7 +223,10 @@ export default function UsersPage() {
                   ) : (
                     <>
                       <td className="py-2 pr-4">{u.name}</td>
-                      <td className="py-2 pr-4 text-fg-muted">{u.email ?? "—"}</td>
+                      <td className="py-2 pr-4 text-fg-muted">
+                        {u.email ?? "—"}
+                        {u.google_linked ? <span className="ml-2 text-xs text-success">Google linked</span> : null}
+                      </td>
                       <td className="py-2 pr-4">{u.role}</td>
                       <td className="py-2 pr-4">
                         <span className={u.active ? "text-success" : "text-error"}>
@@ -225,6 +242,11 @@ export default function UsersPage() {
                           <button onClick={() => resetPassword(u)} className="text-fg-muted underline">
                             Reset password
                           </button>
+                          {u.google_linked ? (
+                            <button onClick={() => unlinkGoogle(u)} className="text-fg-muted underline">
+                              Unlink Google
+                            </button>
+                          ) : null}
                           {u.user_id !== session.userId && (
                             <button
                               onClick={() => toggleActive(u)}

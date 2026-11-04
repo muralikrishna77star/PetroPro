@@ -7,6 +7,9 @@ WORKDIR /repo
 # http://localhost:4000 from the browser's perspective.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Where this container reaches the API for session calls (next.config.ts). Also fixed at build time.
+ARG API_INTERNAL_URL=http://localhost:4000
+ENV API_INTERNAL_URL=${API_INTERNAL_URL}
 
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json

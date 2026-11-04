@@ -1,3 +1,4 @@
+import { clearSession, getSession, saveSession } from "./auth";
 import { API_URL } from "./config";
 import type {
   AppUser,
@@ -129,25 +130,100 @@ export class ApiError extends Error {
   }
 }
 
+/** The API's session routes, through this site's own origin (next.config.ts). */
+const SESSION_API = "/session-api";
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+/** Sends the session's refresh cookie for a new access token. Null means the session has ended;
+ *  anything transient (offline, the API restarting) rejects instead, so nobody gets signed out by it. */
+async function requestNewAccessToken(staleToken: string): Promise<string | null> {
+  const current = getSession();
+  if (!current) return null;
+  if (current.token !== staleToken) return current.token; // another tab already renewed it
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`${SESSION_API}/refresh`, { method: "POST" });
+    if (res.ok) {
+      const { token, user } = (await res.json()) as LoginResponse;
+      saveSession({ token, userId: user.user_id, name: user.name, role: user.role });
+      return token;
+    }
+    if (res.status === 401) return null;
+    if (res.status !== 409) throw new ApiError(res.statusText || "Could not renew the session", res.status);
+    await new Promise((resolve) => setTimeout(resolve, 500)); // another tab is mid-renewal
+  }
+  throw new ApiError("Could not renew the session", 409);
+}
+
+/** One renewal at a time, across all of this browser's tabs where it supports locks. */
+function renewAccessToken(staleToken: string): Promise<string | null> {
+  const run = async () =>
+    navigator.locks
+      ? ((await navigator.locks.request("petropro.refresh", () => requestNewAccessToken(staleToken))) as string | null)
+      : requestNewAccessToken(staleToken);
+  const renewal: Promise<string | null> = refreshInFlight ?? run().finally(() => {
+    refreshInFlight = null;
+  });
+  refreshInFlight = renewal;
+  return renewal;
+}
+
+function sessionEnded(): void {
+  clearSession();
+  if (window.location.pathname !== "/login") window.location.assign("/login?error=session_expired");
+}
+
+/**
+ * fetch with a staff access token. Always sends the newest token, not the one a page captured when
+ * it opened, and on a 401 renews it once and retries, so the short token lifetime stays invisible.
+ * Customer and QR-link tokens are other audiences with no session behind them: `/customer/` calls pass through.
+ */
+export async function authedFetch(url: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const isStaffCall = !url.startsWith(`${API_URL}/customer/`);
+  const send = (bearer: string) =>
+    fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${bearer}` } });
+
+  const bearer = isStaffCall ? (getSession()?.token ?? token) : token;
+  const res = await send(bearer);
+  if (res.status !== 401 || !isStaffCall) return res;
+
+  const renewed = await renewAccessToken(bearer);
+  if (renewed) return send(renewed);
+  sessionEnded();
+  return res;
+}
+
 async function request<T>(
   path: string,
   options: { method?: string; token?: string; body?: unknown } = {},
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const init: RequestInit = {
     method: options.method ?? "GET",
-    headers: {
-      // Only with a body: Fastify answers 400 to a JSON content type on an empty DELETE.
-      ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
+    // Only with a body: Fastify answers 400 to a JSON content type on an empty DELETE.
+    headers: options.body !== undefined ? { "Content-Type": "application/json" } : {},
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  };
+  const url = `${API_URL}${path}`;
+  const res = options.token ? await authedFetch(url, options.token, init) : await fetch(url, init);
 
   const data = await res.json().catch(() => undefined);
   if (!res.ok) {
     throw new ApiError((data as { error?: string })?.error ?? res.statusText, res.status);
   }
   return data as T;
+}
+
+/** A call that starts a session: same-origin, so the browser accepts the refresh cookie it sets. */
+async function sessionRequest(path: string, body: unknown): Promise<LoginResponse> {
+  const res = await fetch(`${SESSION_API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => undefined);
+  if (!res.ok) throw new ApiError((data as { error?: string })?.error ?? res.statusText, res.status);
+  return data as LoginResponse;
 }
 
 /** The API expects the JWT in an Authorization header, so plain <a href> downloads won't
@@ -158,7 +234,7 @@ export async function downloadAuthed(
   filename: string,
   mode: "open" | "save" = "save",
 ): Promise<void> {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await authedFetch(url, token);
   if (!res.ok) throw new ApiError("Download failed", res.status);
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);
@@ -182,8 +258,16 @@ function statementParams(query: CustomerStatementQuery): URLSearchParams {
 }
 
 export const api = {
-  login: (user_id: string, password: string) =>
-    request<LoginResponse>("/auth/login", { method: "POST", body: { user_id, password } }),
+  login: (user_id: string, password: string) => sessionRequest("/login", { user_id, password }),
+
+  /** Finishes a Google sign-in for a user whose Google account is already linked. */
+  googleExchange: (ticket: string) => sessionRequest("/google/exchange", { ticket }),
+
+  /** First sign-in with a Google account: links it once the PetroPro password is confirmed. */
+  googleLink: (ticket: string, password: string) => sessionRequest("/google/link", { ticket, password }),
+
+  /** Ends this device's session on the server, so its cookie stops working even if copied. */
+  logout: () => fetch(`${SESSION_API}/logout`, { method: "POST" }),
 
   listItems: (token: string) => request<Item[]>("/items", { token }),
 
@@ -207,6 +291,9 @@ export const api = {
     request<Pump>(`/pumps/${code}`, { method: "PUT", token, body: { name } }),
 
   listUsers: (token: string) => request<AppUser[]>("/users", { token }),
+
+  unlinkGoogle: (token: string, userId: string) =>
+    request<{ ok: true }>(`/users/${userId}/google-link`, { method: "DELETE", token }),
 
   createUser: (token: string, body: { user_id: string; name: string; role: Role; email?: string | null }) =>
     request<AppUser & { temporaryPassword?: string }>("/users", { method: "POST", token, body }),

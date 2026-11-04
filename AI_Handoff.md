@@ -1679,3 +1679,104 @@ was already in the working tree; this session reviewed it, fixed it and finished
 **Next task:** the user records real account details on `/technology`, and sets `VERCEL_API_TOKEN`,
 `VERCEL_TEAM_ID` and `GITHUB_TOKEN` as Fly.io secrets if they want plan verification. Deploy API first,
 then web.
+
+### 2026-11-04 — Session 24 (Google Sign-In: account linking and hardening)
+
+**Context:** the user pasted a brief for "Sign in with Google" linked to existing users. **The paste was
+cut off mid-sentence in section 2** ("Never trust an email address or User"), so anything after that
+hasn't been seen. Google sign-in already existed (Session 14) but didn't meet the brief, so this hardens
+it rather than adding it. The old version **is live in production**: the button shows, and its redirect
+has no PKCE or nonce.
+
+**What changed:**
+- `services/googleOAuth.ts` (new): the flow's protocol and security rules. `routes/googleAuth.ts` is now
+  thin. Password login, roles and session JWTs are untouched.
+- PKCE (S256), `nonce`, and a signed HttpOnly SameSite=Lax cookie binding `state` to the browser. The old
+  `state` was signed but not tied to a browser, which allowed login CSRF.
+- The ID token is now validated with `jose`: signature against Google's published keys (found through
+  its discovery document), issuer, audience, expiry and nonce, plus `email_verified === true`. Before,
+  the code read Google's userinfo endpoint and never checked verification.
+- New `users.google_sub` (unique). First sign-in links through a verified email an admin has put on the
+  user, and `sub` decides from then on. Unmatched accounts are refused. No user is ever created.
+- Changing a user's email drops the link. `DELETE /users/:id/google-link` (super_admin) unlinks, and the
+  Users screen shows the link and an Unlink button. The Google id never reaches the browser.
+- Audit actions: `google_account_linked`, `google_login`, `google_login_denied`, `unlink_google`.
+- The callback route logs at `warn`, so the one-time code stays out of request logs.
+- Login screen: "Continue with Google", a loading state, and a specific message for each refusal.
+
+**Decisions:**
+- `jose` 6.2.12 rather than hand-written JWT checks. It has no dependencies. Chosen over 6.2.15, which was
+  days old at the time.
+- First-time linking relies on admin-entered email plus Google's verification. There's no password
+  confirmation step or self-service linking yet. The cut-off part of the brief may ask for one.
+- The session token still travels in the URL fragment, as before. `router.replace` removes it from history.
+
+**Verified:**
+- `typecheck`, `lint`, `build`: clean. API tests 115/115, 14 of them new in `routes/googleAuth.test.ts`.
+- Mutation check: removed 16 security rules one at a time. 15 were caught. The 16th (a redundant
+  already-linked check) was harmless because `linkGoogle` also refuses, so the check was deleted.
+- Real browser (headless Chrome, a throwaway database, a fake Google signing real RS256 tokens and
+  enforcing PKCE): 33/33, including refusals, a planted callback link, password login, the Users screen,
+  logs holding no code or secret, and 320, 390 and 820px widths.
+- **Not verified:** a round trip with real Google, which needs a person's Google account. The harness also
+  doesn't exercise the cross-site return from accounts.google.com, where the cookie relies on SameSite=Lax.
+  Google's docs advertise S256 PKCE only through the discovery document.
+
+**State:** superseded by Session 25, which changed the linking to require the password.
+
+### 2026-11-04 — Session 25 (password-confirmed Google linking and revocable staff sessions)
+
+**Context:** the user decided first-time Google linking must confirm the PetroPro password, asked for the
+non-expiring staff tokens to be replaced, and asked for an email review, tests and a commit, with no
+deploy until they've seen a readiness report (`docs/DEPLOY_AUTH_SESSIONS.md`).
+
+**Linking:** the Google callback no longer links anything. An unlinked verified email gets a single-use
+`link` ticket, and `POST /auth/google/link` requires that user's password. Five wrong passwords in 15
+minutes lock the step, across tickets. A linked user gets a `login` ticket that `POST /auth/google/exchange`
+turns into a session, with no password. Recovery is admin-controlled and audited: Reset password, and
+Unlink Google on the Users screen. This replaces Session 24's link-on-first-sign-in.
+
+**Sessions (`services/sessions.ts`, `auth_sessions`):**
+- Access JWTs last 15 minutes and carry a `sid`. Refresh tokens rotate, are stored only as hashes, and
+  last until 7 days idle or 30 days old. All configurable: `ACCESS_TOKEN_TTL_SECONDS`, `SESSION_IDLE_DAYS`,
+  `SESSION_ABSOLUTE_DAYS`.
+- `authenticate` and `requireRole` check the session and user in the database on every staff request, so
+  revocation is immediate and a role change applies from the next request.
+- Deactivation and password reset revoke all of a user's sessions. Sign-out revokes that one.
+- The refresh token's previous value works for 2 minutes, for tab races and lost replies. An older one
+  later ends the session as suspected theft.
+
+**Why the proxy:** web and API are on different domains, and browsers block third-party cookies. So
+`/session-api/*` on the website rewrites to `/auth/*` on the API (`next.config.ts`), making the HttpOnly
+SameSite=Strict refresh cookie first-party. Vercel's own behaviour can only be confirmed after a deploy.
+Docker needs `API_INTERNAL_URL`, set in `docker-compose.yml` (not run: no Docker here).
+
+**Client:** `authedFetch` in `lib/api.ts` sends the newest token and renews once on a 401, with one renewal
+at a time across tabs. Pages keep passing `session.token`, which it treats only as a fallback. Customer and
+QR tokens aren't affected. Only a definite 401 from renewal signs anyone out, never being offline.
+
+**Bug fixed: the offline queue deleted a sale on any API error**, including 401 and 5xx. With 15-minute
+tokens that would have become routine. It now keeps entries on 401, 408, 429 and 5xx. Old tabs still have
+the old behaviour, hence the runbook's "check nothing is queued" step.
+
+**Email review not done:** the read of production data was blocked by the permission system, and wasn't
+worked around. `npm run audit:user-emails -- --fly-app petropro-api` (in `apps/api`) does it, read-only,
+for the user to run. The `--fly-app` path itself hasn't been run; the local path has.
+
+**Verified:**
+- `typecheck`, `lint`, `build`: clean. API tests: see `Todo.md`.
+- Mutation check: 26 new security rules removed one at a time, all caught, after adding one missing test.
+  If a run looks odd, `assert.ok` failures here can cancel a whole file (`# fail 0` but the file is `not ok`).
+- 51/51 browser checks on a production build of the web app, with a real API and a fake Google, including
+  the cookie through the proxy locally, two tabs renewing, two devices, deactivation, expiry, the offline
+  queue on the attendant screen, 13 staff screens and the customer portal.
+- **Not verified:** real Google, the cookie through Vercel, and the Billing screen's bill queue in a browser
+  (it shares `isFinalRejection` with the attendant queue that was tested).
+
+**Known gaps, left alone:**
+- Customer portal tokens still never expire.
+- Password login has no attempt limit (only the Google link step has one).
+- A temporary password has no forced change, and staff have no self-service password change.
+- Restoring a backup restores the sessions as they were then.
+
+**State:** committed on `feature/google-linking-sessions`. Not pushed, not merged, not deployed.

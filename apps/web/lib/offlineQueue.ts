@@ -32,6 +32,12 @@ export interface QueuedBill {
   queuedAt: string;
 }
 
+/** Whether the server really rejected this entry, so retrying can't help. A signed-out session
+ *  (401) or the server being down or restarting (5xx) says nothing about the entry: it stays queued. */
+function isFinalRejection(err: unknown): boolean {
+  return err instanceof ApiError && err.status !== 401 && err.status !== 408 && err.status !== 429 && err.status < 500;
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -104,7 +110,7 @@ export async function flushQueue(token: string): Promise<{ synced: number; remai
       await removeQueuedEntry(entry.clientRef);
       synced++;
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (isFinalRejection(err)) {
         await removeQueuedEntry(entry.clientRef);
       }
       // else: still unreachable — leave queued for the next flush attempt
@@ -166,7 +172,7 @@ export async function flushBillQueue(token: string): Promise<{ synced: number; r
       await removeQueuedBill(bill.clientRef);
       synced++;
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (isFinalRejection(err)) {
         await removeQueuedBill(bill.clientRef);
       }
       // else: still unreachable — leave queued for the next flush attempt

@@ -12,16 +12,18 @@
     "import:demo-transactions": "tsx src/dbf/importTransactions.ts",
     "import:fy2025": "tsx src/dbf/importFY2025.ts",
     "migrate:roles": "tsx src/db/migrateRoles.ts",
+    "audit:user-emails": "tsx src/db/auditUserEmails.ts",
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@petropro/shared-types": "*",
     "@fastify/cors": "^10.0.1",
     "@fastify/jwt": "^9.0.1",
+    "@petropro/shared-types": "*",
     "bcryptjs": "^2.4.3",
     "exceljs": "^4.4.0",
     "fastify": "^5.1.0",
     "fastify-plugin": "^5.0.1",
+    "jose": "^6.2.12",
     "pdfkit": "^0.19.1"
   },
   "devDependencies": {

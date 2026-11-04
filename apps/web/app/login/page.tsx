@@ -2,15 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Fuel } from "lucide-react";
+import { Fuel, Loader2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { API_URL, GOOGLE_SSO_ENABLED } from "@/lib/config";
 import { saveSession, homeRouteForRole } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { cn } from "@/lib/cn";
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
-  not_registered: "No PetroPro account is linked to that Google account — ask an admin to add your email under Users.",
+  not_registered:
+    "That Google account's email doesn't match a PetroPro user. Ask your administrator to add it to your user, then try again.",
+  account_inactive: "This PetroPro account has been deactivated. Please contact your administrator.",
+  account_conflict:
+    "Your PetroPro user is already linked to a different Google account. Sign in with that one, or ask your administrator to unlink it.",
+  email_unverified: "Google hasn't verified that account's email address. Verify it with Google, then try again.",
+  google_cancelled: "Google sign-in was cancelled. You can try again, or sign in with your user ID and password.",
+  session_expired: "Your session has ended. Please sign in again.",
   google_failed: "Google sign-in failed. Please try again or sign in with your user ID and password.",
 };
 
@@ -21,6 +29,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Coming back with the browser's Back button restores this page as it was, spinner included.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setGoogleLoading(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   // Read via window.location rather than useSearchParams() — this page is otherwise fully
   // static, and useSearchParams() would force it into a Suspense-gated client-side render just
@@ -91,7 +109,7 @@ export default function LoginPage() {
         )}
         {error && <p className="mb-4 text-sm text-error">{error}</p>}
 
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button type="submit" disabled={loading || googleLoading} className="w-full">
           {loading ? "Signing in..." : "Sign in"}
         </Button>
 
@@ -104,8 +122,20 @@ export default function LoginPage() {
             </div>
             <a
               href={`${API_URL}/auth/google`}
-              className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-bg-elevated px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-card-hover"
+              aria-busy={googleLoading}
+              onClick={() => {
+                setError(null);
+                setGoogleError(null);
+                setGoogleLoading(true);
+              }}
+              className={cn(
+                "flex min-h-10 w-full items-center justify-center gap-3 rounded-lg border border-border bg-bg-elevated px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                (loading || googleLoading) && "pointer-events-none opacity-60",
+              )}
             >
+              {googleLoading ? (
+                <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+              ) : (
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
                 <path
                   fill="#4285F4"
@@ -121,7 +151,8 @@ export default function LoginPage() {
                   d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .94 4.97L3.95 7.3C4.66 5.17 6.65 3.58 9 3.58Z"
                 />
               </svg>
-              Sign in with Google
+              )}
+              {googleLoading ? "Redirecting to Google..." : "Continue with Google"}
             </a>
           </>
         )}

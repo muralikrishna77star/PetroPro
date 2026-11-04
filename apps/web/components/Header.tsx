@@ -47,6 +47,7 @@ export function Header({ session, onOpenMenu }: { session: Session; onOpenMenu: 
         variant="outline"
         size="sm"
         onClick={() => {
+          api.logout().catch(() => undefined);
           clearSession();
           router.replace("/login");
         }}

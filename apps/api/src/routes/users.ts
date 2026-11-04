@@ -3,8 +3,22 @@ import type { FastifyInstance } from "fastify";
 import { usersRepo, type Role } from "../repositories/users.js";
 import { hashPassword } from "../services/auth.js";
 import { auditLogsRepo } from "../repositories/auditLogs.js";
+import { authSessionsRepo } from "../repositories/authSessions.js";
 
 const ROLES: Role[] = ["super_admin", "owner", "operator", "field_operator"];
+
+/** Ends every login a user has, and records it. */
+function revokeSessions(adminId: string, userId: string, reason: string): number {
+  const count = authSessionsRepo.revokeAllForUser(userId, reason, Date.now());
+  auditLogsRepo.record({
+    user_id: adminId,
+    action: "sessions_revoked",
+    entity_type: "user",
+    entity_id: userId,
+    details: { reason, count },
+  });
+  return count;
+}
 
 function generateTempPassword(): string {
   return crypto.randomBytes(6).toString("hex");
@@ -67,8 +81,18 @@ export default async function userRoutes(fastify: FastifyInstance) {
           return reply.code(409).send({ error: `Email ${normalizedEmail} is already in use` });
         }
       }
+      const wasLinked = Boolean(usersRepo.getById(request.params.id)?.google_sub);
       const updated = usersRepo.update(request.params.id, { name, role, email: normalizedEmail });
       if (!updated) return reply.code(404).send({ error: "User not found" });
+      if (wasLinked && !updated.google_linked) {
+        auditLogsRepo.record({
+          user_id: request.user.sub,
+          action: "unlink_google",
+          entity_type: "user",
+          entity_id: request.params.id,
+          details: { reason: "email_changed" },
+        });
+      }
       auditLogsRepo.record({
         user_id: request.user.sub,
         action: "update_user",
@@ -77,6 +101,27 @@ export default async function userRoutes(fastify: FastifyInstance) {
         details: { name, role },
       });
       return updated;
+    },
+  );
+
+  // The authorized recovery route: lets the user link a Google account again (their next Google
+  // sign-in asks for their password), e.g. after they replace a lost Google account.
+  fastify.delete<{ Params: { id: string } }>(
+    "/users/:id/google-link",
+    { preHandler: fastify.requireRole("super_admin") },
+    async (request, reply) => {
+      if (!usersRepo.getById(request.params.id)) return reply.code(404).send({ error: "User not found" });
+      if (!usersRepo.unlinkGoogle(request.params.id)) {
+        return reply.code(404).send({ error: "No Google account is linked to this user" });
+      }
+      auditLogsRepo.record({
+        user_id: request.user.sub,
+        action: "unlink_google",
+        entity_type: "user",
+        entity_id: request.params.id,
+        details: { reason: "admin" },
+      });
+      return { ok: true };
     },
   );
 
@@ -95,6 +140,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         entity_type: "user",
         entity_id: request.params.id,
       });
+      revokeSessions(request.user.sub, request.params.id, "user_deactivated");
       return updated;
     },
   );
@@ -130,6 +176,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         entity_type: "user",
         entity_id: request.params.id,
       });
+      revokeSessions(request.user.sub, request.params.id, "password_reset");
       return { user_id: request.params.id, temporaryPassword: tempPassword };
     },
   );

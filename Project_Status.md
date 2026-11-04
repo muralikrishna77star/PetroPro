@@ -67,8 +67,8 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   (`HEADINGS.DBF` + `SETTINGS.DBF`'s `GSTNO`). Invoice/receipt PDFs now also print the tenant's
   tagline. Sessions since 13 without handoff detail added mileage tracking, a customer order portal,
   richer reporting, and HSN codes on the item master (see "Known gaps" — doc trail lost for these).
-  Session 14: `routes/googleAuth.ts` (Google SSO for staff, additive to password login, matches by
-  a new `users.email` column), `bills.client_ref` (offline-queue idempotency, same pattern as
+  Session 14: `routes/googleAuth.ts` (Google SSO for staff, additive to password login; since Session 24
+  linked by `users.google_sub`, see `services/googleOAuth.ts`), `bills.client_ref` (offline-queue idempotency, same pattern as
   `pending_transactions.client_ref`), `services/backup.ts`'s daily auto-backup scheduler +
   `GET /backup/:filename/download`, and `reportsRepo.salesByHsn()` + group-nested stock/purchase
   reports. Session 16: WhatsApp Invoice Module (Community edition) —
@@ -159,9 +159,13 @@ data has none, `customers.due_amount` doesn't reconcile with the 3-month ledger 
   has actually been run (no Docker in this dev environment). The repo is on git now (Session 14
   found it already initialized, on branch `master`) but hasn't been pushed anywhere a real Actions
   run could happen — still blocked on both fronts.
-- **Google SSO and the desktop kiosk launcher (Session 14) are still unverified beyond a clean
-  typecheck/lint/build** — no real Google OAuth credentials are available in this environment, and
-  the desktop launcher needs an actual `npm run build` + Chromium install exercised together,
+- **Google sign-in and revocable sessions (Sessions 24 and 25) aren't deployed.** Production still runs the
+  older sign-in and never-expiring staff tokens. Deploy by `docs/DEPLOY_AUTH_SESSIONS.md`. Tested against a
+  fake Google, not real Google, and the refresh cookie through Vercel is unconfirmed until deployed.
+- Customer portal tokens never expire, password login has no attempt limit, and temporary passwords
+  have no forced change.
+- **The desktop kiosk launcher (Session 14) is still unverified beyond a clean
+  typecheck/lint/build** — it needs an actual `npm run build` + Chromium install exercised together,
   neither attempted yet. The *offline billing sync* (also Session 14) is the one Session-14 item
   that **has** since been verified for real, in Session 15 — see `AI_Handoff.md` Session 15.
 - **The root `"dev"` npm script only starts the API on Windows** (found in Session 15) —

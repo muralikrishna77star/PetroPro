@@ -16,8 +16,9 @@ const app = await buildApp();
 app.log.level = "silent";
 test.after(() => app.close());
 
-const superToken = app.jwt.sign({ sub: "boss", role: "super_admin", name: "Boss" });
-const ownerToken = app.jwt.sign({ sub: "own", role: "owner", name: "Owner" });
+const { createSession } = await import("../services/sessions.js");
+const superToken = app.signAccessToken({ user_id: "boss", role: "super_admin", name: "Boss" }, createSession("boss", "password", undefined).sessionId);
+const ownerToken = app.signAccessToken({ user_id: "own", role: "owner", name: "Owner" }, createSession("own", "password", undefined).sessionId);
 const call = (method: "GET" | "PUT" | "POST" | "DELETE", url: string, token = superToken, payload?: unknown) =>
   app.inject({ method, url, headers: token ? { authorization: `Bearer ${token}` } : {}, payload: payload as never });
 

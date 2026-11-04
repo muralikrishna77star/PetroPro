@@ -54,8 +54,10 @@ export interface AppUser {
   role: Role;
   active: number;
   created_at: string;
-  /** Optional Google SSO identity — null means this user can only sign in with user-id/password. */
+  /** Optional. An admin adding it lets this user's Google account with that verified address link. */
   email: string | null;
+  /** 1 once a Google account is linked. The Google id itself is never sent to the browser. */
+  google_linked: number;
 }
 
 export interface PendingTransaction {
