@@ -674,6 +674,9 @@ export interface CustomerReport {
 }
 
 export const customerApi = {
+  googleComplete: (ticket: string, kind: string, password?: string) =>
+    request<CustomerLoginResponse>("/customer/auth/google/complete", { method: "POST", body: { ticket, kind, password } }),
+
   getReport: (token: string, from: string, to: string) =>
     request<CustomerReport>(`/customer/reports?${new URLSearchParams({ from, to })}`, { token }),
 

@@ -376,6 +376,18 @@ export function applySchema(db: DatabaseSync): void {
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_google_tickets_user ON google_tickets(user_id);
+    CREATE TABLE IF NOT EXISTS customer_google_tickets (
+      hash TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('login', 'link')),
+      customer_code TEXT NOT NULL REFERENCES customers(code),
+      google_sub TEXT NOT NULL,
+      email TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      consumed_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_customer_google_tickets_customer ON customer_google_tickets(customer_code);
 
     -- Technology & Subscription Dashboard (routes/techDashboard.ts, super_admin only). The
     -- service list itself is code (services/techCatalog.ts); these hold only what a super admin
@@ -419,6 +431,8 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "users", "active", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "customers", "email", "TEXT");
   ensureColumn(db, "customers", "password_hash", "TEXT");
+  ensureColumn(db, "customers", "google_sub", "TEXT");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_google_sub ON customers(google_sub) WHERE google_sub IS NOT NULL");
   ensureColumn(db, "bill_lines", "order_line_id", "INTEGER REFERENCES order_lines(id)");
   ensureColumn(db, "items", "hsn_code", "TEXT");
   // Optional Google SSO identity for a staff user — see routes/googleAuth.ts. Nullable so

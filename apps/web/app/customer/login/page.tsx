@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Fuel } from "lucide-react";
+import { API_URL } from "@/lib/config";
 import { customerApi, ApiError } from "@/lib/api";
 import { saveCustomerSession } from "@/lib/customerAuth";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +15,14 @@ export default function CustomerLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("error")) {
+      // Read an external OAuth result without displaying provider-supplied text.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError("Google sign-in could not complete. Use the Gmail address registered with the station. For first-time linking, ask the station to set your customer password.");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +87,8 @@ export default function CustomerLoginPage() {
           {loading ? "Signing in..." : "Sign in"}
         </Button>
 
+        <a href={`${API_URL}/auth/google/customer`} className="mt-4 flex min-h-10 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-fg hover:bg-card-hover">Continue with Google</a>
+        <p className="mt-2 text-center text-xs text-fg-muted">Use your registered Gmail address. Confirm your PetroPro customer password once to link your account.</p>
         <p className="mt-4 text-center text-xs text-fg-muted">
           Don&apos;t have a password yet? Ask the station to set one up for you.
         </p>
