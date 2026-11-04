@@ -1845,7 +1845,7 @@ during that, so large batches belong in a quiet period.
 
 **Later:** real 2019 files turned up in git history and passed. See `docs/MIGRATION_NOTES.md`.
 
-**State:** on `feature/legacy-file-import`, uncommitted. Not merged, not deployed.
+**State:** deployed with Session 28, see below.
 
 ### 2026-11-04 — Session 28 (thermal bill printing)
 
@@ -1889,4 +1889,13 @@ so legacy 3101 reprints as a different bill number.
 
 **Not verified:** anything on a real printer. See section 5 of the doc.
 
-**State:** uncommitted, on `feature/legacy-file-import`, together with Session 27. Not deployed.
+**State:** with Session 27, committed as `3d5c2f8`, pushed and deployed on 2026-11-04, around 22:03 IST. The tests at
+commit: API 208/208 twice, bridge 12/12, browser 43/43.
+- **API:** release `v11`. Roll back to `v10`. The process was stopped for about 5 seconds (Fly logs: SIGINT at
+  16:33:32Z, listening at 16:33:37Z).
+- **Web:** `dpl_HqM6YUrkN9fXtpUsAzNNmDEHxCoQ`. Previous: `dpl_58cTFY9a8wYtWvhwbc3xpG46ggn7`.
+- **Live checks, signed out only:** API health, the new routes answer 401, new screens send a visitor to sign in, the live
+  code holds the new screens and print actions, the session route answers 401, no errors logged.
+- **Not checked live, needs a real login:** printing, Legacy Import and Printer Settings on production data.
+- **Backup:** none was taken for this deploy. The database changes only add tables and columns.
+- **Still public at deploy time:** `legacy/Workarea/CUSTOMER.DBF` at `77bb4b0` still answered 200 without a login.

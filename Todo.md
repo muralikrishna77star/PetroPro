@@ -628,8 +628,8 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 ### Legacy file upload (Session 27)
 - [x] Utilities → Legacy Import for monthly sales and stock files, and annual purchases and receipts.
 - [x] Real 2019 files tested. `RECPT` and files from other years are still only tested on generated files.
-- [ ] Commit, merge and deploy (API and web together, about 6 seconds of API restart).
-- [ ] Decide: customer dues don't change on import; live bill and receipt numbers jump past imported ones.
+- [x] Deployed with thermal printing, 2026-11-04.
+- [ ] Decide: customer dues don't change on import; live bill and receipt numbers jump past imported ones. Do this before importing real files.
 - [ ] Decide whether mileage (`MAGE`) and cancelled bills (`BILLCNCS`) need uploading too.
 - [ ] Check which `CSHORCHQ` codes real `RECPT` files use. Only `CQ` reads as a cheque.
 
@@ -639,4 +639,5 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
       rewriting history.
 - [ ] Test on a real printer: the list in `docs/THERMAL_PRINTING.md` section 5.
 - [x] Receipt base amount: the stored sub total, approved 2026-11-04.
-- [ ] Commit, deploy API and web together, and install the bridge at the station.
+- [x] Deployed 2026-11-04: API `v11`, web `dpl_HqM6YUrkN9fXtpUsAzNNmDEHxCoQ`.
+- [ ] Sign in and check printing and Legacy Import on production. Install the bridge at the station for silent printing.
