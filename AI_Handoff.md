@@ -1899,3 +1899,28 @@ commit: API 208/208 twice, bridge 12/12, browser 43/43.
 - **Not checked live, needs a real login:** printing, Legacy Import and Printer Settings on production data.
 - **Backup:** none was taken for this deploy. The database changes only add tables and columns.
 - **Still public at deploy time:** `legacy/Workarea/CUSTOMER.DBF` at `77bb4b0` still answered 200 without a login.
+
+### 2026-11-05 — Session 29 (mileage reports: rate, amount and totals)
+
+**Context:** the user reported that the mileage report shows no amount, and asked for it to be checked against the legacy
+report. PRs #1, #2, #3 and #5 had landed on GitHub between sessions, including the customer mileage statement.
+
+**Found:** Petbill's VWSMAGE and MCWS are sales reports with mileage alongside, built from the bill lines. PetroPro's were
+built from `mileage_log`, so they had no rate or amount, and lost any bill without a reading. The vehicle report also
+included cancelled bills and had no date range.
+
+**Built:** `services/mileageReport.ts` backs `/reports/mileage`, `/reports/customers/:code/mileage` and
+`/customer/reports/mileage`, reusing the statement engine's `foxRound`. `components/MileageTotals.tsx` shows the totals.
+`/reports/mileage` now returns a report object rather than an array. Details are in `docs/MIGRATION_NOTES.md`.
+
+**Verified:** API tests 231/231, bridge 12/12, 15 deliberate breaks all caught, browser 23/23 on staff screens. Real April to
+June 2019 tables: 32 customers (amount, quantity, lines, bills) and 567 vehicles (amount, lines) match a direct calculation
+from the raw DBFs.
+
+**Not verified:** that `KMR` is the closing reading. It's inferred from `CR` appearing in the compiled symbol tables, and the
+only two real `MAGE19` readings are 0. The user was asked to compare a real printout.
+
+**State:** committed as `79641f5`, pushed and deployed on 2026-11-05. This also put PR #5 live.
+- **API:** release `v15`. Roll back to `v14`.
+- **Web:** `dpl_H8Ef6xMWzap3wMN9wd3hkoJTAHnb`. Previous: `dpl_Dcg7vrrJM44D8rcKk45x7yGczWCH`.
+- **Live checks, signed out only:** API health, the routes answer 401, the live code holds the new report.

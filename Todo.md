@@ -641,3 +641,9 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 - [x] Receipt base amount: the stored sub total, approved 2026-11-04.
 - [x] Deployed 2026-11-04: API `v11`, web `dpl_HqM6YUrkN9fXtpUsAzNNmDEHxCoQ`.
 - [ ] Sign in and check printing and Legacy Import on production. Install the bridge at the station for silent printing.
+
+### Mileage reports (Session 29)
+- [x] Rate, amount and Petbill's totals on all three mileage reports. Deployed 2026-11-05: API `v15`.
+- [ ] User: compare one real Petbill mileage printout, to confirm `KMR` is the closing reading.
+- [ ] Decide: `MAGE` import, so imported bills carry readings. Best done before importing real bills.
+- [ ] Decide: PDF and group-by-vehicle (GRPMCWS) versions of the mileage statement.
