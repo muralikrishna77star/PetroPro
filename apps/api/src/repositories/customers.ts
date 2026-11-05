@@ -13,16 +13,17 @@ export interface Customer {
   tin_no: string | null;
   gst_no: string | null;
   email: string | null;
+  report_style: "legacy" | "modern";
 }
 
 export type CustomerWithAuth = Customer & { password_hash: string | null; google_sub: string | null };
 
-export type CustomerInput = Omit<Customer, "due_amount"> & { due_amount?: number };
+export type CustomerInput = Omit<Customer, "due_amount" | "report_style"> & { due_amount?: number };
 
 /** Explicit column list (never `SELECT *`) so `password_hash` never rides along on a plain
  *  `get()`/`list()` and leaks into a JSON response the way `usersRepo` guards against too. */
 const CUSTOMER_COLUMNS =
-  "code, joined_on, name, address, print_name, phone, due_amount, credit_limit, service_charge, tin_no, gst_no, email";
+  "code, joined_on, name, address, print_name, phone, due_amount, credit_limit, service_charge, tin_no, gst_no, email, report_style";
 
 export const customersRepo = {
   list(): Customer[] {
@@ -50,8 +51,8 @@ export const customersRepo = {
     db.prepare(
       `INSERT INTO customers (
         code, joined_on, name, address, print_name, phone, due_amount, credit_limit,
-        service_charge, tin_no, gst_no, email
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        service_charge, tin_no, gst_no, email, report_style
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'modern')`,
     ).run(
       input.code,
       input.joined_on ?? null,
@@ -88,6 +89,11 @@ export const customersRepo = {
       input.email ?? null,
       code,
     );
+    return customersRepo.get(code);
+  },
+
+  setReportStyle(code: string, style: "legacy" | "modern"): Customer | undefined {
+    db.prepare("UPDATE customers SET report_style = ? WHERE code = ?").run(style, code);
     return customersRepo.get(code);
   },
 
