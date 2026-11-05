@@ -1987,4 +1987,7 @@ Not tested on a real phone or with real data.
 
 **Also decided:** no third "Original" option, as the brief asked for two designs. The user didn't choose when asked. Easy to add.
 
-**State:** website only, no API deploy needed.
+**State:** committed as `7ded81f` and `ce6b1fa`, pushed and deployed on 2026-11-05.
+- **Web:** `dpl_EtT8zqnNeiZUqnG4vayx7cJhKNWK`. Previous: `dpl_3w6QoptsJrUrzp7nsE8K1oikjGGB`.
+- **API:** not deployed, still `v16`. No backend code changed.
+- **Live checks, signed out only:** the live code holds both designs, `Customer Login` and the real API address; a saved design applies on the login pages; neither login page shows the switcher; API health is fine and `/customers` answers 401. The signed-in switcher was tested locally, not on the live site.
