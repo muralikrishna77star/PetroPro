@@ -645,6 +645,6 @@ Full detail in `AI_Handoff.md`'s Session 21 entry.
 ### Mileage reports (Session 29)
 - [x] Rate, amount and Petbill's totals on all three mileage reports. Deployed 2026-11-05: API `v15`.
 - [ ] User: compare one real Petbill mileage printout, to confirm `KMR` is the closing reading.
-- [x] `MAGE` upload built and tested on real `MAGE18`, 2026-11-05. Commit and deploy.
+- [x] `MAGE` upload built, tested on real `MAGE18` and deployed 2026-11-05: API `v16`.
 - [ ] 44 of `MAGE18`'s readings have no bill, cause unknown. They're reported on screen.
 - [ ] Decide: PDF and group-by-vehicle (GRPMCWS) versions of the mileage statement.

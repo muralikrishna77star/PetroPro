@@ -1942,4 +1942,7 @@ reading would become a vehicle's starting point for its next live reading.
 **Limits:** a bill from the command-line importers has no legacy number, so `MAGE` can't reach it. Sales must be imported through
 the screen first.
 
-**State:** uncommitted, on `feature/mage-import`. Not deployed.
+**State:** committed as `ca3fff4`, pushed and deployed on 2026-11-05.
+- **API:** release `v16`. Roll back to `v15`.
+- **Web:** `dpl_3w6QoptsJrUrzp7nsE8K1oikjGGB`. Previous: `dpl_H8Ef6xMWzap3wMN9wd3hkoJTAHnb`.
+- **Live checks, signed out only:** API health, the import route answers 401, the live code holds the `MAGE` screen.
