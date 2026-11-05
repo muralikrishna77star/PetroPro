@@ -1,0 +1,210 @@
+/* Classic and Modern designs, chosen in components/DesignSwitcher.tsx and set as `data-design` on <html>.
+   With no choice saved there is no attribute, so none of this applies and the site keeps its base look.
+
+   These rules must never move anything. Change colours, radii, shadows and heading fonts only, and draw
+   any extra border with box-shadow. Never set a size, padding, margin, gap, border width or position here.
+
+   Each design has a dark variant (the base) and a `.light` one, so the header's light/dark button keeps working. */
+
+/* ---------- Classic: navy, white, cream and gold ---------- */
+:root[data-design="classic"] {
+  --pp-bg: #0a1830;
+  --pp-bg-elevated: #0f2140;
+  --pp-sidebar: #0b1a35;
+  --pp-card: #12264a;
+  --pp-card-hover: #1a3160;
+  --pp-primary: #d4af37;
+  --pp-primary-fg: #0f2344;
+  --pp-secondary: #c9a227;
+  --pp-success: #4ade80;
+  --pp-warning: #fbbf24;
+  --pp-error: #f87171;
+  --pp-fg: #f7f1e3;
+  --pp-fg-muted: #b7c0d0;
+  --pp-border: #2a4068;
+
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+
+  /* The menu group colours on cards and in the sidebar. */
+  --color-orange-500: #d4af37;
+  --color-emerald-500: #e3c565;
+  --color-violet-500: #8fa6cc;
+  --color-teal-500: #b89b4a;
+  --color-amber-500: #f0d98a;
+  --color-orange-600: #e3c565;
+  --color-emerald-600: #e3c565;
+  --color-violet-600: #e3c565;
+  --color-teal-600: #e3c565;
+  --color-amber-600: #e3c565;
+}
+
+:root[data-design="classic"].light {
+  --pp-bg: #f7f1e3;
+  --pp-bg-elevated: #fffdf8;
+  --pp-sidebar: #0f2344;
+  --pp-card: #ffffff;
+  --pp-card-hover: #f3ead6;
+  --pp-primary: #14284b;
+  --pp-primary-fg: #ffffff;
+  --pp-secondary: #8a6d1d;
+  --pp-success: #166534;
+  --pp-warning: #b45309;
+  --pp-error: #b91c1c;
+  --pp-fg: #14213d;
+  --pp-fg-muted: #5b6478;
+  --pp-border: #dccfb0;
+
+  --color-orange-500: #b8860b;
+  --color-emerald-500: #14284b;
+  --color-violet-500: #2f4a7a;
+  --color-teal-500: #8a6d1d;
+  --color-amber-500: #c9a227;
+}
+
+/* A navy sidebar in both variants, with its own light text and gold highlights. */
+[data-design="classic"] [data-app-sidebar] {
+  --pp-sidebar: #0f2344;
+  --pp-fg: #fdf8ec;
+  --pp-fg-muted: #c7cfdd;
+  --pp-border: #263a5e;
+  --pp-card-hover: #1b3258;
+  --pp-primary: #d4af37;
+  --pp-primary-fg: #0f2344;
+  --color-orange-500: #d4af37;
+  --color-emerald-500: #d4af37;
+  --color-violet-500: #e3c565;
+  --color-teal-500: #e3c565;
+  --color-amber-500: #f0d98a;
+}
+
+[data-design="classic"] [data-app-sidebar] :is(.bg-orange-500, .bg-emerald-500, .bg-violet-500, .bg-teal-500, .bg-amber-500).text-white {
+  color: #0f2344;
+}
+
+[data-design="classic"] :is(h1, h2, h3, h4, .font-heading) {
+  font-family: var(--font-source-serif), Georgia, "Times New Roman", serif;
+}
+
+[data-design="classic"] button.bg-primary:not(:focus-visible),
+[data-design="classic"] a.bg-primary:not(:focus-visible) {
+  box-shadow: inset 0 0 0 1px #b8962e;
+}
+
+[data-design="classic"] header.border-b {
+  border-bottom-color: #b8962e;
+}
+
+[data-design="classic"] .shadow-sm {
+  --tw-shadow: 0 1px 2px rgb(20 33 61 / 0.1), 0 2px 6px rgb(20 33 61 / 0.05);
+}
+
+/* ---------- Modern: blue, purple and white ---------- */
+:root[data-design="modern"] {
+  --pp-bg: #0d0f26;
+  --pp-bg-end: #15102f;
+  --pp-bg-elevated: #121433;
+  --pp-sidebar: #11132e;
+  --pp-card: #181a3d;
+  --pp-card-hover: #22255a;
+  --pp-primary: #818cf8;
+  --pp-primary-fg: #ffffff;
+  --pp-secondary: #8b5cf6;
+  --pp-success: #4ade80;
+  --pp-warning: #fbbf24;
+  --pp-error: #f87171;
+  --pp-fg: #eef0ff;
+  --pp-fg-muted: #a6abd0;
+  --pp-border: #2a2d5c;
+
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+
+  --color-orange-500: #7c3aed;
+  --color-emerald-500: #2563eb;
+  --color-violet-500: #8b5cf6;
+  --color-teal-500: #4f46e5;
+  --color-amber-500: #a855f7;
+  --color-orange-600: #c4b5fd;
+  --color-emerald-600: #93c5fd;
+  --color-violet-600: #c4b5fd;
+  --color-teal-600: #a5b4fc;
+  --color-amber-600: #d8b4fe;
+}
+
+:root[data-design="modern"].light {
+  --pp-bg: #f6f7ff;
+  --pp-bg-end: #faf5ff;
+  --pp-bg-elevated: #ffffff;
+  --pp-sidebar: #ffffff;
+  --pp-card: #ffffff;
+  --pp-card-hover: #f0f1ff;
+  --pp-primary: #4f46e5;
+  --pp-primary-fg: #ffffff;
+  --pp-secondary: #7c3aed;
+  --pp-success: #166534;
+  --pp-warning: #b45309;
+  --pp-error: #b91c1c;
+  --pp-fg: #1e1b4b;
+  --pp-fg-muted: #5f6482;
+  --pp-border: #e3e5f5;
+
+  --color-orange-600: #6d28d9;
+  --color-emerald-600: #1d4ed8;
+  --color-violet-600: #6d28d9;
+  --color-teal-600: #4338ca;
+  --color-amber-600: #7e22ce;
+}
+
+[data-design="modern"] body,
+[data-design="modern"] .bg-bg {
+  background-image: linear-gradient(135deg, var(--pp-bg), var(--pp-bg-end));
+}
+
+[data-design="modern"] .bg-primary {
+  background-image: linear-gradient(120deg, #2563eb, #7c3aed);
+}
+
+[data-design="modern"] .shadow-sm {
+  --tw-shadow: 0 1px 2px rgb(30 27 75 / 0.06), 0 8px 24px rgb(79 70 229 / 0.07);
+}
+
+[data-design="modern"] :is(button, a),
+[data-design="modern"] .rounded-2xl.shadow-sm {
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, transform 0.18s ease;
+}
+
+[data-design="modern"] .rounded-2xl.shadow-sm:hover {
+  --tw-shadow: 0 2px 4px rgb(30 27 75 / 0.08), 0 14px 32px rgb(79 70 229 / 0.13);
+}
+
+[data-design="modern"] :is(button, a).bg-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* transform doesn't take up space, so the lift can't push anything else. */
+[data-design="modern"] button.bg-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgb(79 70 229 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design="modern"] :is(button, a),
+  [data-design="modern"] .rounded-2xl.shadow-sm {
+    transition: none;
+  }
+
+  [data-design="modern"] button.bg-primary:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ---------- Both ---------- */
+/* Screens write text-white on bg-primary directly, and Classic's dark variant fills it with gold. */
+[data-design] .bg-primary {
+  color: var(--pp-primary-fg);
+}

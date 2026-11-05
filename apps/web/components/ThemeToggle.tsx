@@ -11,6 +11,10 @@ export function ThemeToggle() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bridging from the DOM class set by the pre-paint theme-init script, an external system
     setIsLight(document.documentElement.classList.contains("light"));
+    // Choosing a design can switch to light (lib/design.ts), so keep the icon in step.
+    const observer = new MutationObserver(() => setIsLight(document.documentElement.classList.contains("light")));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   function toggle() {

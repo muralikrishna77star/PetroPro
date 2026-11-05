@@ -7,6 +7,7 @@ import { clearSession, ROLE_LABELS, type Session } from "@/lib/auth";
 import { api, type Tenant } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ColorStyleSwitcher } from "@/components/ColorStyleSwitcher";
+import { DesignSwitcher } from "@/components/DesignSwitcher";
 import { Button } from "@/components/ui/Button";
 
 /** Top app bar for the authenticated shell — a contrast band (bg-card against the page's
@@ -36,6 +37,7 @@ export function Header({ session, onOpenMenu }: { session: Session; onOpenMenu: 
       <div className="hidden md:block">
         <ColorStyleSwitcher />
       </div>
+      <DesignSwitcher />
       <ThemeToggle />
       <div className="hidden h-6 w-px bg-border sm:block" />
       <div className="hidden text-right leading-tight sm:block">

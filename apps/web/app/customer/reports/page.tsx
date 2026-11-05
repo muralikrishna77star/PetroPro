@@ -8,6 +8,7 @@ import { useRequireCustomerSession } from "@/lib/useCustomerSession";
 import { clearCustomerSession } from "@/lib/customerAuth";
 import { CustomerVehicleReports } from "@/components/CustomerVehicleReports";
 import { Card } from "@/components/Card";
+import { DesignSwitcher } from "@/components/DesignSwitcher";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
@@ -81,7 +82,7 @@ export default function CustomerReportsPage() {
       }`}</style>
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div><p className="text-sm font-medium text-primary">PetroPro · Customer Portal</p><h1 className="text-2xl font-semibold">My reports</h1><p className="text-sm text-fg-muted">{session.name}</p></div>
-        <nav aria-label="Customer navigation" className="flex items-center gap-4 print:hidden"><Link href="/customer/orders" className="text-sm text-primary hover:underline">My orders</Link><Button variant="outline" onClick={signOut}>Sign out</Button></nav>
+        <nav aria-label="Customer navigation" className="flex items-center gap-4 print:hidden"><Link href="/customer/orders" className="text-sm text-primary hover:underline">My orders</Link><DesignSwitcher /><Button variant="outline" onClick={signOut}>Sign out</Button></nav>
       </header>
       <Card color="violet" className="print:hidden">
         <form onSubmit={e => { e.preventDefault(); void load(); }} className="flex flex-wrap items-end gap-3">

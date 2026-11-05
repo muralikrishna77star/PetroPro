@@ -7,6 +7,7 @@ import { api, customerApi, ApiError, type Item, type Order } from "@/lib/api";
 import { useRequireCustomerSession } from "@/lib/useCustomerSession";
 import { clearCustomerSession } from "@/lib/customerAuth";
 import { Card } from "@/components/Card";
+import { DesignSwitcher } from "@/components/DesignSwitcher";
 import { Combobox } from "@/components/ui/Combobox";
 
 interface DraftLine {
@@ -109,12 +110,15 @@ export default function CustomerOrdersPage() {
             Order Entry <span className="text-sm font-normal text-fg-muted">— {session.name}</span>
           </h1>
           <Link href="/customer/reports" className="text-sm font-medium text-primary hover:underline">My reports</Link>
-          <button
-            onClick={handleLogout}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <DesignSwitcher />
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         <Card color="orange" className="overflow-x-auto">

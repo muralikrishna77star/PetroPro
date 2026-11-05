@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Poppins, Roboto_Mono } from "next/font/google";
+import { Inter, Poppins, Roboto_Mono, Source_Serif_4 } from "next/font/google";
 import { RegisterServiceWorker } from "./register-sw";
 import { DesktopTitleBar } from "@/components/DesktopTitleBar";
 import "./globals.css";
+import "./designs.css";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -18,6 +19,13 @@ const poppins = Poppins({
 const robotoMono = Roboto_Mono({
   variable: "--font-roboto-mono",
   subsets: ["latin"],
+});
+
+/** Classic's heading font. Not preloaded, so browsers only fetch it when Classic is on. */
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
+  subsets: ["latin"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -38,6 +46,10 @@ try {
   if (localStorage.getItem("petropro.theme") === "light") {
     document.documentElement.classList.add("light");
   }
+  var design = localStorage.getItem("petropro.design");
+  if (design === "classic" || design === "modern") {
+    document.documentElement.setAttribute("data-design", design);
+  }
 } catch (e) {}
 `;
 
@@ -49,7 +61,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${poppins.variable} ${robotoMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${poppins.variable} ${robotoMono.variable} ${sourceSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

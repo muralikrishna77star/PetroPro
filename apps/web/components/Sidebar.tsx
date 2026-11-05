@@ -190,6 +190,7 @@ export function Sidebar({ session, open, onClose }: { session: Session; open: bo
         <button type="button" aria-label="Close menu" className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={onClose} />
       )}
       <aside
+        data-app-sidebar
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex h-full w-64 shrink-0 flex-col border-r border-border bg-sidebar transition-transform md:static md:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",

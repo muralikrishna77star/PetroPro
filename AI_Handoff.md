@@ -1946,3 +1946,45 @@ the screen first.
 - **API:** release `v16`. Roll back to `v15`.
 - **Web:** `dpl_3w6QoptsJrUrzp7nsE8K1oikjGGB`. Previous: `dpl_H8Ef6xMWzap3wMN9wd3hkoJTAHnb`.
 - **Live checks, signed out only:** API health, the import route answers 401, the live code holds the `MAGE` screen.
+
+### 2026-11-05 — Session 31 (screen labels)
+
+**Asked:** rename the customer section's `Order Entry login`.
+
+**Done:** the heading on the customer screen now says `Customer Login`. It was `Customer Portal` for a while, and a later request
+changed it. The old name remains only in a backend comment and a test name, which customers never see.
+
+**Tried and removed:** `Customers` to `Customer Details` in the sidebar, page heading and Legacy Import messages, from the earlier
+request "existing application replace it with Customer details screen". It conflicted with the later "only change this name"
+brief. The user didn't choose when asked, so it was taken out, as recommended, and can be added back on request.
+
+**Left alone:** the `Order Entry` heading on `/customer/orders`, because that page is where customers place orders.
+
+### 2026-11-05 — Session 32 (Classic and Modern designs)
+
+**Asked:** two selectable designs after login, with the layout unchanged and the choice saved in localStorage.
+
+**Built:** `app/designs.css`, `lib/design.ts` and `components/DesignSwitcher.tsx`. The switcher is in the staff header and in the
+header of both customer pages, and not on either login page. `<html data-design>` is set before first paint. No backend change.
+
+**Rule for `designs.css`:** colours, radii, shadows and heading fonts only. Never a size, padding, margin, gap, border width or
+position. Extra borders use `box-shadow`.
+
+**Choices made:** no saved choice keeps the existing look. The first choice opens in light, because both palettes are drawn on
+light backgrounds and customers have no light/dark button. Body text stays Inter in both designs; only Classic's headings change
+font (Source Serif 4), because a different body font would change the width of every button and table cell.
+
+**Verified on a production build with a throwaway database:** 15 staff screens and 2 customer screens at 1400px and 390px, compared
+element by element against the existing look. Modern moved nothing. Classic's narrower headings changed 46 text-hugging boxes across
+both widths, by at most 14.5px wide and 4px of shift, with no extra line wraps. Switcher 25/25. Contrast AA on 394 text items in each
+of the four variants, on six screens. Customer print stays black on white.
+
+**Limits:** the header gained one 36px button, so the items to its left moved 52px in every look, including the existing one. The
+choice is per browser, so staff sharing a terminal share it. Once a design is chosen, the screen offers no way back to the old look.
+Not tested on a real phone or with real data.
+
+**Dev note:** force-stopping `next dev` corrupted `.next/dev` and every route returned 404 until that generated folder was deleted.
+
+**Also decided:** no third "Original" option, as the brief asked for two designs. The user didn't choose when asked. Easy to add.
+
+**State:** website only, no API deploy needed.
