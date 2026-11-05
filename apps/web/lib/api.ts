@@ -425,6 +425,9 @@ export const api = {
     },
   ) => request<Customer>(`/customers/${code}`, { method: "PUT", token, body }),
 
+  setCustomerReportStyle: (token: string, code: string, report_style: "legacy" | "modern") =>
+    request<Customer>(`/customers/${code}/report-style`, { method: "PUT", token, body: { report_style } }),
+
   setCustomerPassword: (token: string, code: string) =>
     request<{ code: string; temporaryPassword: string }>(`/customers/${code}/set-password`, {
       method: "POST",
