@@ -257,3 +257,19 @@ Tested on real files: the April to June 2019 tables in commit `77bb4b0`, on a sc
 4,047 lines, 5,313 stock rows and 114 purchases, the same counts `import:demo-transactions` recorded, and uploading
 them again added nothing. Its one held bill is a blank row with no item and no amount. Those files hold no receipts,
 so `RECPT` has only been tested on generated files, as have files from other years.
+
+## Sales & Mileage reports (`vwsmage`, `magerep`)
+
+Read from the VWSMAGE and MCWS report forms and the query compiled into `Petbill.exe`. They are sales reports with
+mileage alongside, built from the bill lines, so `services/mileageReport.ts` starts there too.
+
+- **Rows:** every line for the vehicle or customer in the date range, including oil and fuel with no reading.
+- **Columns:** Bill Date, Bill No, Ref No (customer form), Vehicle, Item, Qty, KMR, MileAge, Rate, Amount.
+- **Totals:** No. of Bills, Tot.Qty, Grand Total, Service Charge (customer form), Round up, Net Amount, and the amount
+  in words. Rounding is the statement engine's `foxRound`.
+- **`KMR` is taken to be the closing reading (`CR`).** The compiled query starts it at zero and the expression that
+  fills it isn't readable, but both routines' symbol tables list `CR` and not `OR`. PetroPro also shows the previous
+  reading, which Petbill's report doesn't.
+- **Differences:** quantities show 3 decimals rather than Petbill's 2, and a missing reading shows a dash rather than
+  zero. There's no PDF or vehicle-grouped form (GRPMCWS) yet.
+- **Mileage from imported bills:** Legacy Import doesn't take `MAGE` files, so those bills show amounts with no readings.

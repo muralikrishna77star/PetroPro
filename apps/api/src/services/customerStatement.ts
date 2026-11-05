@@ -67,7 +67,7 @@ export interface CustomerStatement {
 }
 
 /** FoxPro ROUND(): half away from zero (Math.round rounds -0.5 towards +∞). */
-function foxRound(n: number, decimals: number): number {
+export function foxRound(n: number, decimals: number): number {
   const f = 10 ** decimals;
   return (Math.sign(n) * Math.round(Math.abs(n) * f + 1e-9)) / f;
 }

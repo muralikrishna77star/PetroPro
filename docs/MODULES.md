@@ -59,7 +59,7 @@ Source-availability key: 🟢 program source survives · 🟡 report layout only
 | Stock Reports (+ Closing Stock Valuation) | `stkanyrp`/`clval` | 🟡 SAR/CLVAL | `/reports` → stock | 3 |
 | Purchase Report (item/invoice-wise) | `pur_rep`/`purinvws` | 🟡 PWR/INVPWR | `/reports` → purchases | 3 |
 | Customer's Sales Statement | `cws` | 🟡 CWS family (largest report cluster in the legacy app — many variants) | `/customers` ledger view | 3 |
-| Customer MileAge Statement | `magerep` | ⚪ | Not a direct match — modern mileage is per-**vehicle**, not per-customer (`/reports` → mileage) | 3 |
+| Customer MileAge Statement | `magerep` | 🟡 MCWS/GRPMCWS | `/reports` → customer statement → Mileage statement, and the customer portal. Same columns and totals; no grouped form or fixed-width print | 3 |
 | Customer Receipts | `rec_rep` | 🟡 REC_REP | Receipts are recorded (`POST /receipts`) but have **no dedicated report/list view** beyond what a per-customer ledger entry shows | 2/3 |
 | Customer Ledger | `displedg` | 🟡 LEDGER/DISPLEDG | `/reports` → customer ledger (computed on the fly, not a stored table — see `Project_Status.md`) | 3 |
 | Vehicle Sales Report | `vws` | 🟡 VWS | `/reports` → vehicles | 3 |

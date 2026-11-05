@@ -219,6 +219,38 @@ export interface StockSummaryRow {
   closing: number;
 }
 
+/** One bill line on a Sales & Mileage report. The reading is empty where none was taken. */
+export interface MileageReportRow {
+  id: number;
+  bill_no: number;
+  bill_date: string;
+  order_no: string | null;
+  vehicle_no: string | null;
+  item_code: string;
+  item_name: string;
+  qty: number;
+  rate: number;
+  amount: number;
+  odometer_prev: number | null;
+  odometer_curr: number | null;
+  mileage: number | null;
+}
+
+export interface MileageReport {
+  from: string;
+  to: string;
+  vehicle_no: string | null;
+  rows: MileageReportRow[];
+  bill_count: number;
+  total_qty: number;
+  total_amount: number;
+  service_charge_percent: number;
+  service_charge_amount: number;
+  round_off: number;
+  net_amount: number;
+  amount_in_words: string;
+}
+
 export interface MileageEntry {
   id: number;
   bill_no: number;

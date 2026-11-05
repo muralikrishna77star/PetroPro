@@ -29,6 +29,8 @@ import type {
   LedgerEntry,
   LoginResponse,
   MileageEntry,
+  MileageReport,
+  MileageReportRow,
   Order,
   OrderLine,
   PendingTransaction,
@@ -109,6 +111,8 @@ export type {
   LedgerEntry,
   LoginResponse,
   MileageEntry,
+  MileageReport,
+  MileageReportRow,
   Order,
   OrderLine,
   PendingTransaction,
@@ -513,10 +517,10 @@ export const api = {
     ),
 
   getCustomerMileage: (token: string, code: string, query: CustomerStatementQuery) =>
-    request<{ from: string; to: string; vehicle_no: string | null; rows: (MileageEntry & { bill_date: string; item_name: string })[] }>(`/reports/customers/${encodeURIComponent(code)}/mileage?${statementParams(query)}`, { token }),
+    request<MileageReport>(`/reports/customers/${encodeURIComponent(code)}/mileage?${statementParams(query)}`, { token }),
 
-  getMileageReport: (token: string, vehicleNo: string) =>
-    request<MileageEntry[]>(`/reports/mileage?vehicle_no=${vehicleNo}`, { token }),
+  getMileageReport: (token: string, query: { vehicleNo: string; from: string; to: string; match: "exact" | "contains" }) =>
+    request<MileageReport>(`/reports/mileage?${new URLSearchParams({ vehicle_no: query.vehicleNo, from: query.from, to: query.to, match: query.match })}`, { token }),
 
   getSalesReport: (
     token: string,
@@ -685,7 +689,7 @@ export const customerApi = {
     request<CustomerStatement>(`/customer/reports/statement?${statementParams(query)}`, { token }),
   statementPdfUrl: (query: CustomerStatementQuery) => `${API_URL}/customer/reports/statement.pdf?${statementParams(query)}`,
   getMileage: (token: string, query: CustomerStatementQuery) =>
-    request<{ from: string; to: string; vehicle_no: string | null; rows: (MileageEntry & { bill_date: string; item_name: string })[] }>(`/customer/reports/mileage?${statementParams(query)}`, { token }),
+    request<MileageReport>(`/customer/reports/mileage?${statementParams(query)}`, { token }),
 
   googleComplete: (ticket: string, kind: string, password?: string) =>
     request<CustomerLoginResponse>("/customer/auth/google/complete", { method: "POST", body: { ticket, kind, password } }),

@@ -21,12 +21,14 @@ import {
   type StockRow,
   type StockSummaryRow,
   type Purchase,
-  type MileageEntry,
+  type MileageReport,
+  type MileageReportRow,
   type Customer,
   type CustomerStatement,
   type CustomerStatementQuery,
 } from "@/lib/api";
 import { useRequireSession } from "@/lib/useSession";
+import { MileageTotals } from "@/components/MileageTotals";
 import { Card } from "@/components/Card";
 
 type ReportType =
@@ -92,6 +94,8 @@ export default function ReportsPage() {
   const [mileageStatement, setMileageStatement] = useState(false);
   const [customerMileage, setCustomerMileage] = useState<{ code: string; from: string; to: string; vehicle: string; run: number } | null>(null);
   const [statement, setStatement] = useState<CustomerStatement | null>(null);
+  const [vehicleReport, setVehicleReport] = useState<MileageReport | null>(null);
+  const [vehicleMatch, setVehicleMatch] = useState<"exact" | "contains">("exact");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -170,7 +174,11 @@ export default function ReportsPage() {
             setRows([]);
             return;
           }
-          setRows(await api.getMileageReport(session.token, vehicleNo));
+          {
+            const report = await api.getMileageReport(session.token, { vehicleNo: vehicleNo.trim(), from, to, match: vehicleMatch });
+            setVehicleReport(report);
+            setRows(report.rows);
+          }
           break;
         case "customer-statement": {
           setStatement(null);
@@ -227,8 +235,7 @@ export default function ReportsPage() {
             </select>
           </div>
 
-          {!needsVehicle && (
-            <>
+          <>
               <div>
                 <label className="mb-1 block text-xs font-medium text-fg-muted">From</label>
                 <input
@@ -247,8 +254,7 @@ export default function ReportsPage() {
                   onChange={(e) => setTo(e.target.value)}
                 />
               </div>
-            </>
-          )}
+          </>
 
           {needsGranularity && (
             <div>
@@ -286,6 +292,20 @@ export default function ReportsPage() {
                 value={vehicleNo}
                 onChange={(e) => setVehicleNo(e.target.value)}
               />
+            </div>
+          )}
+          {needsVehicle && (
+            <div>
+              <label htmlFor="vehicle-match" className="mb-1 block text-xs font-medium text-fg-muted">Vehicle number is</label>
+              <select
+                id="vehicle-match"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                value={vehicleMatch}
+                onChange={(e) => setVehicleMatch(e.target.value as "exact" | "contains")}
+              >
+                <option value="exact">Exactly like</option>
+                <option value="contains">Containing</option>
+              </select>
             </div>
           )}
 
@@ -392,7 +412,10 @@ export default function ReportsPage() {
               <CustomerVehicleReports key={customerMileage.run} token={session.token} customerCode={customerMileage.code} initialVehicle={customerMileage.vehicle} from={customerMileage.from} to={customerMileage.to} mode="mileage" />
             </> : <p className="text-sm text-fg-muted">Select a customer and dates, then run the mileage statement.</p>) : <StatementPreview statement={statement} />
           ) : (
-            <ReportTable reportType={reportType} rows={rows} items={items} />
+            <>
+              <ReportTable reportType={reportType} rows={rows} items={items} />
+              {reportType === "mileage" && vehicleReport && <MileageTotals report={vehicleReport} />}
+            </>
           )}
         </Card>
       </div>
@@ -576,18 +599,21 @@ function ReportTable({ reportType, rows, items }: { reportType: ReportType; rows
       );
     }
     case "mileage": {
-      const data = rows as MileageEntry[];
+      const data = rows as MileageReportRow[];
       return (
         <Table
-          headers={["Date", "Bill #", "Item", "Odometer prev", "Odometer curr", "Qty", "Mileage (km/unit)"]}
+          headers={["Bill Date", "Bill No", "Vehicle", "Item", "Previous km", "KMR", "Mileage", "Qty", "Rate", "Amount"]}
           rows={data.map((r) => [
-            r.created_at,
+            r.bill_date,
             r.bill_no,
-            r.item_code,
+            r.vehicle_no ?? "—",
+            r.item_name,
             r.odometer_prev ?? "—",
-            r.odometer_curr,
-            qty(r.qty, r.item_code),
+            r.odometer_curr ?? "—",
             r.mileage !== null ? r.mileage.toFixed(2) : "—",
+            qty(r.qty, r.item_code),
+            money(r.rate),
+            money(r.amount),
           ])}
         />
       );

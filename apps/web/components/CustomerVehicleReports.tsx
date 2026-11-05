@@ -1,13 +1,13 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { api, customerApi, ApiError, downloadAuthed, type CustomerStatement, type CustomerStatementQuery, type MileageEntry } from "@/lib/api";
+import { api, customerApi, ApiError, downloadAuthed, type CustomerStatement, type CustomerStatementQuery, type MileageReport } from "@/lib/api";
 import { clearCustomerSession } from "@/lib/customerAuth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { MileageTotals } from "@/components/MileageTotals";
 
 const money = (v: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(v);
-type Mileage = MileageEntry & { bill_date: string; item_name: string };
 const cell = (v: unknown) => { const s = String(v ?? ""); return `"${(typeof v === "string" && /^\s*[=+\-@]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`; };
 
 export function CustomerVehicleReports({ token, from, to, mode, customerCode, initialVehicle = "", reportStyle = "modern" }: { token: string; from: string; to: string; mode: "statement" | "mileage"; customerCode?: string; initialVehicle?: string; reportStyle?: "legacy" | "modern" }) {
@@ -15,7 +15,7 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
   const [group, setGroup] = useState(true);
   const [opening, setOpening] = useState(true);
   const [statement, setStatement] = useState<CustomerStatement | null>(null);
-  const [mileage, setMileage] = useState<Mileage[] | null>(null);
+  const [mileage, setMileage] = useState<MileageReport | null>(null);
   const [applied, setApplied] = useState<CustomerStatementQuery | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
         if (id === sequence.current) setStatement(result);
       } else {
         const result = await (customerCode ? api.getCustomerMileage(token, customerCode, query) : customerApi.getMileage(token, query));
-        if (id === sequence.current) setMileage(result.rows);
+        if (id === sequence.current) setMileage(result);
       }
       if (id === sequence.current) setApplied(query);
     } catch (err) { if (id === sequence.current) fail(err); }
@@ -73,8 +73,11 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
       if (applied?.withOpening) rows.push(["Account opening balance", statement.opening_balance], ["Account receipts", statement.receipts]);
       rows.push(["Net amount", statement.net_amount]);
     } else if (mileage) {
-      rows.push(["Date", "Vehicle", "Bill", "Item", "Odometer previous", "Odometer current", "Quantity", "Mileage (km/unit)"]);
-      mileage.forEach(m => rows.push([m.bill_date, m.vehicle_no, m.bill_no, m.item_name, m.odometer_prev, m.odometer_curr, m.qty, m.mileage]));
+      rows.push(["Bill Date", "Bill No", "Ref No", "Vehicle", "Item", "Quantity", "Previous km", "KMR", "Mileage (km/unit)", "Rate", "Amount"]);
+      mileage.rows.forEach(m => rows.push([m.bill_date, m.bill_no, m.order_no, m.vehicle_no, m.item_name, m.qty, m.odometer_prev, m.odometer_curr, m.mileage, m.rate, m.amount]));
+      rows.push(["No. of Bills", mileage.bill_count], ["Total Qty", mileage.total_qty], ["Grand Total", mileage.total_amount]);
+      if (mileage.service_charge_percent > 0) rows.push([`Service Charge (${mileage.service_charge_percent}%)`, mileage.service_charge_amount]);
+      rows.push(["Round up", mileage.round_off], ["Net Amount", mileage.net_amount], [mileage.amount_in_words]);
     }
     const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.map(r => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `my-${mode}-${from}-${to}.csv`; link.click();
@@ -85,7 +88,7 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
     try { await downloadAuthed(customerApi.statementPdfUrl(applied), token, `my-credit-statement-${from}-${to}.pdf`); }
     catch (err) { fail(err); }
   }
-  const headers = statement ? ["Date", "Bill", "Order", "Vehicle", "Item", "Quantity", "Rate", "Amount"] : ["Date", "Vehicle", "Bill", "Item", "Previous km", "Current km", "Quantity", "Mileage km/unit"];
+  const headers = statement ? ["Date", "Bill", "Order", "Vehicle", "Item", "Quantity", "Rate", "Amount"] : ["Bill Date", "Bill No", "Ref No", "Vehicle", "Item", "Quantity", "Previous km", "KMR", "Mileage km/unit", "Rate", "Amount"];
   return <section className="rounded-2xl border border-border bg-card p-5">
     <h2 className="text-lg font-semibold">{mode === "statement" ? "Credit sales statement" : (customerCode ? "Credit vehicle mileage statement" : "Vehicle mileage report")}</h2>
     <form className="my-4 flex flex-wrap items-end gap-4 print:hidden" onSubmit={e => { e.preventDefault(); void load({ from, to, vehicleNo: vehicle.trim() || undefined, groupByVehicle: group, withOpening: opening }); }}>
@@ -107,16 +110,16 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
           {applied.groupByVehicle && <tr className="bg-bg-elevated font-semibold"><th colSpan={8} scope="rowgroup" className="p-2">{g.vehicle}</th></tr>}
           {g.lines.map((l, i) => <tr key={i}>{[l.bill_date, l.bill_no, l.order_no || "—", l.vehicle_no || "—", l.item_name, l.qty.toFixed(3), money(l.rate), money(l.amount)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}
           {applied.groupByVehicle && <tr className="font-semibold"><td colSpan={7} className="p-2">Vehicle subtotal — {g.vehicle}</td><td className="p-2">{money(g.lines.reduce((s, l) => s + l.amount, 0))}</td></tr>}
-        </Fragment>) : mileage?.map(m => <tr key={m.id}>{[m.bill_date, m.vehicle_no, m.bill_no, m.item_name, m.odometer_prev ?? "—", m.odometer_curr, m.qty.toFixed(3), m.mileage === null ? "—" : m.mileage.toFixed(2)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}</tbody>
+        </Fragment>) : mileage?.rows.map(m => <tr key={m.id}>{[m.bill_date, m.bill_no, m.order_no || "—", m.vehicle_no || "—", m.item_name, m.qty.toFixed(3), m.odometer_prev ?? "—", m.odometer_curr ?? "—", m.mileage === null ? "—" : m.mileage.toFixed(2), money(m.rate), money(m.amount)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}</tbody>
       </table></div>}
-      {((statement && !statement.lines.length) || (mileage && !mileage.length)) && <p className="py-5 text-center text-sm text-fg-muted">No records for this period and vehicle.</p>}
+      {((statement && !statement.lines.length) || (mileage && !mileage.rows.length)) && <p className="py-5 text-center text-sm text-fg-muted">No records for this period and vehicle.</p>}
       {statement && <>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
           {[["Sales total", statement.total_amount], ["Service charge", statement.service_charge_amount], ...(applied.withOpening ? [["Account opening balance", statement.opening_balance], ["Account receipts", statement.receipts]] : []), ["Round off", statement.round_off], [applied.withOpening ? "Closing amount" : "Net sales amount", statement.net_amount]].map(([label, amount]) => <div key={label}><p className="text-fg-muted">{label}</p><p className="font-semibold">{money(Number(amount))}</p></div>)}
         </div>
         <p className="mt-3 text-xs text-fg-muted">Credit sales only. Opening balances and receipts apply to the whole customer account, including when sales are filtered by vehicle. Use Account ledger for the full account closing balance.</p>
       </>}
-      {mileage && <p className="mt-3 text-xs text-fg-muted">{customerCode ? "Credit bills only. " : ""}Mileage uses the odometer readings recorded against your bills. A dash means a previous reading or mileage was not recorded.</p>}
+      {mileage && <><MileageTotals report={mileage} /><p className="mt-3 text-xs text-fg-muted">{customerCode ? "Credit bills only. " : ""}Every item on your bills is listed, as its amount counts towards the total. A dash means no odometer reading was recorded for that item.</p></>}
     </>}
   </section>;
 }

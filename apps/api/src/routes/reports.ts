@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { reportsRepo, type Granularity } from "../repositories/reports.js";
 import { stockRepo } from "../repositories/stock.js";
 import { purchasesRepo } from "../repositories/purchases.js";
-import { mileageRepo } from "../repositories/mileage.js";
 import { getCustomerLedger } from "../services/ledger.js";
+import { getMileageReport } from "../services/mileageReport.js";
 import { generateGstSummaryExcel } from "../services/gstExcel.js";
 import { getCustomerStatement } from "../services/customerStatement.js";
 import { generateCustomerStatementPdf } from "../services/customerStatementPdf.js";
@@ -200,14 +200,20 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.get<{ Querystring: { vehicle_no: string } }>(
+  fastify.get<{ Querystring: { vehicle_no?: string; from?: string; to?: string; match?: string } }>(
     "/reports/mileage",
     { preHandler: managerOnly },
     async (request, reply) => {
-      if (!request.query.vehicle_no) {
+      const { vehicle_no, from = "0000-01-01", to = "9999-12-31", match } = request.query;
+      if (!vehicle_no?.trim()) {
         return reply.code(400).send({ error: "vehicle_no query param is required" });
       }
-      return mileageRepo.listByVehicle(request.query.vehicle_no);
+      const validDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && (v === "0000-01-01" || v === "9999-12-31" || Number.isFinite(Date.parse(`${v}T00:00:00Z`)));
+      if (!validDate(from) || !validDate(to) || from > to) {
+        return reply.code(400).send({ error: "Choose valid From and To dates in chronological order" });
+      }
+      // VWSMAGE's own prompt: "Exactly Like" or "Containing".
+      return getMileageReport({ vehicleNo: vehicle_no, from, to, vehicleMatch: match === "contains" ? "contains" : "exact" });
     },
   );
 }
