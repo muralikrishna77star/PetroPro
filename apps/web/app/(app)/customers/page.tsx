@@ -391,7 +391,7 @@ export default function CustomersPage() {
 
               {(session.role === "super_admin" || session.role === "owner") && (
                 <div className="rounded-lg border border-border p-3 ">
-                  <h3 className="mb-2 text-sm font-medium">Order Entry login</h3>
+                  <h3 className="mb-2 text-sm font-medium">Customer Login</h3>
                   <form onSubmit={handleSaveEmail} className="mb-2 flex gap-2">
                     <input
                       type="email"
