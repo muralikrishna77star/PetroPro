@@ -10,7 +10,7 @@ const money = (v: number) => new Intl.NumberFormat("en-IN", { style: "currency",
 type Mileage = MileageEntry & { bill_date: string; item_name: string };
 const cell = (v: unknown) => { const s = String(v ?? ""); return `"${(typeof v === "string" && /^\s*[=+\-@]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`; };
 
-export function CustomerVehicleReports({ token, from, to, mode, customerCode, initialVehicle = "" }: { token: string; from: string; to: string; mode: "statement" | "mileage"; customerCode?: string; initialVehicle?: string }) {
+export function CustomerVehicleReports({ token, from, to, mode, customerCode, initialVehicle = "", reportStyle = "modern" }: { token: string; from: string; to: string; mode: "statement" | "mileage"; customerCode?: string; initialVehicle?: string; reportStyle?: "legacy" | "modern" }) {
   const [vehicle, setVehicle] = useState(initialVehicle);
   const [group, setGroup] = useState(true);
   const [opening, setOpening] = useState(true);
@@ -101,14 +101,14 @@ export function CustomerVehicleReports({ token, from, to, mode, customerCode, in
     {applied && <>
       <p className="my-3 text-sm text-fg-muted">{from} to {to} · Vehicle: {applied.vehicleNo || "All vehicles"}</p>
       <div className="mb-4 flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={csv}>Download CSV</Button>{statement && <Button variant="outline" onClick={() => void pdf()}>Download statement PDF</Button>}<Button variant="outline" onClick={() => window.print()}>Print / Save PDF</Button></div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm">
+      {reportStyle === "legacy" && statement ? <div className="overflow-x-auto rounded-lg border border-border p-3"><p className="mb-2 text-xs text-fg-muted">Legacy FoxPro statement layout</p>{statement.pages.map((page, index) => <pre key={index} className="mb-5 w-max whitespace-pre font-mono text-xs leading-5">{page.join("\n")}</pre>)}</div> : <div className="overflow-x-auto"><table className="w-full text-left text-sm">
         <thead><tr>{headers.map(h => <th className="whitespace-nowrap border-b border-border p-2" scope="col" key={h}>{h}</th>)}</tr></thead>
         <tbody>{statement ? groups.map((g, index) => <Fragment key={index}>
           {applied.groupByVehicle && <tr className="bg-bg-elevated font-semibold"><th colSpan={8} scope="rowgroup" className="p-2">{g.vehicle}</th></tr>}
           {g.lines.map((l, i) => <tr key={i}>{[l.bill_date, l.bill_no, l.order_no || "—", l.vehicle_no || "—", l.item_name, l.qty.toFixed(3), money(l.rate), money(l.amount)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}
           {applied.groupByVehicle && <tr className="font-semibold"><td colSpan={7} className="p-2">Vehicle subtotal — {g.vehicle}</td><td className="p-2">{money(g.lines.reduce((s, l) => s + l.amount, 0))}</td></tr>}
         </Fragment>) : mileage?.map(m => <tr key={m.id}>{[m.bill_date, m.vehicle_no, m.bill_no, m.item_name, m.odometer_prev ?? "—", m.odometer_curr, m.qty.toFixed(3), m.mileage === null ? "—" : m.mileage.toFixed(2)].map((v, j) => <td className="whitespace-nowrap border-b border-border p-2" key={j}>{v}</td>)}</tr>)}</tbody>
-      </table></div>
+      </table></div>}
       {((statement && !statement.lines.length) || (mileage && !mileage.length)) && <p className="py-5 text-center text-sm text-fg-muted">No records for this period and vehicle.</p>}
       {statement && <>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">

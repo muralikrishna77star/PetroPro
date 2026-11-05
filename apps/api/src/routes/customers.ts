@@ -38,6 +38,23 @@ export default async function customerRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Report preference is intentionally separate from profile edits to avoid accidental resets.
+  fastify.put<{ Params: { code: string }; Body: { report_style: "legacy" | "modern" } }>(
+    "/customers/:code/report-style",
+    { preHandler: fastify.requireRole("super_admin", "owner") },
+    async (request, reply) => {
+      const style = request.body?.report_style;
+      if (style !== "legacy" && style !== "modern") return reply.code(400).send({ error: "Choose legacy or modern" });
+      const previous = customersRepo.get(request.params.code);
+      if (!previous) return reply.code(404).send({ error: "Customer not found" });
+      const updated = customersRepo.setReportStyle(previous.code, style);
+      if (previous.report_style !== style) auditLogsRepo.record({ user_id: request.user.sub,
+        action: "set_customer_report_style", entity_type: "customer", entity_id: previous.code,
+        details: { from: previous.report_style, to: style } });
+      return updated;
+    },
+  );
+
   // Provisions/resets a customer's Order Entry login (routes/customerAuth.ts). No self-signup —
   // staff generate a temp password here and relay it to the customer, mirroring reset-password
   // for staff users (routes/users.ts).

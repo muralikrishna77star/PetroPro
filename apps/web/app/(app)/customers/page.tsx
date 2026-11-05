@@ -10,6 +10,8 @@ export default function CustomersPage() {
   const canViewLedger = session?.role === "super_admin" || session?.role === "owner";
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [reportStyleError, setReportStyleError] = useState<string | null>(null);
+  const [reportStyleBusy, setReportStyleBusy] = useState(false);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
 
@@ -52,6 +54,7 @@ export default function CustomersPage() {
   async function selectCustomer(customer: Customer) {
     if (!session) return;
     setSelected(customer);
+    setReportStyleError(null);
     setLedger(null);
     setReceiptMessage(null);
     setLastReceipt(null);
@@ -172,6 +175,21 @@ export default function CustomersPage() {
     }
   }
 
+  async function handleReportStyle(style: "legacy" | "modern") {
+    if (!session || !selected || reportStyleBusy) return;
+    setReportStyleBusy(true);
+    setReportStyleError(null);
+    try {
+      const updated = await api.setCustomerReportStyle(session.token, selected.code, style);
+      setSelected(updated);
+      refreshCustomers(session.token);
+    } catch (err) {
+      setReportStyleError(err instanceof ApiError ? err.message : "Could not update report preference");
+    } finally {
+      setReportStyleBusy(false);
+    }
+  }
+
   async function handleSetPassword() {
     if (!session || !selected) return;
     setPasswordError(null);
@@ -285,6 +303,18 @@ export default function CustomersPage() {
                 </form>
               )}
 
+              {canViewLedger && <section className="rounded-lg border border-border p-3">
+                <h3 className="mb-2 text-sm font-medium">Customer reporting preference</h3>
+                <p className="mb-2 text-xs text-fg-muted">Existing customers retain Legacy reports. Modern is available on request; changing this setting does not alter transactions.</p>
+                <label className="flex items-center gap-3 text-sm">Report format
+                  <select aria-label="Customer report format" className="rounded-lg border border-border bg-bg-elevated px-3 py-1.5"
+                    value={selected.report_style} disabled={reportStyleBusy}
+                    onChange={e => void handleReportStyle(e.target.value as "legacy" | "modern")}>
+                    <option value="legacy">Legacy</option><option value="modern">Modern</option>
+                  </select>
+                </label>
+                {reportStyleError && <p role="alert" className="mt-2 text-sm text-error">{reportStyleError}</p>}
+              </section>}
               <form onSubmit={handleRecordReceipt} className="rounded-lg border border-border p-3 ">
                 <h3 className="mb-2 text-sm font-medium">Record a receipt</h3>
                 <div className="mb-2 flex gap-2">

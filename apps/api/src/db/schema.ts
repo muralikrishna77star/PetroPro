@@ -432,6 +432,8 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "customers", "email", "TEXT");
   ensureColumn(db, "customers", "password_hash", "TEXT");
   ensureColumn(db, "customers", "google_sub", "TEXT");
+  // Existing imported accounts keep legacy statements; new accounts opt into modern by default.
+  ensureColumn(db, "customers", "report_style", "TEXT NOT NULL DEFAULT 'legacy' CHECK (report_style IN ('legacy', 'modern'))");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_google_sub ON customers(google_sub) WHERE google_sub IS NOT NULL");
   ensureColumn(db, "bill_lines", "order_line_id", "INTEGER REFERENCES order_lines(id)");
   ensureColumn(db, "items", "hsn_code", "TEXT");

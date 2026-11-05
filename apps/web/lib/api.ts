@@ -425,6 +425,9 @@ export const api = {
     },
   ) => request<Customer>(`/customers/${code}`, { method: "PUT", token, body }),
 
+  setCustomerReportStyle: (token: string, code: string, report_style: "legacy" | "modern") =>
+    request<Customer>(`/customers/${code}/report-style`, { method: "PUT", token, body: { report_style } }),
+
   setCustomerPassword: (token: string, code: string) =>
     request<{ code: string; temporaryPassword: string }>(`/customers/${code}/set-password`, {
       method: "POST",
@@ -677,6 +680,7 @@ export interface CustomerReport {
 }
 
 export const customerApi = {
+  me: (token: string) => request<Customer>("/customer/me", { token }),
   getStatement: (token: string, query: CustomerStatementQuery) =>
     request<CustomerStatement>(`/customer/reports/statement?${statementParams(query)}`, { token }),
   statementPdfUrl: (query: CustomerStatementQuery) => `${API_URL}/customer/reports/statement.pdf?${statementParams(query)}`,

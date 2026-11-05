@@ -117,6 +117,7 @@ export interface Customer {
   service_charge: number;
   gst_no: string | null;
   email: string | null;
+  report_style: "legacy" | "modern";
 }
 
 /** A customer's own order-placement login (apps/api's routes/customerAuth.ts) — a separate
