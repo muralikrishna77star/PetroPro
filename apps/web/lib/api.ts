@@ -680,6 +680,7 @@ export interface CustomerReport {
 }
 
 export const customerApi = {
+  me: (token: string) => request<Customer>("/customer/me", { token }),
   getStatement: (token: string, query: CustomerStatementQuery) =>
     request<CustomerStatement>(`/customer/reports/statement?${statementParams(query)}`, { token }),
   statementPdfUrl: (query: CustomerStatementQuery) => `${API_URL}/customer/reports/statement.pdf?${statementParams(query)}`,
