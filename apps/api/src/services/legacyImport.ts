@@ -8,7 +8,8 @@ import { createBackup } from "./backup.js";
 
 /**
  * Uploaded Petbill (FoxPro 2.6) files: monthly sales `DECBIL25`, monthly stock `DECSTK25`, annual
- * purchases `PURCH25` and receipts `RECPT26`. Every suffix is a calendar year (docs/MIGRATION_NOTES.md).
+ * purchases `PURCH25` and receipts `RECPT26`, whose suffix is a calendar year, and annual mileage `MAGE25`,
+ * whose suffix is the year a financial year starts: BILLEN writes April 2025 to March 2026 there.
  *
  * Preview and import run the same analysis, so what's previewed is what gets written, and nothing
  * is written until the file is confirmed. Re-uploading is safe: rows already in PetroPro are matched
@@ -19,13 +20,14 @@ import { createBackup } from "./backup.js";
  */
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-const FILE_NAME = new RegExp(`^(?:(${MONTHS.join("|")})(BIL|STK)|(PURCH|RECPT))(\\d{2})(?:\\.DBF)?$`, "i");
+const FILE_NAME = new RegExp(`^(?:(${MONTHS.join("|")})(BIL|STK)|(PURCH|RECPT|MAGE))(\\d{2})(?:\\.DBF)?$`, "i");
 
 const REQUIRED_FIELDS: Record<LegacyImportKind, string[]> = {
   sales: ["BILL_NO", "BILL_DATE", "ICODE", "QTY", "RATE", "AMT"],
   stock: ["ICODE", "SDATE", "OSTOCK", "CSTOCK"],
   purchases: ["ICODE", "QTY", "PUR_VALUE", "PUR_DATE"],
   receipts: ["REC_DATE", "CUST_CODE", "AMOUNT"],
+  mileage: ["BILL_NO", "STATUS", "VEH_NO", "ICODE", "OR", "CR", "MILEAGE"],
 };
 const TAX_FIELDS = ["RATEBTX", "TAX_PER", "TAX_AMT"];
 const MAX_EXAMPLES = 20;
@@ -51,6 +53,9 @@ export function parseLegacyFilename(filename: string): LegacyFilePeriod | null {
   const match = FILE_NAME.exec(filename.trim());
   if (!match) return null;
   const year = fullYear(match[4]);
+  if (match[3]?.toUpperCase() === "MAGE") {
+    return { kind: "mileage", label: `FY ${year}-${String(year + 1).slice(2)}`, from: `${year}-04-01`, to: `${year + 1}-03-31` };
+  }
   if (match[3]) {
     const kind = match[3].toUpperCase() === "PURCH" ? "purchases" : "receipts";
     return { kind, label: String(year), from: `${year}-01-01`, to: `${year}-12-31` };
@@ -221,6 +226,7 @@ function analyzeSales(report: LegacyImportReport, rows: DbfRow[], fields: Set<st
 
   const bills: {
     date: string;
+    status: string;
     vehicle: string | null;
     customer: string | null;
     user: string | null;
@@ -272,6 +278,7 @@ function analyzeSales(report: LegacyImportReport, rows: DbfRow[], fields: Set<st
     if (vehicle && !vehiclesRepo.get(vehicle)) newVehicles.add(vehicle);
     bills.push({
       date,
+      status: str(first, "STATUS"),
       vehicle,
       customer,
       user: user && users.has(user) ? user : null,
@@ -294,8 +301,8 @@ function analyzeSales(report: LegacyImportReport, rows: DbfRow[], fields: Set<st
     report,
     apply() {
       const insertBill = db.prepare(
-        `INSERT INTO bills (bill_date, vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, legacy_bill_no)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO bills (bill_date, vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, legacy_bill_no, legacy_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const insertLine = db.prepare(
         `INSERT INTO bill_lines (bill_no, item_code, qty, rate, rate_pretax, amount, tax_percent, tax_amount, is_retail, service_charge)
@@ -315,6 +322,7 @@ function analyzeSales(report: LegacyImportReport, rows: DbfRow[], fields: Set<st
           money(bill.amount),
           bill.customer ? "credit" : "cash",
           num(bill.lines[0], "BILL_NO"),
+          bill.status || null,
         );
         for (const line of bill.lines) {
           insertLine.run(
@@ -551,12 +559,137 @@ function analyzeReceipts(report: LegacyImportReport, rows: DbfRow[], period: Leg
   };
 }
 
+/**
+ * MAGE has no date, so a row finds its bill by Petbill's number and type within the financial year,
+ * which is how PRINTBIL finds it. It only reaches bills imported through this screen, as earlier
+ * imports kept no legacy number. Anything that doesn't lead to exactly one bill is reported, not guessed.
+ */
+function analyzeMileage(report: LegacyImportReport, rows: DbfRow[], period: LegacyFilePeriod): Analysis {
+  const skips = new Skips();
+  const bills = db
+    .prepare(
+      `SELECT bill_no, legacy_bill_no, legacy_status, payment_type, vehicle_no FROM bills
+       WHERE legacy_bill_no IS NOT NULL AND date(bill_date) BETWEEN ? AND ?`,
+    )
+    .all(period.from, period.to) as unknown as {
+    bill_no: number;
+    legacy_bill_no: number;
+    legacy_status: string | null;
+    payment_type: string;
+    vehicle_no: string | null;
+  }[];
+  const byNumber = new Map<number, typeof bills>();
+  for (const bill of bills) byNumber.set(bill.legacy_bill_no, [...(byNumber.get(bill.legacy_bill_no) ?? []), bill]);
+
+  const lineRows = db
+    .prepare(
+      `SELECT l.bill_no, l.item_code, l.qty, COALESCE(i.track_mileage, 0) AS track_mileage
+       FROM bill_lines l JOIN bills b ON b.bill_no = l.bill_no LEFT JOIN items i ON i.code = l.item_code
+       WHERE b.legacy_bill_no IS NOT NULL AND date(b.bill_date) BETWEEN ? AND ? ORDER BY l.id`,
+    )
+    .all(period.from, period.to) as unknown as { bill_no: number; item_code: string; qty: number; track_mileage: number }[];
+  const linesOf = new Map<number, typeof lineRows>();
+  for (const line of lineRows) linesOf.set(line.bill_no, [...(linesOf.get(line.bill_no) ?? []), line]);
+
+  const stored = db
+    .prepare(
+      `SELECT m.bill_no, m.odometer_curr FROM mileage_log m JOIN bills b ON b.bill_no = m.bill_no
+       WHERE b.legacy_bill_no IS NOT NULL AND date(b.bill_date) BETWEEN ? AND ?`,
+    )
+    .all(period.from, period.to) as unknown as { bill_no: number; odometer_curr: number }[];
+  const seen = new Set(stored.map((m) => `${m.bill_no}|${m.odometer_curr}`));
+
+  const toInsert: { bill_no: number; vehicle: string; item: string; prev: number | null; curr: number; qty: number; mileage: number | null }[] = [];
+  const legacyPayment: Record<string, string> = { C: "cash", R: "credit" };
+  let repeats = 0;
+  let noReading = 0;
+  const repeatKeys = new Set<string>();
+
+  for (const row of rows) {
+    const legacyNo = num(row, "BILL_NO");
+    const status = str(row, "STATUS");
+    const vehicle = str(row, "VEH_NO");
+    const label = `Bill ${legacyNo}`;
+    // BILLEN saves each reading twice, so an exact repeat is the same reading.
+    const key = [status, legacyNo, vehicle, str(row, "ICODE"), row.OR, row.CR, row.MILEAGE].join("|");
+    if (repeatKeys.has(key)) {
+      repeats++;
+      continue;
+    }
+    repeatKeys.add(key);
+    if (hasOverflow(row, ["OR", "CR", "MILEAGE"])) {
+      skips.add("Rows with an unreadable reading", label);
+      continue;
+    }
+    // Zeros mean nothing was entered. Storing one would also become this vehicle's latest reading.
+    if (num(row, "CR") <= 0) {
+      noReading++;
+      continue;
+    }
+    const sameNumber = (byNumber.get(legacyNo) ?? []).filter(
+      (b) => b.legacy_status === status || (b.legacy_status === null && b.payment_type === legacyPayment[status]),
+    );
+    if (sameNumber.length === 0) {
+      skips.add("Readings for bills not in PetroPro. Import that month's sales first", label);
+      continue;
+    }
+    const candidates = sameNumber.filter((b) => (b.vehicle_no ?? "").toUpperCase() === vehicle.toUpperCase());
+    if (candidates.length === 0) {
+      skips.add("Readings whose vehicle differs from the bill's", label);
+      continue;
+    }
+    if (candidates.length > 1) {
+      skips.add("Readings that match more than one bill", label);
+      continue;
+    }
+    const bill = candidates[0];
+    if (seen.has(`${bill.bill_no}|${num(row, "CR")}`)) {
+      report.already_present++;
+      continue;
+    }
+    // Petbill worked the mileage out from the bill's fuel line, though a row can name another item
+    // from the same bill, such as a cloth entered last.
+    const lines = linesOf.get(bill.bill_no) ?? [];
+    const fuel = lines.filter((l) => l.track_mileage);
+    const line = fuel.find((l) => l.item_code === str(row, "ICODE")) ?? fuel[0] ?? lines.find((l) => l.item_code === str(row, "ICODE"));
+    if (!line) {
+      skips.add("Readings for an item that isn't on the bill", label);
+      continue;
+    }
+    seen.add(`${bill.bill_no}|${num(row, "CR")}`);
+    toInsert.push({
+      bill_no: bill.bill_no,
+      vehicle: bill.vehicle_no ?? vehicle,
+      item: line.item_code,
+      prev: num(row, "OR") > 0 ? num(row, "OR") : null,
+      curr: num(row, "CR"),
+      qty: line.qty,
+      mileage: num(row, "MILEAGE") > 0 ? num(row, "MILEAGE") : null,
+    });
+  }
+
+  report.to_import = toInsert.length;
+  report.skipped = skips.list();
+  report.notes.push(`This file covers ${period.label}, April to March.`);
+  if (repeats > 0) report.notes.push(`${repeats} repeated row(s) counted once. Petbill saves each reading twice.`);
+  if (noReading > 0) report.notes.push(`${noReading} row(s) with no reading (0) left out.`);
+  return {
+    report,
+    apply() {
+      const insert = db.prepare(
+        "INSERT INTO mileage_log (bill_no, vehicle_no, item_code, odometer_prev, odometer_curr, qty, mileage) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      );
+      for (const r of toInsert) insert.run(r.bill_no, r.vehicle, r.item, r.prev, r.curr, r.qty, r.mileage);
+    },
+  };
+}
+
 function analyze(filename: string, content: Buffer): Analysis {
   const period = parseLegacyFilename(filename);
   const report = blankReport(filename, period);
   const noop = { report, apply: () => undefined };
   if (!period) {
-    report.blocked = "This name isn't one PetroPro recognises. Use a name like DECBIL25.DBF, DECSTK25.DBF, PURCH25.DBF or RECPT26.DBF.";
+    report.blocked = "This name isn't one PetroPro recognises. Use a name like DECBIL25.DBF, DECSTK25.DBF, PURCH25.DBF, RECPT26.DBF or MAGE25.DBF.";
     return noop;
   }
 
@@ -579,6 +712,7 @@ function analyze(filename: string, content: Buffer): Analysis {
   if (period.kind === "sales") return analyzeSales(report, rows, fields, period);
   if (period.kind === "stock") return analyzeStock(report, rows, period);
   if (period.kind === "receipts") return analyzeReceipts(report, rows, period);
+  if (period.kind === "mileage") return analyzeMileage(report, rows, period);
   return analyzePurchases(report, rows, period);
 }
 

@@ -449,6 +449,7 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "bills", "client_ref", "TEXT");
   ensureColumn(db, "bills", "local_time", "TEXT");
   ensureColumn(db, "bills", "legacy_bill_no", "INTEGER");
+  ensureColumn(db, "bills", "legacy_status", "TEXT");
   // QR-scanned invoice page's optional "send to my WhatsApp" (routes/publicInvoice.ts). Off by
   // default: it hands out a bill link that lives for days rather than the QR's 30 minutes.
   ensureColumn(db, "communication_settings", "qr_whatsapp_enabled", "INTEGER NOT NULL DEFAULT 0");

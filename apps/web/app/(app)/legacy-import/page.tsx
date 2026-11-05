@@ -6,7 +6,7 @@ import type { LegacyImportReport } from "@petropro/shared-types";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 
-const KIND_LABELS = { sales: "Sales", stock: "Stock", purchases: "Purchases", receipts: "Receipts" } as const;
+const KIND_LABELS = { sales: "Sales", stock: "Stock", purchases: "Purchases", receipts: "Receipts", mileage: "Mileage" } as const;
 
 interface Entry {
   file: File;
@@ -18,11 +18,14 @@ function messageOf(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
 }
 
-function statusOf({ report, error }: Entry): { text: string; className: string } {
+function statusOf({ report, error }: Entry, salesInBatch: boolean): { text: string; className: string } {
   if (error) return { text: error, className: "text-error" };
   if (!report) return { text: "Checking...", className: "text-fg-muted" };
   if (report.blocked) return { text: report.blocked, className: "text-error" };
   if (report.imported) return { text: "Imported", className: "text-success" };
+  if (report.to_import === 0 && report.kind === "mileage" && salesInBatch) {
+    return { text: "Checked again after the sales files import", className: "text-fg-muted" };
+  }
   if (report.to_import === 0) return { text: "Nothing new to import", className: "text-fg-muted" };
   return { text: "Ready", className: "text-success" };
 }
@@ -45,6 +48,8 @@ export default function LegacyImportPage() {
   async function chooseFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
     const files = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    // Mileage attaches to imported bills, so it stays last on screen and when importing.
+    files.sort((a, b) => Number(/^mage/i.test(a.name)) - Number(/^mage/i.test(b.name)));
     setEntries(files.map((file) => ({ file, report: null, error: null })));
     setBackup(null);
     setError(null);
@@ -63,10 +68,16 @@ export default function LegacyImportPage() {
 
   const ready = entries.filter((e) => !e.error && e.report && !e.report.blocked && !e.report.imported && e.report.to_import > 0);
 
+  // A mileage file may wait on sales files in this batch, so it goes along with them even if its
+  // preview found nothing it could attach to yet. The server checks it again when it's imported.
+  const otherReady = ready.filter((e) => e.report?.kind !== "mileage");
+  const mileagePending = entries.filter((e) => !e.error && e.report?.kind === "mileage" && !e.report.blocked && !e.report.imported);
+  const importable = otherReady.length > 0 ? [...otherReady, ...mileagePending] : ready;
+
   async function runImport() {
     if (
       !window.confirm(
-        `Import ${ready.length} file(s) into PetroPro? A backup is taken first. New bills and receipts will use the next numbers, so your next live bill and receipt numbers will jump.`,
+        `Import ${importable.length} file(s) into PetroPro? A backup is taken first. New bills and receipts will use the next numbers, so your next live bill and receipt numbers will jump.`,
       )
     ) {
       return;
@@ -74,7 +85,7 @@ export default function LegacyImportPage() {
     setError(null);
     setWorking(true);
     let needBackup = true;
-    for (const entry of ready) {
+    for (const entry of importable) {
       const index = entries.indexOf(entry);
       setProgress(`Importing ${entry.file.name}`);
       try {
@@ -99,7 +110,7 @@ export default function LegacyImportPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
         <div>
           <h1 className="text-xl font-semibold text-primary">Legacy Import</h1>
-          <p className="text-sm text-fg-muted">Bring in old Petbill (FoxPro) sales, stock, purchase and receipt files.</p>
+          <p className="text-sm text-fg-muted">Bring in old Petbill (FoxPro) sales, stock, purchase, receipt and mileage files.</p>
         </div>
 
         <Card color="teal" className="flex flex-col gap-3">
@@ -116,6 +127,10 @@ export default function LegacyImportPage() {
             </li>
             <li>
               <span className="font-mono">RECPT26.DBF</span>: customer receipts for calendar year 2026
+            </li>
+            <li>
+              <span className="font-mono">MAGE25.DBF</span>: mileage for financial year 2025-26 (April 2025 to March 2026). It attaches to
+              bills imported here, so import those months&apos; sales first or in the same batch
             </li>
           </ul>
           <p className="text-sm text-fg-muted">
@@ -177,7 +192,7 @@ export default function LegacyImportPage() {
                 <tbody>
                   {entries.map((entry) => {
                     const { report } = entry;
-                    const status = statusOf(entry);
+                    const status = statusOf(entry, otherReady.some((e) => e.report?.kind === "sales"));
                     const notImported = report?.skipped.reduce((sum, s) => sum + s.count, 0) ?? 0;
                     return (
                       <tr key={entry.file.name} className="border-b border-border align-top">
@@ -232,10 +247,10 @@ export default function LegacyImportPage() {
             <div>
               <button
                 onClick={runImport}
-                disabled={working || ready.length === 0}
+                disabled={working || importable.length === 0}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                {working ? "Working..." : ready.length > 0 ? `Import ${ready.length} file(s)` : "Nothing to import"}
+                {working ? "Working..." : importable.length > 0 ? `Import ${importable.length} file(s)` : "Nothing to import"}
               </button>
             </div>
           </Card>

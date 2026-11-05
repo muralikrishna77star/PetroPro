@@ -251,7 +251,19 @@ all or nothing, and one backup is taken per batch. The rules, and why:
 - **Imported bills and receipts take the next numbers,** so live numbering jumps past them. A bill's legacy
   BILL_NO is kept in `legacy_bill_no` and printed on its receipt. Bills imported earlier by `import:fy2025` don't
   have it. REC_NO isn't kept.
-- **Not handled here:** mileage (`MAGE`) and cancelled bills (`BILLCNCS`).
+- **Mileage (`MAGE<YY>`) is financial-year numbered:** `MAGE25` is April 2025 to March 2026, which `BILLEN` sets out when
+  it picks the file. A row has no date, so it finds its bill by `legacy_bill_no` and `legacy_status` within that year, then
+  by vehicle. Bills from the command-line importers have no legacy number and can't be matched. `BILLEN` writes each reading
+  twice, so exact repeats count once. Rows with a closing reading of 0 are left out, as nothing was entered and it would
+  otherwise become the vehicle's latest reading. A reading goes on the bill's fuel line even if the row names another item.
+- **Cancelled bills don't need removing:** Petbill moves them out of the monthly file. All 38 `BILLCNCS` rows for April to June
+  2019 are absent from `APRBIL19`, `MAYBIL19` and `JUNBIL19`, so a cancelled sale doesn't import as a sale. Those are the only
+  months where both files exist. `BILLCNCS` itself isn't imported, as it lacks the tax fields a bill needs.
+- **Tested on real `MAGE18`:** 6,315 rows gave 3,624 readings, after 2,581 repeats and 66 zero rows, with none ambiguous. Uploading
+  again added nothing. 44 readings had no bill of that type and number in months that were imported, and are reported. Their cause
+  isn't known: `BILLCNCS` has no rows for 2018, so it can't show whether they were cancelled. Of the stored readings with both
+  odometer values and a mileage, 3,258 agree with `(CR-OR)/qty`. The other 14 are Petbill's own odometer mistakes, overflowing
+  its narrow `MILEAGE` column, and are kept as Petbill has them.
 
 Tested on real files: the April to June 2019 tables in commit `77bb4b0`, on a scratch database, gave 3,606 bills,
 4,047 lines, 5,313 stock rows and 114 purchases, the same counts `import:demo-transactions` recorded, and uploading
@@ -272,4 +284,4 @@ mileage alongside, built from the bill lines, so `services/mileageReport.ts` sta
   reading, which Petbill's report doesn't.
 - **Differences:** quantities show 3 decimals rather than Petbill's 2, and a missing reading shows a dash rather than
   zero. There's no PDF or vehicle-grouped form (GRPMCWS) yet.
-- **Mileage from imported bills:** Legacy Import doesn't take `MAGE` files, so those bills show amounts with no readings.
+- **Mileage from imported bills:** upload the year's `MAGE` file with its sales files. See "Uploading Petbill files".

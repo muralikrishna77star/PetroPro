@@ -186,7 +186,7 @@ test("file names decide the type and period, with calendar years", () => {
   assert.equal(parseLegacyFilename("recpt27.dbf")?.from, "2027-01-01");
   assert.equal(parseLegacyFilename("FEBBIL24.DBF")?.to, "2024-02-29");
   assert.equal(parseLegacyFilename("MARBIL99.DBF")?.from, "1999-03-01");
-  for (const bad of ["ANOVBIL25.DBF", "BILSEK25.DBF", "MAGE25.DBF", "XXXBIL25.DBF", "DECBIL2025.DBF", "PURCH.DBF", "../DECBIL25.DBF"]) {
+  for (const bad of ["ANOVBIL25.DBF", "BILSEK25.DBF", "XXXBIL25.DBF", "DECBIL2025.DBF", "PURCH.DBF", "../DECBIL25.DBF"]) {
     assert.equal(parseLegacyFilename(bad), null, bad);
   }
 });
@@ -569,6 +569,154 @@ test("receipts that can't be placed are held and reported", async () => {
   assert.deepEqual(report.skipped.find((s) => s.reason.includes("outside"))?.examples, ["2025-12-31"]);
   assert.ok(report.notes.some((n) => n.includes("cashier")));
   assert.equal((db.prepare("SELECT cashier_id FROM receipts").get() as { cashier_id: string | null }).cashier_id, null);
+});
+
+const MAGE_FIELDS: Field[] = [
+  ["BILL_NO", "N", 10],
+  ["STATUS", "C", 1],
+  ["VEH_NO", "C", 13],
+  ["ICODE", "C", 3],
+  ["OR", "N", 9, 1],
+  ["CR", "N", 9, 1],
+  ["MILEAGE", "N", 6, 2],
+];
+
+function mageRow(no: number, overrides: Row = {}): Row {
+  return { BILL_NO: no, STATUS: "R", VEH_NO: "TN01AB1234", ICODE: "MS", OR: 1000, CR: 1120.5, MILEAGE: 12.05, ...overrides };
+}
+
+const mileageOf = (billNo: number) => db.prepare("SELECT * FROM mileage_log WHERE bill_no = ? ORDER BY id").all(billNo) as unknown as Record<string, unknown>[];
+const billNoFor = (legacyNo: number, status = "R") => (db.prepare("SELECT bill_no FROM bills WHERE legacy_bill_no = ? AND legacy_status = ?").get(legacyNo, status) as { bill_no: number }).bill_no;
+
+function clearMileage() {
+  db.exec("DELETE FROM mileage_log");
+  clearData();
+  db.exec("UPDATE items SET track_mileage = 0");
+  db.exec("UPDATE items SET track_mileage = 1 WHERE code IN ('MS', 'HSD')");
+}
+
+test("MAGE's name means a financial year, unlike the other files", () => {
+  assert.deepEqual(parseLegacyFilename("MAGE25.DBF"), { kind: "mileage", label: "FY 2025-26", from: "2025-04-01", to: "2026-03-31" });
+  assert.equal(parseLegacyFilename("mage18")?.to, "2019-03-31");
+});
+
+test("readings attach to the imported bill, including one from the next calendar year", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(1, { CUST_CODE: "C01" })]));
+  await commit("MARBIL26.DBF", dbf(BILL_FIELDS, [billRow(2, { CUST_CODE: "C01", BILL_DATE: "2026-03-10" })]));
+  const report = await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(1), mageRow(2, { OR: 1120.5, CR: 1300, MILEAGE: 17.95 })]));
+  assert.equal(report.kind, "mileage");
+  assert.equal(report.period, "FY 2025-26");
+  assert.equal(report.to_import, 2);
+  assert.equal(report.imported, true);
+  const [first] = mileageOf(billNoFor(1));
+  assert.deepEqual([first.vehicle_no, first.item_code, first.odometer_prev, first.odometer_curr, first.qty, first.mileage], ["TN01AB1234", "MS", 1000, 1120.5, 10, 12.05]);
+  assert.equal(mileageOf(billNoFor(2))[0].odometer_curr, 1300);
+});
+
+test("Petbill's doubled rows count once, and uploading again adds nothing", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(1)]));
+  const file = dbf(MAGE_FIELDS, [mageRow(1), mageRow(1)]);
+  const report = await commit("MAGE25.DBF", file);
+  assert.equal(report.to_import, 1);
+  assert.ok(report.notes.some((n) => n.includes("1 repeated row")));
+  assert.equal(mileageOf(billNoFor(1)).length, 1);
+  const again = await commit("MAGE25.DBF", file);
+  assert.equal(again.to_import, 0);
+  assert.equal(again.already_present, 1);
+  assert.equal(mileageOf(billNoFor(1)).length, 1);
+});
+
+test("a preview writes nothing", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(1)]));
+  assert.equal((await preview("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(1)]))).to_import, 1);
+  assert.equal(count("mileage_log"), 0);
+});
+
+test("a cash and a credit bill can share a number, and each gets its own reading", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(5, { STATUS: "C", BTIME: "09:00:00" }), billRow(5, { STATUS: "R", CUST_CODE: "C01", BTIME: "10:00:00" })]));
+  await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(5, { STATUS: "C", CR: 500 }), mageRow(5, { STATUS: "R", CR: 900 })]));
+  assert.equal(mileageOf(billNoFor(5, "C"))[0].odometer_curr, 500);
+  assert.equal(mileageOf(billNoFor(5, "R"))[0].odometer_curr, 900);
+});
+
+test("a bill imported before this release has no status, and is matched by its payment type", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(6, { STATUS: "C", BTIME: "09:00:00" }), billRow(6, { STATUS: "R", CUST_CODE: "C01", BTIME: "10:00:00" })]));
+  db.exec("UPDATE bills SET legacy_status = NULL");
+  await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(6, { STATUS: "R", CR: 900 })]));
+  const credit = db.prepare("SELECT bill_no FROM bills WHERE legacy_bill_no = 6 AND payment_type = 'credit'").get() as { bill_no: number };
+  assert.equal(mileageOf(credit.bill_no)[0].odometer_curr, 900);
+  assert.equal(count("mileage_log"), 1);
+});
+
+test("a reading naming another item on the bill still lands on the fuel line", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(7), billRow(7, { ICODE: "L99", QTY: 1, AMT: 50 })]));
+  db.exec("INSERT OR IGNORE INTO items (code, name) VALUES ('L99', 'Cloth')");
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(7), billRow(7, { ICODE: "L99", QTY: 1, AMT: 50 })]));
+  await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(7, { ICODE: "L99" })]));
+  const [row] = mileageOf(billNoFor(7));
+  assert.deepEqual([row.item_code, row.qty], ["MS", 10]);
+});
+
+test("rows that lead nowhere are reported, never guessed", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(1)]));
+  const report = await commit(
+    "MAGE25.DBF",
+    dbf(MAGE_FIELDS, [
+      mageRow(99),
+      mageRow(1, { VEH_NO: "OTHER" }),
+      mageRow(1, { CR: 0, OR: 0, MILEAGE: 0 }),
+      mageRow(1, { CR: "*".repeat(9) }),
+    ]),
+  );
+  assert.equal(report.to_import, 0);
+  assert.deepEqual(report.skipped.find((s) => s.reason.includes("not in PetroPro"))?.examples, ["Bill 99"]);
+  assert.equal(report.skipped.find((s) => s.reason.includes("vehicle differs"))?.count, 1);
+  assert.equal(report.skipped.find((s) => s.reason.includes("unreadable"))?.count, 1);
+  assert.ok(report.notes.some((n) => n.includes("1 row(s) with no reading")));
+  assert.equal(count("mileage_log"), 0);
+});
+
+test("two bills with one number in a year are held rather than guessed", async () => {
+  clearMileage();
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(1)]));
+  await commit("JANBIL26.DBF", dbf(BILL_FIELDS, [billRow(1, { BILL_DATE: "2026-01-05" })]));
+  const report = await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(1)]));
+  assert.equal(report.skipped.find((s) => s.reason.includes("more than one"))?.count, 1);
+  assert.equal(count("mileage_log"), 0);
+});
+
+test("the financial year keeps a number from matching another year's bill", async () => {
+  clearMileage();
+  await commit("DECBIL24.DBF", dbf(BILL_FIELDS, [billRow(1, { BILL_DATE: "2024-12-05" })]));
+  const report = await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(1)]));
+  assert.equal(report.to_import, 0);
+  assert.equal(report.skipped.find((s) => s.reason.includes("not in PetroPro"))?.count, 1);
+  assert.equal(count("mileage_log"), 0);
+});
+
+test("a MAGE file with the wrong columns is blocked", async () => {
+  const report = await preview("MAGE25.DBF", dbf(STOCK_FIELDS, [{ ICODE: "MS", SDATE: "2025-12-01" }]));
+  assert.match(report.blocked ?? "", /mileage file/);
+});
+
+test("old readings imported later don't become a vehicle's starting point", async () => {
+  clearMileage();
+  const { mileageRepo } = await import("../repositories/mileage.js");
+  const live = db.prepare("INSERT INTO bills (bill_date, vehicle_no, grand_total, payment_type) VALUES ('2026-11-01 10:00:00', 'TN01AB1234', 100, 'cash')").run();
+  mileageRepo.record({ billNo: Number(live.lastInsertRowid), vehicleNo: "TN01AB1234", itemCode: "MS", odometerOpening: 5000, odometerCurr: 5500, qty: 10 });
+  await commit("DECBIL25.DBF", dbf(BILL_FIELDS, [billRow(1)]));
+  await commit("MAGE25.DBF", dbf(MAGE_FIELDS, [mageRow(1, { OR: 1000, CR: 1120.5 })]));
+  const next = db.prepare("INSERT INTO bills (bill_date, vehicle_no, grand_total, payment_type) VALUES ('2026-11-02 10:00:00', 'TN01AB1234', 100, 'cash')").run();
+  const entry = mileageRepo.record({ billNo: Number(next.lastInsertRowid), vehicleNo: "TN01AB1234", itemCode: "MS", odometerCurr: 5600, qty: 10 });
+  assert.equal(entry.odometer_prev, 5500, "the live reading, not the older imported one");
+  assert.equal(entry.mileage, 10);
 });
 
 test("an import takes a backup when asked, and is audited without customer details", async () => {

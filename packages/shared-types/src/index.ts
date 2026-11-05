@@ -643,7 +643,7 @@ export interface TechDashboard {
   };
 }
 
-export type LegacyImportKind = "sales" | "stock" | "purchases" | "receipts";
+export type LegacyImportKind = "sales" | "stock" | "purchases" | "receipts" | "mileage";
 
 export interface LegacyImportSkip {
   reason: string;

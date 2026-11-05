@@ -21,7 +21,11 @@ export const mileageRepo = {
 
   lastForVehicle(vehicleNo: string): MileageLogEntry | undefined {
     return db
-      .prepare("SELECT * FROM mileage_log WHERE vehicle_no = ? ORDER BY id DESC LIMIT 1")
+      // By the bill's date, not the row's id: readings imported later can belong to years ago.
+      .prepare(
+        `SELECT m.* FROM mileage_log m JOIN bills b ON b.bill_no = m.bill_no
+         WHERE m.vehicle_no = ? ORDER BY date(b.bill_date) DESC, m.id DESC LIMIT 1`,
+      )
       .get(vehicleNo) as MileageLogEntry | undefined;
   },
 

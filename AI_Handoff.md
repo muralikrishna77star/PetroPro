@@ -1924,3 +1924,22 @@ only two real `MAGE19` readings are 0. The user was asked to compare a real prin
 - **API:** release `v15`. Roll back to `v14`.
 - **Web:** `dpl_H8Ef6xMWzap3wMN9wd3hkoJTAHnb`. Previous: `dpl_Dcg7vrrJM44D8rcKk45x7yGczWCH`.
 - **Live checks, signed out only:** API health, the routes answer 401, the live code holds the new report.
+
+### 2026-11-05 — Session 30 (MAGE upload)
+
+**Context:** imported bills showed amounts but no readings, and the user asked for `MAGE` import.
+
+**Built:** `analyzeMileage` in `services/legacyImport.ts`, new `bills.legacy_status`, and mileage files going last in a batch on
+the Legacy Import screen. Rules and real-data results are in `docs/MIGRATION_NOTES.md`.
+
+**Changed behaviour:** `mileageRepo.lastForVehicle` now orders by the bill's date, not the row's id. Otherwise an imported old
+reading would become a vehicle's starting point for its next live reading.
+
+**Answered:** cancelled bills are removed from the monthly `BIL` files, so they can't import as sales.
+
+**Verified:** API tests 243/243, 13 deliberate breaks all caught (one only after tightening a test), browser 13/13, real `MAGE18`.
+
+**Limits:** a bill from the command-line importers has no legacy number, so `MAGE` can't reach it. Sales must be imported through
+the screen first.
+
+**State:** uncommitted, on `feature/mage-import`. Not deployed.

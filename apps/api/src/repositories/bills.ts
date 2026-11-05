@@ -20,6 +20,8 @@ export interface Bill {
   local_time: string | null;
   /** The number Petbill gave an imported bill. PetroPro's own bill_no is a new one. */
   legacy_bill_no: number | null;
+  /** Petbill's bill type, C, R or K. Each has its own number counter, so the number alone repeats. */
+  legacy_status: string | null;
 }
 
 export interface BillLine {
