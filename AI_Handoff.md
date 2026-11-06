@@ -2024,3 +2024,27 @@ Classic, unchanged in Modern, positions unchanged.
 **State:** committed as `53f8bba`, pushed and deployed on 2026-11-06.
 - **Web:** `dpl_Hi5TNXis44Nhixqqvj7toCihN8me`. Previous: `dpl_BVNNfiVE89LimmQToWNPXQZGEcfJ`.
 - **API:** not deployed, still `v16`.
+
+### 2026-11-06 — Session 35 (Classic navy sidebar and sky-blue work area)
+
+**Asked:** navy sidebar with a golden-yellow active item, sky-blue work area, white cards, white header with navy text and borders.
+The user chose Classic Design only, and sent a screenshot of the current Classic light dashboard as the layout reference.
+
+**Built, in `app/designs.css` plus `data-app-shell` (app layout) and `data-app-header` (Header):**
+- **Sidebar, Classic light and dark:** `#071B3A` with a navy gradient, white/light-grey text, `#12305A` hover, `#E0B52F` glossy gold
+  active item and logo tile.
+- **Classic light only:** work area `#BAE6FD` to `#38BDF8` on the app shell and on `body` (customer pages); `--pp-border` soft navy
+  (`rgb(7 27 58 / 0.24)`); navy card shadows; header white with navy text, icons, separator and bottom border.
+- **Readability:** in Classic light, muted text is `#2C4468` and status colours are a shade darker (`#14532D`, `#92400E`, `#991B1B`),
+  so text sitting straight on `#38BDF8` stays readable.
+
+**Verified locally:** before/after measurement of every element on 15 staff and 2 customer screens in all five looks. No element
+moved because of the theme; Dashboard and Audit Logs moved identically in every look, from extra sign-in rows. Default and Modern
+colours unchanged. Readability check on 624 text items, Classic light and dark: all pass. Live, signed out: customer login shows the
+gradient in Classic light only, the form is unmoved, and the live CSS holds the new rules.
+
+**Deploy note:** the first `vercel deploy` failed with "fetch failed" before building; a retry worked.
+
+**State:** committed as `1a5d7d1`, pushed and deployed on 2026-11-06.
+- **Web:** `dpl_9GUYSaLk916hNJkpJdt3NLWU53JZ`. Previous: `dpl_Hi5TNXis44Nhixqqvj7toCihN8me`.
+- **API:** not deployed, still `v16`.
