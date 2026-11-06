@@ -6,7 +6,7 @@
 
    Each design has a dark variant (the base) and a `.light` one, so the header's light/dark button keeps working. */
 
-/* ---------- Classic: navy, white, cream and gold ---------- */
+/* ---------- Classic: navy, gold, white and a sky-blue work area ---------- */
 :root[data-design="classic"] {
   --pp-bg: #0a1830;
   --pp-bg-elevated: #0f2140;
@@ -41,21 +41,23 @@
   --color-amber-600: #e3c565;
 }
 
+/* Light: a sky-blue work area with white cards. Muted and status text are a shade darker than usual so they stay
+   readable where they sit straight on the deepest blue (#38BDF8). Borders and dividers are a soft navy. */
 :root[data-design="classic"].light {
-  --pp-bg: #f7f1e3;
-  --pp-bg-elevated: #fffdf8;
-  --pp-sidebar: #0f2344;
+  --pp-bg: #bae6fd;
+  --pp-bg-elevated: #ffffff;
+  --pp-sidebar: #071b3a;
   --pp-card: #ffffff;
-  --pp-card-hover: #f3ead6;
+  --pp-card-hover: #eef6fd;
   --pp-primary: #14284b;
   --pp-primary-fg: #ffffff;
   --pp-secondary: #8a6d1d;
-  --pp-success: #166534;
-  --pp-warning: #b45309;
-  --pp-error: #b91c1c;
+  --pp-success: #14532d;
+  --pp-warning: #92400e;
+  --pp-error: #991b1b;
   --pp-fg: #14213d;
-  --pp-fg-muted: #5b6478;
-  --pp-border: #dccfb0;
+  --pp-fg-muted: #2c4468;
+  --pp-border: rgb(7 27 58 / 0.24);
 
   --color-orange-500: #b8860b;
   --color-emerald-500: #14284b;
@@ -64,24 +66,51 @@
   --color-amber-500: #c9a227;
 }
 
-/* A navy sidebar in both variants, with its own light text and gold highlights. */
+/* A glossy navy sidebar in both variants: white and light-grey text, lighter-navy hover, golden-yellow active item. */
 [data-design="classic"] [data-app-sidebar] {
-  --pp-sidebar: #0f2344;
-  --pp-fg: #fdf8ec;
-  --pp-fg-muted: #c7cfdd;
-  --pp-border: #263a5e;
-  --pp-card-hover: #1b3258;
-  --pp-primary: #d4af37;
-  --pp-primary-fg: #0f2344;
-  --color-orange-500: #d4af37;
-  --color-emerald-500: #d4af37;
-  --color-violet-500: #e3c565;
-  --color-teal-500: #e3c565;
+  --pp-sidebar: #071b3a;
+  --pp-fg: #ffffff;
+  --pp-fg-muted: #c7d2e3;
+  --pp-border: #1d3b66;
+  --pp-card-hover: #12305a;
+  --pp-primary: #e0b52f;
+  --pp-primary-fg: #071b3a;
+  --color-orange-500: #e0b52f;
+  --color-emerald-500: #e0b52f;
+  --color-violet-500: #e8c75a;
+  --color-teal-500: #e8c75a;
   --color-amber-500: #f0d98a;
+  background-image: linear-gradient(180deg, #0d2c5c 0%, #071b3a 40%, #051430 100%);
+  border-right-color: #071b3a;
+  box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.07);
 }
 
 [data-design="classic"] [data-app-sidebar] :is(.bg-orange-500, .bg-emerald-500, .bg-violet-500, .bg-teal-500, .bg-amber-500).text-white {
-  color: #0f2344;
+  color: #071b3a;
+}
+
+/* Glossy gold for the active menu item and the logo tile. */
+[data-design="classic"] [data-app-sidebar] .bg-primary,
+[data-design="classic"] [data-app-sidebar] a.bg-primary:not(:focus-visible) {
+  background-image: linear-gradient(180deg, #f2d26a 0%, #e0b52f 55%, #c99c1f 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 1px 3px rgb(0 0 0 / 0.35);
+}
+
+/* Light: a shiny sky-blue work area, from #BAE6FD to #38BDF8, with a soft sheen at the top. The customer pages
+   have no app shell, so the page itself gets it. */
+[data-design="classic"].light :is([data-app-shell], body) {
+  background-color: #38bdf8;
+  background-image: radial-gradient(120% 55% at 20% 0%, rgb(255 255 255 / 0.4), transparent 65%), linear-gradient(165deg, #bae6fd 0%, #38bdf8 100%);
+  background-attachment: fixed;
+}
+
+/* Light: a white header with navy text, icons, separator and bottom border. */
+[data-design="classic"].light [data-app-header] {
+  --pp-card: #ffffff;
+  --pp-card-hover: #e6f0fb;
+  --pp-fg: #071b3a;
+  --pp-fg-muted: #1f3a63;
+  --pp-border: #071b3a;
 }
 
 [data-design="classic"] :is(h1, h2, h3, h4, .font-heading) {
@@ -97,8 +126,16 @@
   border-bottom-color: #b8962e;
 }
 
+[data-design="classic"].light header.border-b {
+  border-bottom-color: #071b3a;
+}
+
 [data-design="classic"] .shadow-sm {
   --tw-shadow: 0 1px 2px rgb(20 33 61 / 0.1), 0 2px 6px rgb(20 33 61 / 0.05);
+}
+
+[data-design="classic"].light .shadow-sm {
+  --tw-shadow: 0 1px 2px rgb(7 27 58 / 0.14), 0 6px 18px rgb(7 27 58 / 0.12);
 }
 
 /* Classic fields: sky blue with navy borders, in both light and dark. Colours and a box-shadow focus glow only,

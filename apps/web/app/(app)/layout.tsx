@@ -26,7 +26,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
 
   return (
     <ColorStyleProvider>
-      <div className="flex h-screen overflow-hidden bg-bg">
+      <div data-app-shell className="flex h-screen overflow-hidden bg-bg">
         <Sidebar session={session} open={menuOpen} onClose={() => setMenuOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Header session={session} onOpenMenu={() => setMenuOpen(true)} />

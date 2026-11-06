@@ -22,7 +22,7 @@ export function Header({ session, onOpenMenu }: { session: Session; onOpenMenu: 
   }, [session.token]);
 
   return (
-    <header className="relative flex h-16 shrink-0 items-center justify-end gap-2 border-b border-border bg-card px-3 md:gap-4 md:px-6">
+    <header data-app-header className="relative flex h-16 shrink-0 items-center justify-end gap-2 border-b border-border bg-card px-3 md:gap-4 md:px-6">
       <Button type="button" variant="ghost" size="sm" aria-label="Open menu" className="mr-auto md:hidden" onClick={onOpenMenu}>
         <Menu size={20} />
       </Button>
