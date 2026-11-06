@@ -66,6 +66,26 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-bg px-4">
+      {/* The whole photo, scaled to fit any screen without cropping. A blurred copy fills whatever space
+          is left, so there are no empty bars. All three layers are absolute, so they take up no space. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 scale-110 blur-2xl"
+        style={{ backgroundImage: "url('/login-background.png')", backgroundSize: "cover", backgroundPosition: "center center" }}
+      />
+      <div
+        aria-hidden="true"
+        data-login-photo
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: "url('/login-background.png')",
+          backgroundSize: "contain",
+          backgroundPosition: "center center",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
+      {/* Darkens the photo slightly so the form stands out. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/45" />
       <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-secondary/20 blur-3xl" />
 
