@@ -2007,3 +2007,20 @@ is small, so it's soft on large monitors. The user was asked to confirm the phot
 **State:** committed as `2f074b6`, pushed and deployed on 2026-11-06.
 - **Web:** `dpl_BVNNfiVE89LimmQToWNPXQZGEcfJ`. Previous: `dpl_EtT8zqnNeiZUqnG4vayx7cJhKNWK`.
 - **API:** not deployed, still `v16`.
+
+### 2026-11-06 — Session 34 (Classic field colours)
+
+**Built:** in `app/designs.css`, Classic only (light and dark): fields `#E0F2FE` with `#071B3A` borders and `#263238` text,
+placeholder `#5F6B7A`, and a navy focus ring (`inset` 1px line plus a 3px glow). The item picker list (`[role="listbox"]`) matches.
+Checkboxes, radios, file pickers and buttons are excluded. Colours and box-shadow only.
+
+**Changed from the request:** the user's spec said a soft grey placeholder; `#64748B` was 4.1:1, so `#5F6B7A` (4.7:1) was used. The
+inset line was added because a navy glow alone is invisible on Classic dark's navy cards.
+
+**Verified locally:** 68 fields on 15 staff screens plus both login and both customer pages, Classic light and dark; layout identical
+with the rules switched off in the page; Modern unaffected; focus moves nothing. Live, signed out: login pages' fields correct in
+Classic, unchanged in Modern, positions unchanged.
+
+**State:** committed as `53f8bba`, pushed and deployed on 2026-11-06.
+- **Web:** `dpl_Hi5TNXis44Nhixqqvj7toCihN8me`. Previous: `dpl_BVNNfiVE89LimmQToWNPXQZGEcfJ`.
+- **API:** not deployed, still `v16`.
