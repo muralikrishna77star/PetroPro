@@ -1991,3 +1991,19 @@ Not tested on a real phone or with real data.
 - **Web:** `dpl_EtT8zqnNeiZUqnG4vayx7cJhKNWK`. Previous: `dpl_3w6QoptsJrUrzp7nsE8K1oikjGGB`.
 - **API:** not deployed, still `v16`. No backend code changed.
 - **Live checks, signed out only:** the live code holds both designs, `Customer Login` and the real API address; a saved design applies on the login pages; neither login page shows the switcher; API health is fine and `/customers` answers 401. The signed-in switcher was tested locally, not on the live site.
+
+### 2026-11-06 — Session 33 (login background)
+
+**Built:** the user's petrol station photo, `public/login-background.png` (740 x 494, unchanged), behind the staff login form only.
+First it filled the screen with `cover`; the user then asked for it to fit each screen, so it is now `contain`, with a blurred `cover`
+copy filling the leftover space and a 45% dark overlay. All three layers are absolute, so the form keeps its exact position and size.
+
+**Verified:** in a browser at five screen sizes, locally; the form and its fields didn't move and the photo kept its proportions. Live,
+signed out: the served image is byte-identical to the upload, the staff login renders with it, and the customer login is unchanged.
+
+**Open:** on an upright phone the whole photo is a 260px band mostly behind the form. Offered: fill the screen on phones only. The image
+is small, so it's soft on large monitors. The user was asked to confirm the photo's licence.
+
+**State:** committed as `2f074b6`, pushed and deployed on 2026-11-06.
+- **Web:** `dpl_BVNNfiVE89LimmQToWNPXQZGEcfJ`. Previous: `dpl_EtT8zqnNeiZUqnG4vayx7cJhKNWK`.
+- **API:** not deployed, still `v16`.
