@@ -2048,3 +2048,26 @@ gradient in Classic light only, the form is unmoved, and the live CSS holds the 
 **State:** committed as `1a5d7d1`, pushed and deployed on 2026-11-06.
 - **Web:** `dpl_9GUYSaLk916hNJkpJdt3NLWU53JZ`. Previous: `dpl_Hi5TNXis44Nhixqqvj7toCihN8me`.
 - **API:** not deployed, still `v16`.
+
+### 2026-11-10 — Session 36 (item name on printed bills)
+
+**Asked:** an "Item Name" heading and the product name beside the item code, on normal and duplicate bills, nothing else
+changed. The user chose both print formats.
+
+**Built:**
+- **Thermal receipt** (`services/receipt.ts`): heading `Item Name`, rows print `CODE Name` via `itemLabel`. An item whose name
+  equals its code prints the code once. 58 mm keeps its existing no-heading layout. Every duplicate path (printer, browser print,
+  preview, receipt PDF) uses the same builder.
+- **A5 invoice PDF** (`services/invoicePdf.ts`): an `Item Name` column at x+40 between the code and Qty; names wider than 86 pt
+  end in `...`, so no other column moves.
+
+**Verified:** before/after output on a sample bill at 32, 42 and 48 characters, original and duplicate: only the heading and item
+rows changed. PDF text positions unchanged apart from the new column. New test in `routes/printing.test.ts`; API 244/244.
+
+Also written this session: an architecture review for sales, stock, ledgers and cash book, as a Claude Doc
+(https://claude.ai/artifact/GSNZj7kVJBy9cvXssLaTnC). Proposal only; awaiting the user's and accountant's decisions.
+
+**State:** committed as `a466291`, pushed and deployed on 2026-11-10.
+- **API:** release `v17`. Roll back to `v16`.
+- **Web:** not deployed; unchanged.
+- **Live checks, signed out only:** health 200; receipt, receipt PDF and invoice PDF routes answer 401.
