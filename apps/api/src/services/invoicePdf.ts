@@ -1,7 +1,20 @@
 import PDFDocument from "pdfkit";
 import { billsRepo } from "../repositories/bills.js";
 import { tenantsRepo } from "../repositories/tenants.js";
+import { itemsRepo } from "../repositories/items.js";
 import { amountInWords } from "./money.js";
+
+/** The Item Name column sits between the code and Qty, which stay where they were. A name too long for
+ *  it is shortened with "..." so every row keeps its single line. */
+const NAME_X = 40;
+const NAME_WIDTH = 86;
+
+function fitWidth(doc: PDFKit.PDFDocument, text: string, width: number): string {
+  if (doc.widthOfString(text) <= width) return text;
+  let cut = text;
+  while (cut.length > 0 && doc.widthOfString(`${cut}...`) > width) cut = cut.slice(0, -1);
+  return `${cut.trimEnd()}...`;
+}
 
 /** Print-ready invoice PDF for a single bill (master-prompt success criterion: "Reports: PDF,
  *  Excel and print-ready invoices"). Deliberately simple/manual layout — pdfkit has no table
@@ -46,6 +59,7 @@ export function generateInvoicePdf(billNo: number): Promise<Buffer> {
     let y = doc.y;
     doc.fontSize(9).font("Helvetica-Bold");
     doc.text("Item", startX, y);
+    doc.text("Item Name", startX + NAME_X, y);
     doc.text("Qty", startX + 130, y);
     doc.text("Rate", startX + 175, y);
     doc.text("Tax", startX + 225, y);
@@ -57,6 +71,7 @@ export function generateInvoicePdf(billNo: number): Promise<Buffer> {
     doc.font("Helvetica");
     for (const line of lines) {
       doc.text(line.item_code, startX, y);
+      doc.text(fitWidth(doc, itemsRepo.get(line.item_code)?.name ?? "", NAME_WIDTH), startX + NAME_X, y, { lineBreak: false });
       doc.text(line.qty.toString(), startX + 130, y);
       doc.text(line.rate.toFixed(2), startX + 175, y);
       doc.text(line.tax_amount.toFixed(2), startX + 225, y);

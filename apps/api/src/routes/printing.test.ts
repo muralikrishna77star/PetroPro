@@ -198,6 +198,26 @@ test("rounding and precision follow Petbill: two decimals by default, three if c
   await call("PUT", "/print/settings", { qty_decimals: 2 }, superToken);
 });
 
+test("every item row shows its code and product name under Item Name, on original and duplicate", async () => {
+  const billNo = makeBill({ lines: [["A01", 10, 89.62, 89.62, 0, 0, 896.2], ["B01", 5, 103.44, 103.44, 0, 0, 517.2]] });
+  for (const chars of [48, 42]) {
+    await call("PUT", `/print/terminals/${TERMINAL}`, { chars_per_line: chars }, superToken);
+    const { text } = (await call("GET", `/bills/${billNo}/receipt?terminal_id=${TERMINAL}`)).json() as PrintPayload;
+    assert.match(text, /^Item Name\s+Rate\s+Qty\s+Amt$/m, `heading at ${chars}`);
+    assert.match(text, /^A01 DIESEL\s+89\.62\s+10\.00\s+896\.20$/m, `diesel row at ${chars}`);
+    assert.match(text, /^B01 PETROL\s+103\.44\s+5\.00\s+517\.20$/m, `petrol row at ${chars}`);
+  }
+  await call("PUT", `/print/terminals/${TERMINAL}`, { chars_per_line: 48 }, superToken);
+  const first = (await print(billNo)).json() as PrintPayload;
+  await call("PATCH", `/print-jobs/${first.job!.id}`, { status: "sent" });
+  const second = (await print(billNo)).json() as PrintPayload;
+  assert.equal(second.job!.kind, "duplicate");
+  for (const job of [first, second]) {
+    assert.match(job.text, /^Item Name\s+Rate/m);
+    assert.ok(printableBytes(Buffer.from(job.escpos_base64, "base64")).includes("A01 DIESEL"));
+  }
+});
+
 test("large amounts and long names are never cut, at 80 or 58 mm", async () => {
   const billNo = makeBill({
     payment: "credit",

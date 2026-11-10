@@ -138,6 +138,11 @@ function nameLookup(bill: Bill, lines: BillLine[]) {
     .all(bill.bill_no) as unknown as MileageRow[];
   return {
     itemName: (code: string) => items.get(code) ?? code,
+    /** The item column: code, then the product name. An item with no name of its own prints its code once. */
+    itemLabel: (code: string) => {
+      const name = items.get(code)?.trim();
+      return name && name !== code ? `${code} ${name}` : code;
+    },
     customerName: customer ? customer.print_name?.trim() || customer.name : (bill.customer_code ?? null),
     cashierName: cashier?.name ?? null,
     mileage,
@@ -211,14 +216,14 @@ export function buildBillReceipt(
   text(
     layout.nameAbove
       ? ["Rate".padStart(layout.rate), "Qty".padStart(layout.qty), "Amt".padStart(layout.amt)].join("").padStart(width)
-      : "Item".padEnd(layout.name) + "Rate".padStart(layout.rate) + "Qty".padStart(layout.qty) + "Amt".padStart(layout.amt),
+      : (layout.name >= "Item Name".length ? "Item Name" : "Item").padEnd(layout.name) + "Rate".padStart(layout.rate) + "Qty".padStart(layout.qty) + "Amt".padStart(layout.amt),
     { bold: true },
   );
   if (anyTax) {
     text("Bas.Amt".padStart(layout.base) + "Vat%".padStart(layout.vat) + "T.Amt".padStart(layout.tax), { bold: true });
   }
   for (const line of lines) {
-    for (const row of lineBlocks(line, names.itemName(line.item_code), width, showTax, settings.qty_decimals)) text(row);
+    for (const row of lineBlocks(line, names.itemLabel(line.item_code), width, showTax, settings.qty_decimals)) text(row);
   }
   rule();
 
