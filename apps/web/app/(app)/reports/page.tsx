@@ -215,11 +215,11 @@ export default function ReportsPage() {
       <div className="mx-auto flex w-full flex-1 flex-col gap-6 px-4 py-8">
         <h1 className="text-xl font-semibold text-primary">Reports</h1>
 
-        <Card color="violet" className="flex flex-wrap items-end gap-3">
-          <div>
+        <Card color="violet" className="flex flex-wrap items-end gap-x-3 gap-y-3 [&_input:not([type=checkbox])]:min-h-10 [&_select]:min-h-10 [&_input:not([type=checkbox])]:rounded-xl [&_select]:rounded-xl [&_input:not([type=checkbox])]:border-slate-200 [&_select]:border-slate-200 [&_input:not([type=checkbox])]:shadow-sm [&_select]:shadow-sm [&_input:not([type=checkbox])]:focus:border-sky-400 [&_select]:focus:border-sky-400 [&_input:not([type=checkbox])]:focus:outline-none [&_select]:focus:outline-none [&_input:not([type=checkbox])]:focus:ring-2 [&_select]:focus:ring-2 [&_input:not([type=checkbox])]:focus:ring-sky-100 [&_select]:focus:ring-sky-100">
+          <div className="min-w-48 flex-[2_1_220px]">
             <label className="mb-1 block text-xs font-medium text-fg-muted">Report</label>
             <select
-              className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+              className="w-full rounded-lg border border-border px-3 py-1.5 text-sm bg-bg-elevated"
               value={reportType}
               onChange={(e) => {
                 setReportType(e.target.value as ReportType);
@@ -236,20 +236,20 @@ export default function ReportsPage() {
           </div>
 
           <>
-              <div>
+              <div className="min-w-40 flex-1">
                 <label className="mb-1 block text-xs font-medium text-fg-muted">From</label>
                 <input
                   type="date"
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                  className="w-full rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="min-w-40 flex-1">
                 <label className="mb-1 block text-xs font-medium text-fg-muted">To</label>
                 <input
                   type="date"
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                  className="w-full rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                 />
@@ -257,7 +257,7 @@ export default function ReportsPage() {
           </>
 
           {needsGranularity && (
-            <div>
+            <div className="min-w-36 flex-1">
               <label className="mb-1 block text-xs font-medium text-fg-muted">Granularity</label>
               <select
                 className="rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
@@ -311,10 +311,10 @@ export default function ReportsPage() {
 
           {isStatement && (
             <>
-              <div>
+              <div className="min-w-48 flex-[2_1_220px]">
                 <label className="mb-1 block text-xs font-medium text-fg-muted">Customer</label>
                 <select
-                  className="max-w-64 rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
+                  className="w-full rounded-lg border border-border px-3 py-1.5 text-sm  bg-bg-elevated"
                   value={customerCode}
                   onChange={(e) => setCustomerCode(e.target.value)}
                 >
@@ -352,7 +352,7 @@ export default function ReportsPage() {
           <button
             onClick={runReport}
             disabled={loading}
-            className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="min-h-10 rounded-xl bg-primary px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? "Running..." : "Run report"}
           </button>
