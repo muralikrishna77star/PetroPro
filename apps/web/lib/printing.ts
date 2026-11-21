@@ -52,8 +52,10 @@ export function getBridgeConfig(): BridgeConfig {
   return readJson<BridgeConfig>(BRIDGE_KEY, { url: "http://127.0.0.1:9147", token: "" });
 }
 
+/** A token copied from the bridge's console often brings a space or line break along, which the
+ *  password-style field hides. No real token contains whitespace. */
 export function saveBridgeConfig(config: BridgeConfig): void {
-  writeJson(BRIDGE_KEY, config);
+  writeJson(BRIDGE_KEY, { url: config.url.trim(), token: config.token.replace(/\s+/g, "") });
 }
 
 function bytesOf(base64: string): Uint8Array {
@@ -71,7 +73,7 @@ async function callBridge(path: string, init: RequestInit = {}): Promise<Respons
     return await fetch(`${url}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: { ...init.headers, "Content-Type": "application/json", "X-Bridge-Token": token },
+      headers: { ...init.headers, "Content-Type": "application/json", "X-Bridge-Token": token.replace(/\s+/g, "") },
     });
   } catch {
     throw new Error("The print bridge isn't answering on this computer. Check that it's running.");

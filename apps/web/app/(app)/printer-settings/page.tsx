@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PrintPayload, PrinterConnection, ReceiptLogo, ReceiptSettings, TerminalPrinterSettings } from "@petropro/shared-types";
+import type { OilCompany, PrintPayload, PrinterConnection, ReceiptLogo, ReceiptSettings, TerminalPrinterSettings } from "@petropro/shared-types";
 import { api, ApiError } from "@/lib/api";
 import { checkBridge, deliver, getBridgeConfig, getTerminalId, saveBridgeConfig, type BridgeConfig } from "@/lib/printing";
 import { useRequireSession } from "@/lib/useSession";
@@ -19,6 +19,26 @@ const CONNECTIONS: { value: PrinterConnection; label: string; hint: string }[] =
 
 const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm";
 const LOGO_MAX_WIDTH = 384;
+/** 32 mm on a 203 dpi printer: clearly the brand, without spending a lot of paper on every bill. */
+const COMPANY_LOGO_WIDTH = 256;
+
+const OIL_COMPANIES: { value: OilCompany; label: string }[] = [
+  { value: "iocl", label: "Indian Oil (IOCL)" },
+  { value: "hpcl", label: "Hindustan Petroleum (HPCL)" },
+  { value: "bpcl", label: "Bharat Petroleum (BPCL)" },
+];
+
+/** Company artwork ships with the web app in public/brand-logos, named by company code. */
+async function loadCompanyLogo(company: OilCompany): Promise<ReceiptLogo> {
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const res = await fetch(`/brand-logos/${company}.${ext}`, { cache: "no-cache" }).catch(() => null);
+    if (res?.ok && (res.headers.get("content-type") ?? "").startsWith("image/")) {
+      return imageToLogo(await res.blob(), COMPANY_LOGO_WIDTH);
+    }
+  }
+  const label = OIL_COMPANIES.find((c) => c.value === company)?.label ?? company;
+  throw new Error(`The ${label} logo isn't installed yet. It goes in apps/web/public/brand-logos as ${company}.png`);
+}
 
 function messageOf(err: unknown, fallback: string): string {
   return err instanceof ApiError || err instanceof Error ? err.message : fallback;
@@ -45,8 +65,13 @@ function Toggle({ id, label, checked, onChange }: { id: string; label: string; c
   );
 }
 
-/** Turns an uploaded picture into the one-bit image a thermal printer draws, in this browser. */
-function imageToLogo(file: File): Promise<ReceiptLogo> {
+/**
+ * Turns a picture into the one-bit image a thermal printer draws, in this browser. Dark colours print
+ * solid and light ones drop out. On the company logos that keeps the navy, blue and red and loses the
+ * orange and yellow, which looks like each company's own one-colour artwork. Shading (dithering) was
+ * tried and turned Bharat Petroleum's blue-on-yellow into an unreadable grey.
+ */
+function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH): Promise<ReceiptLogo> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -56,7 +81,8 @@ function imageToLogo(file: File): Promise<ReceiptLogo> {
     };
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const scale = Math.min(1, LOGO_MAX_WIDTH / img.width);
+      if (!img.width || !img.height) return reject(new Error("That picture has no size"));
+      const scale = Math.min(1, maxWidth / img.width);
       const width = Math.max(8, Math.floor((img.width * scale) / 8) * 8);
       const height = Math.min(400, Math.max(1, Math.round((img.height / img.width) * width)));
       const canvas = document.createElement("canvas");
@@ -95,6 +121,7 @@ export default function PrinterSettingsPage() {
   const [testResult, setTestResult] = useState<PrintPayload | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [working, setWorking] = useState(false);
+  const [logoMessage, setLogoMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const token = session?.token;
 
@@ -170,9 +197,30 @@ export default function PrinterSettingsPage() {
   async function chooseLogo(file: File | undefined) {
     if (!file) return;
     try {
-      setR("logo", await imageToLogo(file));
+      const logo = await imageToLogo(file);
+      setReceipt((r) => r && { ...r, logo, oil_company: null });
+      setLogoMessage({ ok: true, text: "Logo ready. Save to keep it." });
     } catch (err) {
-      setMessage({ ok: false, text: messageOf(err, "That picture couldn't be used") });
+      setLogoMessage({ ok: false, text: messageOf(err, "That picture couldn't be used") });
+    }
+  }
+
+  /** Picking a company swaps in its logo and turns logo printing on for this terminal; picking none
+   *  removes a company logo but leaves an uploaded one alone. Nothing is kept until Save. */
+  async function chooseCompany(value: string) {
+    setLogoMessage(null);
+    if (!value) {
+      setReceipt((r) => r && { ...r, oil_company: null, logo: r.oil_company ? null : r.logo });
+      return;
+    }
+    const company = value as OilCompany;
+    try {
+      const logo = await loadCompanyLogo(company);
+      setReceipt((r) => r && { ...r, oil_company: company, logo });
+      setTerminal((t) => t && { ...t, show_logo: true });
+      setLogoMessage({ ok: true, text: "Logo ready, and Print logo is on for this computer. Save to keep it." });
+    } catch (err) {
+      setLogoMessage({ ok: false, text: messageOf(err, "That logo couldn't be loaded") });
     }
   }
 
@@ -263,7 +311,7 @@ export default function PrinterSettingsPage() {
                 <input id="bridge-url" className={inputClass} value={bridge.url} onChange={(e) => setBridge({ ...bridge, url: e.target.value })} />
               </Field>
               <Field label="Pairing token" htmlFor="bridge-token" hint="Shown when the bridge starts. It's stored on this device only, never on the server.">
-                <input id="bridge-token" type="password" autoComplete="off" className={inputClass} value={bridge.token} onChange={(e) => setBridge({ ...bridge, token: e.target.value })} />
+                <input id="bridge-token" name="bridge-token" type="password" autoComplete="new-password" spellCheck={false} data-1p-ignore data-lpignore="true" className={inputClass} value={bridge.token} onChange={(e) => setBridge({ ...bridge, token: e.target.value })} />
               </Field>
               <div>
                 <Button size="sm" variant="outline" onClick={testBridge}>
@@ -329,9 +377,19 @@ export default function PrinterSettingsPage() {
             <Toggle id="r-tax" label="Tax details" checked={receipt.show_tax_breakup} onChange={(v) => setR("show_tax_breakup", v)} />
             <Toggle id="r-fest" label="New Year and Pongal greetings" checked={receipt.festival_greetings} onChange={(v) => setR("festival_greetings", v)} />
           </div>
+          <Field label="Oil company" htmlFor="oil-company" hint="Prints that company's logo, centred at the top of every bill.">
+            <select id="oil-company" className={`${inputClass} md:max-w-sm`} value={receipt.oil_company ?? ""} onChange={(e) => chooseCompany(e.target.value)}>
+              <option value="">None, or my own logo</option>
+              {OIL_COMPANIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <div>
             <label htmlFor="logo-file" className="mb-1 block text-sm font-medium">
-              Logo
+              {receipt.oil_company ? "Logo" : "Logo (or upload your own)"}
             </label>
             {receipt.logo && (
               // eslint-disable-next-line @next/next/no-img-element -- a stored data: URL, not an optimizable remote image
@@ -340,12 +398,17 @@ export default function PrinterSettingsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <input id="logo-file" type="file" accept="image/*" className="max-w-full text-sm" onChange={(e) => chooseLogo(e.target.files?.[0])} />
               {receipt.logo && (
-                <Button size="sm" variant="outline" onClick={() => setR("logo", null)}>
+                <Button size="sm" variant="outline" onClick={() => setReceipt({ ...receipt, logo: null, oil_company: null })}>
                   Remove logo
                 </Button>
               )}
             </div>
             <p className="mt-1 text-xs text-fg-muted">Converted to black and white, as the printer will draw it. Turn on &quot;Print logo&quot; for each terminal that should print it.</p>
+            {logoMessage && (
+              <p role={logoMessage.ok ? "status" : "alert"} className={`mt-1 text-sm ${logoMessage.ok ? "text-success" : "text-error"}`}>
+                {logoMessage.text}
+              </p>
+            )}
           </div>
           <div>
             <Button onClick={saveAll} disabled={working}>
