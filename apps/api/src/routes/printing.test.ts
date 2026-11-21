@@ -607,3 +607,37 @@ test("the oil company is one of the three, kept when not sent, and clearable", (
   assert.equal(cleanReceiptSettings({ oil_company: "shell" as never }, base).oil_company, "hpcl");
   assert.equal(cleanReceiptSettings({ oil_company: null }, base).oil_company, null);
 });
+
+test("the logo size stays within what the paper can hold, to a tenth of a millimetre", () => {
+  const base = { ...DEFAULT_RECEIPT_SETTINGS };
+  assert.equal(base.logo_width_mm, 30);
+  assert.equal(cleanReceiptSettings({ logo_width_mm: 25 }, base).logo_width_mm, 25);
+  assert.equal(cleanReceiptSettings({ logo_width_mm: 27.54 }, base).logo_width_mm, 27.5);
+  assert.equal(cleanReceiptSettings({ logo_width_mm: 72 }, base).logo_width_mm, 72);
+  for (const bad of [14, 73, Number.NaN, "big" as never]) {
+    assert.equal(cleanReceiptSettings({ logo_width_mm: bad }, base).logo_width_mm, 30, String(bad));
+  }
+  assert.equal(cleanReceiptSettings({}, { ...base, logo_width_mm: 35 }).logo_width_mm, 35);
+});
+
+test("a square logo as wide as the paper is accepted, and the payload says how wide it prints", async () => {
+  const side = 576;
+  const logo = {
+    width: side,
+    height: side,
+    raster_base64: Buffer.alloc((side / 8) * side).toString("base64"),
+    preview_data_url: "data:image/png;base64,AAAA",
+  };
+  const saved = cleanReceiptSettings({ logo }, DEFAULT_RECEIPT_SETTINGS);
+  assert.equal(saved.logo?.height, side);
+  const { printSettingsRepo } = await import("../repositories/printing.js");
+  const { testPrint } = await import("../services/printing.js");
+  const before = printSettingsRepo.getReceipt();
+  printSettingsRepo.saveReceipt({ logo: { ...logo, width: 280, height: 280, raster_base64: Buffer.alloc(35 * 280).toString("base64") } });
+  try {
+    assert.equal(testPrint({ ...DEFAULT_TERMINAL_SETTINGS, show_logo: true }).logo_width_mm, 35);
+    assert.equal(testPrint({ ...DEFAULT_TERMINAL_SETTINGS, show_logo: false }).logo_width_mm, null);
+  } finally {
+    printSettingsRepo.saveReceipt({ logo: before.logo });
+  }
+});

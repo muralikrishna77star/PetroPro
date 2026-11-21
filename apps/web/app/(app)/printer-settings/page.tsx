@@ -18,9 +18,16 @@ const CONNECTIONS: { value: PrinterConnection; label: string; hint: string }[] =
 ];
 
 const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm";
-const LOGO_MAX_WIDTH = 384;
-/** 32 mm on a 203 dpi printer: clearly the brand, without spending a lot of paper on every bill. */
-const COMPANY_LOGO_WIDTH = 256;
+/** 203 dpi: what nearly every receipt printer draws at, so a logo made at this prints at its size. */
+const DOTS_PER_MM = 8;
+const LOGO_SIZES = [
+  { mm: 25, label: "Small (2.5 cm)" },
+  { mm: 30, label: "Medium (3 cm)" },
+  { mm: 35, label: "Large (3.5 cm)" },
+];
+/** The same limits the API keeps: 1.5 cm, up to the 7.2 cm an 80 mm printer can draw across. */
+const LOGO_MIN_MM = 15;
+const LOGO_MAX_MM = 72;
 /** The square border round a company logo: 4 dots is half a millimetre, then a 1 mm gap to the logo. */
 const FRAME_DOTS = 4;
 const FRAME_GAP_DOTS = 8;
@@ -32,11 +39,11 @@ const OIL_COMPANIES: { value: OilCompany; label: string }[] = [
 ];
 
 /** Company artwork ships with the web app in public/brand-logos, named by company code. */
-async function loadCompanyLogo(company: OilCompany): Promise<ReceiptLogo> {
+async function loadCompanyLogo(company: OilCompany, widthMm: number): Promise<ReceiptLogo> {
   for (const ext of ["png", "jpg", "jpeg", "webp"]) {
     const res = await fetch(`/brand-logos/${company}.${ext}`, { cache: "no-cache" }).catch(() => null);
     if (res?.ok && (res.headers.get("content-type") ?? "").startsWith("image/")) {
-      return imageToLogo(await res.blob(), COMPANY_LOGO_WIDTH, true);
+      return imageToLogo(await res.blob(), widthMm, true);
     }
   }
   const label = OIL_COMPANIES.find((c) => c.value === company)?.label ?? company;
@@ -74,7 +81,7 @@ function Toggle({ id, label, checked, onChange }: { id: string; label: string; c
  * orange and yellow, which looks like each company's own one-colour artwork. Shading (dithering) was
  * tried and turned Bharat Petroleum's blue-on-yellow into an unreadable grey.
  */
-function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH, framed = false): Promise<ReceiptLogo> {
+function imageToLogo(file: Blob, widthMm: number, framed = false): Promise<ReceiptLogo> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -85,10 +92,10 @@ function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH, framed = false): Pro
     img.onload = () => {
       URL.revokeObjectURL(url);
       if (!img.width || !img.height) return reject(new Error("That picture has no size"));
-      const scale = Math.min(1, maxWidth / img.width);
-      const width = Math.max(8, Math.floor((img.width * scale) / 8) * 8);
+      // The chosen size, to the nearest whole byte of dots, as ESC/POS draws rows a byte at a time.
+      const width = Math.max(8, Math.round((widthMm * DOTS_PER_MM) / 8) * 8);
       // A framed logo is a square, with the picture fitted inside it.
-      const height = framed ? width : Math.min(400, Math.max(1, Math.round((img.height / img.width) * width)));
+      const height = framed ? width : Math.min(LOGO_MAX_MM * DOTS_PER_MM, Math.max(1, Math.round((img.height / img.width) * width)));
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
@@ -139,6 +146,10 @@ export default function PrinterSettingsPage() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [working, setWorking] = useState(false);
   const [logoMessage, setLogoMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // The picture uploaded on this visit, kept so a size change can redraw it. Only the printer's
+  // black-and-white version is saved, which would blur if it were scaled again.
+  const [uploaded, setUploaded] = useState<File | null>(null);
+  const [customSize, setCustomSize] = useState<string | null>(null);
 
   const token = session?.token;
 
@@ -214,11 +225,37 @@ export default function PrinterSettingsPage() {
   async function chooseLogo(file: File | undefined) {
     if (!file) return;
     try {
-      const logo = await imageToLogo(file);
+      const logo = await imageToLogo(file, receipt!.logo_width_mm);
+      setUploaded(file);
       setReceipt((r) => r && { ...r, logo, oil_company: null });
       setLogoMessage({ ok: true, text: "Logo ready. Save to keep it." });
     } catch (err) {
       setLogoMessage({ ok: false, text: messageOf(err, "That picture couldn't be used") });
+    }
+  }
+
+  /** A new size redraws the logo from its original picture: the company's artwork, or the file
+   *  uploaded on this visit. A logo uploaded on an earlier visit has to be uploaded again. */
+  async function chooseSize(mm: number) {
+    setLogoMessage(null);
+    if (!Number.isFinite(mm) || mm < LOGO_MIN_MM || mm > LOGO_MAX_MM) {
+      setLogoMessage({ ok: false, text: `Choose a size from ${LOGO_MIN_MM / 10} to ${LOGO_MAX_MM / 10} cm` });
+      return;
+    }
+    const widthMm = Math.round(mm * 10) / 10;
+    setReceipt((r) => r && { ...r, logo_width_mm: widthMm });
+    try {
+      let logo: ReceiptLogo | null = null;
+      if (receipt!.oil_company) logo = await loadCompanyLogo(receipt!.oil_company, widthMm);
+      else if (uploaded) logo = await imageToLogo(uploaded, widthMm);
+      if (logo) {
+        setReceipt((r) => r && { ...r, logo });
+        setLogoMessage({ ok: true, text: `Logo resized to ${widthMm / 10} cm. Save to keep it.` });
+      } else if (receipt!.logo) {
+        setLogoMessage({ ok: false, text: "Upload the logo again to print it at this size." });
+      }
+    } catch (err) {
+      setLogoMessage({ ok: false, text: messageOf(err, "The logo couldn't be resized") });
     }
   }
 
@@ -232,7 +269,7 @@ export default function PrinterSettingsPage() {
     }
     const company = value as OilCompany;
     try {
-      const logo = await loadCompanyLogo(company);
+      const logo = await loadCompanyLogo(company, receipt!.logo_width_mm);
       setReceipt((r) => r && { ...r, oil_company: company, logo });
       setTerminal((t) => t && { ...t, show_logo: true });
       setLogoMessage({ ok: true, text: "Logo ready, and Print logo is on for this computer. Save to keep it." });
@@ -403,6 +440,55 @@ export default function PrinterSettingsPage() {
                 </option>
               ))}
             </select>
+          </Field>
+          <Field
+            label="Logo size"
+            htmlFor="logo-size"
+            hint={`Width on the paper. The logo now on file prints ${receipt.logo ? `${receipt.logo.width / DOTS_PER_MM / 10} cm` : "—"} wide. A 58 mm printer fits up to 4.8 cm.`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                id="logo-size"
+                className={`${inputClass} md:max-w-xs`}
+                value={customSize !== null || !LOGO_SIZES.some((s) => s.mm === receipt.logo_width_mm) ? "custom" : String(receipt.logo_width_mm)}
+                onChange={(e) => {
+                  if (e.target.value === "custom") {
+                    setCustomSize(String(receipt.logo_width_mm / 10));
+                  } else {
+                    setCustomSize(null);
+                    void chooseSize(Number(e.target.value));
+                  }
+                }}
+              >
+                {LOGO_SIZES.map((s) => (
+                  <option key={s.mm} value={s.mm}>
+                    {s.label}
+                  </option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+              {(customSize !== null || !LOGO_SIZES.some((s) => s.mm === receipt.logo_width_mm)) && (
+                <>
+                  <input
+                    aria-label="Custom logo width in centimetres"
+                    type="number"
+                    min={LOGO_MIN_MM / 10}
+                    max={LOGO_MAX_MM / 10}
+                    step={0.1}
+                    className={`${inputClass} w-24`}
+                    value={customSize ?? String(receipt.logo_width_mm / 10)}
+                    onChange={(e) => setCustomSize(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void chooseSize(Number(customSize) * 10);
+                    }}
+                  />
+                  <span className="text-sm">cm</span>
+                  <Button size="sm" variant="outline" onClick={() => chooseSize(Number(customSize ?? receipt.logo_width_mm / 10) * 10)}>
+                    Apply
+                  </Button>
+                </>
+              )}
+            </div>
           </Field>
           <div>
             <label htmlFor="logo-file" className="mb-1 block text-sm font-medium">

@@ -3,7 +3,7 @@ import { billsRepo } from "../repositories/bills.js";
 import { auditLogsRepo } from "../repositories/auditLogs.js";
 import { printJobsRepo, printSettingsRepo } from "../repositories/printing.js";
 import { buildBillReceipt, buildTestReceipt, renderText } from "./receipt.js";
-import { renderCopies } from "./escpos.js";
+import { DOTS_PER_MM, renderCopies } from "./escpos.js";
 
 /** Long enough for a browser dialog or a slow printer to finish. After this a pending original is
  *  treated as abandoned, so a crashed terminal can't leave a bill unprintable. */
@@ -26,6 +26,7 @@ function payload(job: PrintJob | null, doc: ReceiptDocument, terminal: TerminalP
     escpos_base64: renderCopies(doc, terminal, terminal.show_logo ? logo : null, copies).toString("base64"),
     settings: terminal,
     logo_preview: terminal.show_logo ? (logo?.preview_data_url ?? null) : null,
+    logo_width_mm: terminal.show_logo && logo ? logo.width / DOTS_PER_MM : null,
   };
 }
 
