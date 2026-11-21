@@ -16,7 +16,9 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
-import { FEATURES, SALES_CONTACT, TOUR_SLIDES } from "@/lib/marketing/productTour";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { FEATURES, SALES_CONTACT, TOUR_SLIDES, WEBSITE_HOSTS } from "@/lib/marketing/productTour";
 import { StaffRedirect } from "./StaffRedirect";
 
 const FEATURE_ICONS: LucideIcon[] = [Smartphone, Receipt, Printer, Users, Gauge, FileSpreadsheet, Boxes, ShieldCheck, WifiOff];
@@ -28,7 +30,11 @@ const STEPS = [
   { title: "Books", text: "Stock, dues, shift cash and reports update." },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // A station's own address opens its app, not the website.
+  const host = ((await headers()).get("host") ?? "").replace(/:\d+$/, "").toLowerCase();
+  if (!WEBSITE_HOSTS.includes(host)) redirect("/start");
+
   return (
     <main>
       <StaffRedirect />

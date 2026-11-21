@@ -13,6 +13,11 @@ export const SALES_CONTACT = {
 
 export const SITE_URL = "https://petropro.online";
 
+/** Addresses where "/" is the website. Every other address belongs to a station, such as
+ *  srinivasaagencies.petropro.online, and "/" there opens the app as it always has. localhost
+ *  shows the website so it can be worked on. */
+export const WEBSITE_HOSTS = ["petropro.online", "www.petropro.online", "localhost", "127.0.0.1"];
+
 export type Screen = { src: string; alt: string; width: number; height: number; cropTop?: number };
 
 export type TourSlide =
