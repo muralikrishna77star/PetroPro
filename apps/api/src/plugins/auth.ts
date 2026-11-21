@@ -51,24 +51,62 @@ declare module "fastify" {
     startStaffSession: (
       request: FastifyRequest,
       reply: FastifyReply,
-      user: Pick<User, "user_id" | "role" | "name">,
+      user: Pick<User, "user_id" | "role" | "name" | "billing_only">,
       method: "password" | "google",
-    ) => { token: string; user: { user_id: string; name: string; role: Role } };
+    ) => { token: string; user: { user_id: string; name: string; role: Role; billing_only: boolean } };
   }
 }
 
 /**
+ * What a "Billing screen only" cashier may call: what the Billing screen and its print, share and
+ * offline parts use, and nothing else. Close Day isn't here on purpose: it closes the whole
+ * station's day, which a tablet at the pumps shouldn't do. Sign-in routes don't authenticate.
+ */
+export const BILLING_ONLY_ROUTES = new Set([
+  "GET /items",
+  "GET /pumps",
+  "GET /customers",
+  "GET /customers/:code",
+  "GET /orders",
+  "GET /settings",
+  "GET /tenant",
+  "GET /business-date",
+  "POST /bills",
+  "GET /bills/recent",
+  "GET /bills/:billNo",
+  "POST /bills/:billNo/cancel",
+  "GET /bills/:billNo/pdf",
+  "GET /bills/:billNo/share-link",
+  "GET /bills/:billNo/receipt",
+  "GET /bills/:billNo/receipt.pdf",
+  "GET /bills/:billNo/print-jobs",
+  "POST /bills/:billNo/print-jobs",
+  "POST /print-jobs/:id/retry",
+  "PATCH /print-jobs/:id",
+  "GET /print/terminals/:id",
+  "POST /print/stations/:id/work",
+  "PATCH /print/station-tests/:id",
+  "GET /communication/settings",
+  "GET /communication/log",
+  "POST /communication/log",
+]);
+
+export const BILLING_ONLY_REFUSAL = "This account can only use the Billing screen";
+
+/**
  * Whether this verified staff token's session and user are still live, right now. Tokens from
  * before sessions existed have no `sid` and are refused. Role and name are taken from the database,
- * so a role change applies from the next request rather than whenever the token runs out.
+ * so a role change applies from the next request rather than whenever the token runs out. So does
+ * "Billing screen only": a call that screen doesn't make is "restricted".
  */
-function applyLiveSession(request: FastifyRequest): boolean {
+function applyLiveSession(request: FastifyRequest): "ok" | "ended" | "restricted" {
   const claims = request.user;
-  if (claims.role === "customer" || claims.role === "invoice" || !claims.sid) return false;
+  if (claims.role === "customer" || claims.role === "invoice" || !claims.sid) return "ended";
   const live = authSessionsRepo.liveUser(claims.sid, claims.sub, Date.now());
-  if (!live) return false;
+  if (!live) return "ended";
   request.user = { ...claims, role: live.role, name: live.name };
-  return true;
+  if (live.billing_only && !BILLING_ONLY_ROUTES.has(`${request.method} ${request.routeOptions.url}`)) return "restricted";
+  return "ok";
 }
 
 async function authPlugin(fastify: FastifyInstance) {
@@ -83,7 +121,7 @@ async function authPlugin(fastify: FastifyInstance) {
 
   fastify.decorate(
     "startStaffSession",
-    (request: FastifyRequest, reply: FastifyReply, user: Pick<User, "user_id" | "role" | "name">, method: "password" | "google") => {
+    (request: FastifyRequest, reply: FastifyReply, user: Pick<User, "user_id" | "role" | "name" | "billing_only">, method: "password" | "google") => {
       const { sessionId, refreshToken } = createSession(user.user_id, method, request.headers["user-agent"]);
       auditLogsRepo.record({
         user_id: user.user_id,
@@ -95,7 +133,7 @@ async function authPlugin(fastify: FastifyInstance) {
       reply.header("Set-Cookie", refreshCookie(refreshToken));
       return {
         token: fastify.signAccessToken(user, sessionId),
-        user: { user_id: user.user_id, name: user.name, role: user.role },
+        user: { user_id: user.user_id, name: user.name, role: user.role, billing_only: user.billing_only === 1 },
       };
     },
   );
@@ -118,7 +156,9 @@ async function authPlugin(fastify: FastifyInstance) {
       reply.code(403).send({ error: "Forbidden" });
       return;
     }
-    if (!applyLiveSession(request)) reply.code(401).send({ error: "Unauthorized" });
+    const live = applyLiveSession(request);
+    if (live === "ended") reply.code(401).send({ error: "Unauthorized" });
+    else if (live === "restricted") reply.code(403).send({ error: BILLING_ONLY_REFUSAL });
   });
 
   fastify.decorate("requireRole", (...roles: Role[]) => {
@@ -133,8 +173,13 @@ async function authPlugin(fastify: FastifyInstance) {
         reply.code(403).send({ error: "Forbidden" });
         return;
       }
-      if (!applyLiveSession(request)) {
+      const live = applyLiveSession(request);
+      if (live === "ended") {
         reply.code(401).send({ error: "Unauthorized" });
+        return;
+      }
+      if (live === "restricted") {
+        reply.code(403).send({ error: BILLING_ONLY_REFUSAL });
         return;
       }
       if (!roles.includes(request.user.role)) {

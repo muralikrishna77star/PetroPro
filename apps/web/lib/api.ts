@@ -159,7 +159,7 @@ async function requestNewAccessToken(staleToken: string): Promise<string | null>
     const res = await fetch(`${SESSION_API}/refresh`, { method: "POST" });
     if (res.ok) {
       const { token, user } = (await res.json()) as LoginResponse;
-      saveSession({ token, userId: user.user_id, name: user.name, role: user.role });
+      saveSession({ token, userId: user.user_id, name: user.name, role: user.role, billingOnly: user.billing_only === true });
       return token;
     }
     if (res.status === 401) return null;
@@ -321,10 +321,10 @@ export const api = {
   unlinkGoogle: (token: string, userId: string) =>
     request<{ ok: true }>(`/users/${userId}/google-link`, { method: "DELETE", token }),
 
-  createUser: (token: string, body: { user_id: string; name: string; role: Role; email?: string | null }) =>
+  createUser: (token: string, body: { user_id: string; name: string; role: Role; email?: string | null; billing_only?: boolean }) =>
     request<AppUser & { temporaryPassword?: string }>("/users", { method: "POST", token, body }),
 
-  updateUser: (token: string, userId: string, body: { name: string; role: Role; email?: string | null }) =>
+  updateUser: (token: string, userId: string, body: { name: string; role: Role; email?: string | null; billing_only?: boolean }) =>
     request<AppUser>(`/users/${userId}`, { method: "PUT", token, body }),
 
   deactivateUser: (token: string, userId: string) =>

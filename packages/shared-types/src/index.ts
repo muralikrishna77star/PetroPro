@@ -9,7 +9,8 @@ export type Role = "super_admin" | "owner" | "operator" | "field_operator";
 
 export interface LoginResponse {
   token: string;
-  user: { user_id: string; name: string; role: Role };
+  /** billing_only: a cashier account limited to the Billing screen, for tablets and phones. */
+  user: { user_id: string; name: string; role: Role; billing_only?: boolean };
 }
 
 export interface Item {
@@ -58,6 +59,8 @@ export interface AppUser {
   email: string | null;
   /** 1 once a Google account is linked. The Google id itself is never sent to the browser. */
   google_linked: number;
+  /** 1 for a cashier limited to the Billing screen, for tablets and phones. */
+  billing_only: number;
 }
 
 export interface PendingTransaction {

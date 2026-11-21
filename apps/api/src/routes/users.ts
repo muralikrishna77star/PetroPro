@@ -6,6 +6,7 @@ import { auditLogsRepo } from "../repositories/auditLogs.js";
 import { authSessionsRepo } from "../repositories/authSessions.js";
 
 const ROLES: Role[] = ["super_admin", "owner", "operator", "field_operator"];
+const BILLING_ONLY_ROLE_ERROR = "Billing screen only is for cashier (operator) accounts";
 
 /** Ends every login a user has, and records it. */
 function revokeSessions(adminId: string, userId: string, reason: string): number {
@@ -27,11 +28,12 @@ function generateTempPassword(): string {
 export default async function userRoutes(fastify: FastifyInstance) {
   fastify.get("/users", { preHandler: fastify.requireRole("super_admin") }, async () => usersRepo.list());
 
-  fastify.post<{ Body: { user_id: string; name: string; role: Role; password?: string; email?: string | null } }>(
+  fastify.post<{ Body: { user_id: string; name: string; role: Role; password?: string; email?: string | null; billing_only?: boolean } }>(
     "/users",
     { preHandler: fastify.requireRole("super_admin") },
     async (request, reply) => {
-      const { user_id, name, role, password, email } = request.body ?? {};
+      const { user_id, name, role, password, email, billing_only } = request.body ?? {};
+      if (billing_only === true && role !== "operator") return reply.code(400).send({ error: BILLING_ONLY_ROLE_ERROR });
       if (!user_id || !name || !role) {
         return reply.code(400).send({ error: "user_id, name and role are required" });
       }
@@ -53,23 +55,25 @@ export default async function userRoutes(fastify: FastifyInstance) {
         password_hash: hashPassword(tempPassword),
         role,
         email: normalizedEmail,
+        billing_only: billing_only === true,
       });
       auditLogsRepo.record({
         user_id: request.user.sub,
         action: "create_user",
         entity_type: "user",
         entity_id: user_id,
-        details: { role },
+        details: { role, billing_only: created.billing_only === 1 },
       });
       return reply.code(201).send({ ...created, temporaryPassword: password ? undefined : tempPassword });
     },
   );
 
-  fastify.put<{ Params: { id: string }; Body: { name: string; role: Role; email?: string | null } }>(
+  fastify.put<{ Params: { id: string }; Body: { name: string; role: Role; email?: string | null; billing_only?: boolean } }>(
     "/users/:id",
     { preHandler: fastify.requireRole("super_admin") },
     async (request, reply) => {
-      const { name, role, email } = request.body ?? {};
+      const { name, role, email, billing_only } = request.body ?? {};
+      if (billing_only === true && role !== "operator") return reply.code(400).send({ error: BILLING_ONLY_ROLE_ERROR });
       if (!name || !role) return reply.code(400).send({ error: "name and role are required" });
       if (!ROLES.includes(role)) {
         return reply.code(400).send({ error: `role must be one of: ${ROLES.join(", ")}` });
@@ -82,7 +86,12 @@ export default async function userRoutes(fastify: FastifyInstance) {
         }
       }
       const wasLinked = Boolean(usersRepo.getById(request.params.id)?.google_sub);
-      const updated = usersRepo.update(request.params.id, { name, role, email: normalizedEmail });
+      const updated = usersRepo.update(request.params.id, {
+        name,
+        role,
+        email: normalizedEmail,
+        billing_only: typeof billing_only === "boolean" ? billing_only : undefined,
+      });
       if (!updated) return reply.code(404).send({ error: "User not found" });
       if (wasLinked && !updated.google_linked) {
         auditLogsRepo.record({
@@ -98,7 +107,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
         action: "update_user",
         entity_type: "user",
         entity_id: request.params.id,
-        details: { name, role },
+        details: { name, role, billing_only: updated.billing_only === 1 },
       });
       return updated;
     },

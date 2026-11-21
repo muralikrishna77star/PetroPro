@@ -14,7 +14,7 @@ import {
   Search,
   Settings,
 } from "lucide-react";
-import { type Role, type Session } from "@/lib/auth";
+import { BILLING_ONLY_HOME, type Role, type Session } from "@/lib/auth";
 import { PortalBadge } from "@/components/PortalBadge";
 import { useColorStyle } from "@/components/ColorStyleProvider";
 import { cn } from "@/lib/cn";
@@ -179,10 +179,11 @@ export function Sidebar({ session, open, onClose }: { session: Session; open: bo
 
   const visibleGroups = NAV_GROUPS.map((group) => ({
     group,
-    items: group.items.filter((item) => item.roles.includes(session.role)),
+    items: group.items.filter((item) => item.roles.includes(session.role) && (!session.billingOnly || item.href === BILLING_ONLY_HOME)),
   })).filter(({ items }) => items.length > 0);
 
-  const visibleUngrouped = UNGROUPED.filter((item) => item.roles.includes(session.role));
+  // A billing-only cashier sees Billing and nothing else.
+  const visibleUngrouped = session.billingOnly ? [] : UNGROUPED.filter((item) => item.roles.includes(session.role));
 
   return (
     <>

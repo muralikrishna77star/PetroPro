@@ -469,14 +469,17 @@ export default function BillingPage() {
                 {syncingBills ? "Syncing..." : `${queuedBillCount} bill(s) queued — sync now`}
               </button>
             )}
-            <button
-              onClick={handleCloseDay}
-              disabled={closingDay || !businessDate}
-              title="Close billing for the current date and move the running date forward one day"
-              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-            >
-              {closingDay ? "Closing..." : "Close Day"}
-            </button>
+            {/* Closing the day closes it for the whole station, which a tablet or phone shouldn't do. */}
+            {!session.billingOnly && (
+              <button
+                onClick={handleCloseDay}
+                disabled={closingDay || !businessDate}
+                title="Close billing for the current date and move the running date forward one day"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+              >
+                {closingDay ? "Closing..." : "Close Day"}
+              </button>
+            )}
           </div>
         </div>
         {closeDayError && <p className="text-sm text-error">{closeDayError}</p>}

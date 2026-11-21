@@ -177,7 +177,7 @@ test("the right password links, keeps the user's identity, and creates no one", 
   assert.equal(after.google_sub, "google-1");
   assert.deepEqual({ ...after, google_sub: null }, { ...beforeUser }); // nothing else about the user changed
   assert.equal(userCount(), before);
-  assert.deepEqual(res.json().user, { user_id: "cash1", name: "cash1", role: "operator" });
+  assert.deepEqual(res.json().user, { user_id: "cash1", name: "cash1", role: "operator", billing_only: false });
   assert.match(String(res.headers["set-cookie"]), /petropro_refresh=.*HttpOnly/);
   const me = await app.inject({ method: "GET", url: "/auth/me", headers: { authorization: `Bearer ${res.json().token}` } });
   assert.equal(me.json().sub, "cash1");

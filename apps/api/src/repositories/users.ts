@@ -12,6 +12,8 @@ export interface User {
   created_at: string;
   email: string | null;
   google_sub: string | null;
+  /** 1 for a cashier limited to the Billing screen. Only ever set on an operator. */
+  billing_only: number;
 }
 
 /** Never carries the password hash or the Google id itself, only whether one is linked. */
@@ -26,7 +28,7 @@ export const usersRepo = {
   list(): PublicUser[] {
     return db
       .prepare(
-        "SELECT user_id, name, role, active, created_at, email, (google_sub IS NOT NULL) AS google_linked FROM users ORDER BY user_id",
+        "SELECT user_id, name, role, active, created_at, email, billing_only, (google_sub IS NOT NULL) AS google_linked FROM users ORDER BY user_id",
       )
       .all() as unknown as PublicUser[];
   },
@@ -62,10 +64,11 @@ export const usersRepo = {
     return db.prepare("UPDATE users SET google_sub = NULL WHERE user_id = ? AND google_sub IS NOT NULL").run(userId).changes === 1;
   },
 
-  create(input: { user_id: string; name: string; password_hash: string; role: Role; email?: string | null }): PublicUser {
+  create(input: { user_id: string; name: string; password_hash: string; role: Role; email?: string | null; billing_only?: boolean }): PublicUser {
+    const billingOnly = input.billing_only && input.role === "operator" ? 1 : 0;
     db.prepare(
-      "INSERT INTO users (user_id, name, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
-    ).run(input.user_id, input.name, input.password_hash, input.role, input.email ?? null);
+      "INSERT INTO users (user_id, name, password_hash, role, email, billing_only) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(input.user_id, input.name, input.password_hash, input.role, input.email ?? null, billingOnly);
     return {
       user_id: input.user_id,
       name: input.name,
@@ -73,6 +76,7 @@ export const usersRepo = {
       active: 1,
       created_at: new Date().toISOString(),
       email: input.email ?? null,
+      billing_only: billingOnly,
       google_linked: 0,
     };
   },
@@ -81,7 +85,13 @@ export const usersRepo = {
   // can't accidentally wipe out a previously-set one on every plain name/role update.
   // Changing the email drops any Google link: the link was granted for the old address, so
   // whoever now holds that Google account must not keep access.
-  update(userId: string, input: { name: string; role: Role; email?: string | null }): PublicUser | undefined {
+  // `billing_only` is omittable like `email`, and only an operator can keep it: changing the role
+  // away from operator clears it, so a promoted user isn't left limited to Billing.
+  update(userId: string, input: { name: string; role: Role; email?: string | null; billing_only?: boolean }): PublicUser | undefined {
+    const keep = input.billing_only === undefined ? null : input.billing_only ? 1 : 0;
+    db.prepare(
+      "UPDATE users SET billing_only = CASE WHEN ? <> 'operator' THEN 0 WHEN ? IS NULL THEN billing_only ELSE ? END WHERE user_id = ?",
+    ).run(input.role, keep, keep, userId);
     if (input.email !== undefined) {
       db.prepare(
         "UPDATE users SET name = ?, role = ?, google_sub = CASE WHEN email IS ? THEN google_sub END, email = ? WHERE user_id = ?",

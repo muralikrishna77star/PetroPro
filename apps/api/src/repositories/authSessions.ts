@@ -31,13 +31,13 @@ export const authSessionsRepo = {
 
   /** The current role and name if this session and its user are both still live, else undefined.
    *  Runs on every staff API request: this is what makes revocation immediate. */
-  liveUser(sessionId: string, userId: string, now: number): { role: Role; name: string } | undefined {
+  liveUser(sessionId: string, userId: string, now: number): { role: Role; name: string; billing_only: number } | undefined {
     return db
       .prepare(
-        `SELECT u.role, u.name FROM auth_sessions s JOIN users u ON u.user_id = s.user_id
+        `SELECT u.role, u.name, u.billing_only FROM auth_sessions s JOIN users u ON u.user_id = s.user_id
          WHERE s.id = ? AND s.user_id = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND u.active = 1`,
       )
-      .get(sessionId, userId, now) as { role: Role; name: string } | undefined;
+      .get(sessionId, userId, now) as { role: Role; name: string; billing_only: number } | undefined;
   },
 
   rotate(id: string, refreshHash: string, previousHash: string, now: number): void {
