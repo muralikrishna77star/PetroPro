@@ -641,3 +641,159 @@ test("a square logo as wide as the paper is accepted, and the payload says how w
     printSettingsRepo.saveReceipt({ logo: before.logo });
   }
 });
+
+// --- Print stations: a tablet's bills print on the counter computer --------------------------
+
+const STATION = "station-cccc-3333";
+const TABLET = "tablet-dddd-4444";
+
+async function setUpStation() {
+  const counter = await call(
+    "PUT",
+    `/print/terminals/${STATION}`,
+    terminal({ terminal_name: "Counter 1", connection: "bridge_usb", windows_printer: "POS80", print_station: true }),
+    ownerToken,
+  );
+  assert.equal(counter.statusCode, 200, counter.body);
+  const tablet = await call("PUT", `/print/terminals/${TABLET}`, terminal({ terminal_name: "Tab 1", connection: "station", station_id: STATION }), ownerToken);
+  assert.equal(tablet.statusCode, 200, tablet.body);
+}
+const work = async (wait = false) => call("POST", `/print/stations/${STATION}/work${wait ? "?wait=1" : ""}`);
+async function drainStation() {
+  while ((await work()).json().kind !== "none");
+}
+
+test("a print station needs its own printer, and a tablet names the station it sends to", async () => {
+  const viaDialog = await call("PUT", `/print/terminals/${STATION}`, terminal({ connection: "browser", print_station: true }), ownerToken);
+  assert.equal(viaDialog.statusCode, 400);
+  assert.match(viaDialog.json().error, /its own printer/);
+  await setUpStation();
+  const tablet = (await call("GET", `/print/terminals/${TABLET}`)).json() as TerminalPrinterSettings;
+  assert.equal(tablet.station_id, STATION);
+  // Leaving station mode clears the target, so it can't linger unseen.
+  const elsewhere = (await call("PUT", `/print/terminals/${TERMINAL_2}`, terminal({ connection: "bridge_usb", station_id: STATION }), ownerToken)).json() as TerminalPrinterSettings;
+  assert.equal(elsewhere.station_id, "");
+});
+
+test("a station shows as listening only once it asks for work", async () => {
+  await setUpStation();
+  db.prepare("UPDATE print_terminals SET last_seen = NULL WHERE terminal_id = ?").run(STATION);
+  let stations = (await call("GET", "/print/stations")).json() as { terminal_id: string; name: string; online: boolean }[];
+  assert.deepEqual(
+    stations.map((s) => [s.terminal_id, s.name, s.online]),
+    [[STATION, "Counter 1", false]],
+  );
+  assert.equal((await work()).json().kind, "none");
+  stations = (await call("GET", "/print/stations")).json();
+  assert.equal(stations[0].online, true);
+});
+
+test("a tablet's bill waits for the station, which prints it once, and no sale changes", async () => {
+  await setUpStation();
+  await drainStation();
+  const billNo = makeBill();
+  const before = snapshot();
+
+  const sent = (await print(billNo, newKey(), TABLET)).json() as PrintPayload;
+  assert.equal(sent.job!.status, "queued");
+  assert.equal(sent.job!.station_id, STATION);
+  assert.deepEqual(sent.station, { id: STATION, name: "Counter 1" });
+  assert.equal(sent.settings.connection, "station", "the tablet must not print it itself");
+
+  const again = await print(billNo, newKey(), TABLET);
+  assert.equal(again.statusCode, 409);
+  assert.match(again.json().error, /waiting to print at Counter 1/);
+
+  const taken = (await work()).json();
+  assert.equal(taken.kind, "job");
+  assert.equal(taken.payload.job.id, sent.job!.id);
+  assert.equal(taken.payload.job.status, "pending");
+  assert.equal(taken.payload.job.terminal_id, STATION);
+  assert.equal(taken.payload.settings.connection, "bridge_usb", "the station prints on its own printer");
+  assert.equal(taken.payload.station, null);
+  assert.equal((await work()).json().kind, "none", "a job is handed out once");
+
+  await call("PATCH", `/print-jobs/${sent.job!.id}`, { status: "sent" });
+  const jobs = (await call("GET", `/bills/${billNo}/print-jobs`)).json() as PrintJob[];
+  assert.deepEqual(
+    jobs.map((j) => [j.kind, j.status]),
+    [["original", "sent"]],
+  );
+  assert.equal(snapshot(), before, "printing changes no bill, stock or dues");
+});
+
+test("a reprint from a tablet reaches the station as a duplicate, and is audited", async () => {
+  await setUpStation();
+  await drainStation();
+  const billNo = makeBill();
+  const first = (await print(billNo, newKey(), TABLET)).json() as PrintPayload;
+  await work();
+  await call("PATCH", `/print-jobs/${first.job!.id}`, { status: "sent" });
+
+  const dup = (await print(billNo, newKey(), TABLET)).json() as PrintPayload;
+  assert.equal(dup.job!.kind, "duplicate");
+  assert.equal(dup.job!.status, "queued");
+  const taken = (await work()).json();
+  assert.equal(taken.payload.job.id, dup.job!.id);
+  assert.match(taken.payload.text, /DUPLICATE BILL/);
+  const audit = db
+    .prepare("SELECT details FROM audit_logs WHERE action = 'reprint_bill' AND entity_id = ? ORDER BY id DESC")
+    .get(String(billNo)) as { details: string };
+  assert.match(audit.details, new RegExp(STATION));
+});
+
+test("a station's failure comes back to the tablet, and Retry queues the same job again", async () => {
+  await setUpStation();
+  await drainStation();
+  const billNo = makeBill();
+  const sent = (await print(billNo, newKey(), TABLET)).json() as PrintPayload;
+  await work();
+  await call("PATCH", `/print-jobs/${sent.job!.id}`, { status: "failed", error: "Printer POS80 is out of paper" });
+  const failed = ((await call("GET", `/bills/${billNo}/print-jobs`)).json() as PrintJob[])[0];
+  assert.deepEqual([failed.status, failed.error], ["failed", "Printer POS80 is out of paper"]);
+
+  const retried = (await call("POST", `/print-jobs/${sent.job!.id}/retry`, { terminal_id: TABLET })).json() as PrintPayload;
+  assert.deepEqual([retried.job!.id, retried.job!.status, retried.job!.kind], [sent.job!.id, "queued", "original"]);
+  const taken = (await work()).json();
+  assert.equal(taken.payload.job.id, sent.job!.id);
+  assert.equal(taken.payload.job.attempts, 2);
+});
+
+test("a tablet can send a test page to the station", async () => {
+  await setUpStation();
+  await drainStation();
+  assert.equal((await call("POST", `/print/stations/${STATION}/test`, {}, cashierToken)).statusCode, 403);
+  const sent = (await call("POST", `/print/stations/${STATION}/test`, {}, ownerToken)).json() as { id: number; status: string };
+  assert.equal(sent.status, "queued");
+  const taken = (await work()).json();
+  assert.equal(taken.kind, "test");
+  assert.equal(taken.test_id, sent.id);
+  assert.equal(taken.requested_by, "Owner");
+  assert.match(taken.payload.text, /TEST PRINT - NOT A BILL/);
+  assert.equal((await call("PATCH", `/print/station-tests/${sent.id}`, { status: "sent" })).json().status, "sent");
+  assert.equal((await call("GET", `/print/station-tests/${sent.id}`)).json().status, "sent");
+});
+
+test("only a station is given work, and a tablet can't send to one that was turned off", async () => {
+  await setUpStation();
+  const notStation = await call("POST", `/print/stations/${TABLET}/work`);
+  assert.equal(notStation.statusCode, 409);
+  await call("PUT", `/print/terminals/${STATION}`, terminal({ terminal_name: "Counter 1", connection: "bridge_usb", print_station: false }), ownerToken);
+  const refused = await print(makeBill(), newKey(), TABLET);
+  assert.equal(refused.statusCode, 409);
+  assert.match(refused.json().error, /isn't set up as a print station/);
+  await setUpStation();
+});
+
+test("a waiting station gets a bill the moment it's sent", async () => {
+  await setUpStation();
+  await drainStation();
+  const waiting = work(true);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const sent = (await print(makeBill(), newKey(), TABLET)).json() as PrintPayload;
+  const started = Date.now();
+  const got = (await waiting).json();
+  assert.equal(got.kind, "job");
+  assert.equal(got.payload.job.id, sent.job!.id);
+  assert.ok(Date.now() - started < 2000, "picked up within a couple of seconds");
+});

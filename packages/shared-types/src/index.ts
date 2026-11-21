@@ -671,10 +671,12 @@ export interface LegacyImportReport {
   backup: string | null;
 }
 
-export type PrinterConnection = "browser" | "bridge_lan" | "bridge_usb" | "webusb" | "bluetooth";
+/** "station" sends each bill to another terminal, a print station, which prints it on its own printer. */
+export type PrinterConnection = "browser" | "bridge_lan" | "bridge_usb" | "webusb" | "bluetooth" | "station";
 export type PrinterEncoding = "ascii" | "cp437" | "cp858";
 export type PrintKind = "original" | "duplicate";
-export type PrintJobStatus = "pending" | "sent" | "failed";
+/** "queued" is a job waiting for its print station to collect it. "pending" is being printed now. */
+export type PrintJobStatus = "queued" | "pending" | "sent" | "failed";
 
 export interface ReceiptLogo {
   width: number;
@@ -729,6 +731,33 @@ export interface TerminalPrinterSettings {
   auto_cut: boolean;
   auto_print: boolean;
   copies: number;
+  /** This terminal also prints bills that other terminals send to it, while PetroPro is open here. */
+  print_station: boolean;
+  /** With connection "station": the terminal whose printer prints this one's bills. */
+  station_id: string;
+}
+
+/** A terminal that prints for others, as other terminals see it. */
+export interface PrintStation {
+  terminal_id: string;
+  name: string;
+  /** When it last asked for work. A station that hasn't is closed, or PetroPro isn't open there. */
+  last_seen: string | null;
+  online: boolean;
+}
+
+/** What a print station is given when it asks for work. */
+export type StationWork =
+  | { kind: "none" }
+  | { kind: "job"; payload: PrintPayload }
+  | { kind: "test"; test_id: number; requested_by: string; payload: PrintPayload };
+
+export interface StationTest {
+  id: number;
+  station_id: string;
+  status: PrintJobStatus;
+  error: string | null;
+  created_at: string;
 }
 
 export type ReceiptBlock =
@@ -756,6 +785,8 @@ export interface PrintJob {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** The print station this job was sent to, or null when the requesting terminal prints it. */
+  station_id: string | null;
 }
 
 export interface PrintPayload {
@@ -768,4 +799,6 @@ export interface PrintPayload {
   logo_preview: string | null;
   /** The logo's printed width, so the browser dialog and PDF draw it the size the printer does. */
   logo_width_mm: number | null;
+  /** Set when the job went to a print station rather than to this terminal's own printer. */
+  station: { id: string; name: string } | null;
 }

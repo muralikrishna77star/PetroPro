@@ -5,6 +5,7 @@ import { getSession, type Session } from "@/lib/auth";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { ColorStyleProvider } from "@/components/ColorStyleProvider";
+import { PrintStationRunner } from "@/components/PrintStationRunner";
 
 /** Shared shell (sidebar + content frame) for every authenticated page. Deliberately does not
  *  duplicate auth/role gating here — each page still calls useRequireSession(allowedRoles)
@@ -35,6 +36,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
           </main>
         </div>
       </div>
+      <PrintStationRunner />
     </ColorStyleProvider>
   );
 }

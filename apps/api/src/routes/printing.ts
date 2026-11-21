@@ -3,12 +3,15 @@ import type { PrintJobStatus, ReceiptSettings, TerminalPrinterSettings } from "@
 import { config } from "../config.js";
 import { auditLogsRepo } from "../repositories/auditLogs.js";
 import { billsRepo } from "../repositories/bills.js";
-import { DEFAULT_TERMINAL_SETTINGS, cleanTerminalSettings, printJobsRepo, printSettingsRepo } from "../repositories/printing.js";
-import { previewPrint, PrintRefused, requestPrint, retryPrint, testPrint } from "../services/printing.js";
+import { DEFAULT_TERMINAL_SETTINGS, cleanTerminalSettings, printJobsRepo, printSettingsRepo, stationTestsRepo } from "../repositories/printing.js";
+import { previewPrint, PrintRefused, requestPrint, retryPrint, takeStationWork, testPrint } from "../services/printing.js";
 import { buildBillReceipt } from "../services/receipt.js";
 import { renderReceiptPdf } from "../services/billReceiptPdf.js";
 
 const TERMINAL_ID = /^[A-Za-z0-9_-]{8,64}$/;
+/** How long a print station's request for work is held open, and how often it looks meanwhile. */
+const STATION_WAIT_MS = 20_000;
+const STATION_POLL_MS = 700;
 
 function terminalIdOf(value: unknown): string | null {
   return typeof value === "string" && TERMINAL_ID.test(value) ? value : null;
@@ -134,6 +137,49 @@ export default async function printingRoutes(fastify: FastifyInstance) {
   );
 
   fastify.get("/print-jobs/unfinished", staff, async () => printJobsRepo.listUnfinished());
+
+  // --- Print stations: a terminal that prints bills other terminals send it ------------------
+
+  fastify.get("/print/stations", staff, async () => printSettingsRepo.listStations());
+
+  /** A station asks for work. With wait=1 the answer is held for up to STATION_WAIT_MS until
+   *  something arrives, so a bill prints within a second of being sent, and a browser tab in the
+   *  background, whose timers Chrome slows down, still prints promptly. */
+  fastify.post<{ Params: { id: string }; Querystring: { wait?: string } }>("/print/stations/:id/work", staff, async (request, reply) => {
+    const id = terminalIdOf(request.params.id);
+    if (!id) return reply.code(400).send({ error: "Unknown terminal" });
+    const deadline = Date.now() + (request.query.wait === "1" ? STATION_WAIT_MS : 0);
+    try {
+      for (;;) {
+        // A station that went away mustn't be handed a job it will never print.
+        if (request.raw.socket?.destroyed) return reply.code(499).send();
+        const work = takeStationWork(id, qrMinter);
+        if (work.kind !== "none" || Date.now() >= deadline) return work;
+        await new Promise((resolve) => setTimeout(resolve, STATION_POLL_MS));
+      }
+    } catch (err) {
+      if (err instanceof PrintRefused) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  fastify.post<{ Params: { id: string } }>("/print/stations/:id/test", admin, async (request, reply) => {
+    const id = terminalIdOf(request.params.id);
+    if (!id || !printSettingsRepo.getStation(id)) return reply.code(404).send({ error: "That counter printer isn't a print station" });
+    return stationTestsRepo.create(id, request.user.sub);
+  });
+
+  fastify.get<{ Params: { id: string } }>("/print/station-tests/:id", staff, async (request, reply) => {
+    const test = stationTestsRepo.get(Number(request.params.id));
+    return test ?? reply.code(404).send({ error: "Test not found" });
+  });
+
+  fastify.patch<{ Params: { id: string }; Body: { status?: string; error?: string } }>("/print/station-tests/:id", staff, async (request, reply) => {
+    const status = request.body?.status;
+    if (status !== "sent" && status !== "failed") return reply.code(400).send({ error: "Status must be sent or failed" });
+    const test = stationTestsRepo.report(Number(request.params.id), status, typeof request.body?.error === "string" ? request.body.error.slice(0, 300) : null);
+    return test ?? reply.code(404).send({ error: "Test not found" });
+  });
 
   fastify.post<{ Params: { id: string }; Body: { terminal_id?: string; connection?: string } }>("/print-jobs/:id/retry", staff, async (request, reply) => {
     const job = printJobsRepo.get(Number(request.params.id));

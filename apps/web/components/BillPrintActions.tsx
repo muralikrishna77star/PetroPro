@@ -9,7 +9,17 @@ import { deliver, findFailedForBill, flushPrintReports, forgetFailed, getTermina
 import { Button } from "@/components/ui/Button";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
 
-type Status = { kind: "idle" } | { kind: "working" } | { kind: "sent"; text: string } | { kind: "failed"; text: string };
+type Status =
+  | { kind: "idle" }
+  | { kind: "working" }
+  | { kind: "waiting"; text: string }
+  | { kind: "sent"; text: string }
+  | { kind: "failed"; text: string };
+
+/** A bill sent to a print station that hasn't been collected by now probably won't be soon: the
+ *  counter computer is off, or PetroPro isn't open on it. */
+const STATION_SLOW_MS = 30_000;
+const STATION_CHECK_MS = 2_000;
 
 function errorText(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return err.message;
@@ -40,6 +50,7 @@ export function BillPrintActions({
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [failedJob, setFailedJob] = useState<number | null>(null);
   const [preview, setPreview] = useState<PrintPayload | null>(null);
+  const [waiting, setWaiting] = useState<{ id: number; station: string; since: number } | null>(null);
   const busy = useRef(false);
 
   const role = getSession()?.role;
@@ -60,6 +71,13 @@ export function BillPrintActions({
   const send = useCallback(
     async (payload: PrintPayload) => {
       const job = payload.job!;
+      // The counter's print station prints this one. This screen follows it until it's done.
+      if (payload.station) {
+        setFailedJob(null);
+        setWaiting({ id: job.id, station: payload.station.name, since: Date.now() });
+        setStatus({ kind: "waiting", text: `Sent to ${payload.station.name}. Waiting for it to print...` });
+        return;
+      }
       try {
         await deliver(payload, jobKeyOf(job.id));
         forgetFailed(job.id);
@@ -131,6 +149,44 @@ export function BillPrintActions({
     refreshJobs();
   }, [refreshJobs]);
 
+  // Follows a bill sent to a print station until the station says it printed or failed.
+  useEffect(() => {
+    if (!waiting) return;
+    let stopped = false;
+    const check = async () => {
+      try {
+        const list = await api.listBillPrintJobs(token, billNo);
+        if (stopped) return;
+        setJobs(list);
+        const job = list.find((j) => j.id === waiting.id);
+        if (!job) return;
+        if (job.status === "sent") {
+          setWaiting(null);
+          setFailedJob(null);
+          setStatus({ kind: "sent", text: `Printed at ${waiting.station}. The customer can collect it at the counter.` });
+        } else if (job.status === "failed") {
+          setWaiting(null);
+          setFailedJob(job.id);
+          setStatus({ kind: "failed", text: `${waiting.station} couldn't print it: ${job.error ?? "no reason given"}. The bill is saved.` });
+        } else if (job.status === "queued" && Date.now() - waiting.since > STATION_SLOW_MS) {
+          setFailedJob(job.id);
+          setStatus({
+            kind: "waiting",
+            text: `${waiting.station} hasn't picked this up yet. Check that PetroPro is open on the counter computer: it prints as soon as it is.`,
+          });
+        }
+      } catch {
+        // Offline for a moment. The next check tries again.
+      }
+    };
+    void check();
+    const timer = setInterval(check, STATION_CHECK_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [billNo, token, waiting]);
+
   useEffect(() => {
     if (!justFinalized && !autoPrint) return;
     let cancelled = false;
@@ -172,12 +228,13 @@ export function BillPrintActions({
   }
 
   const working = status.kind === "working";
+  const sentToStation = waiting !== null && failedJob === null;
 
   return (
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={printOrReprint} disabled={working || jobs === null}>
-          {working ? "Printing..." : printed ? "Reprint Bill" : "Print Bill"}
+        <Button size="sm" onClick={printOrReprint} disabled={working || sentToStation || jobs === null}>
+          {working ? "Printing..." : sentToStation ? "Waiting for counter..." : printed ? "Reprint Bill" : "Print Bill"}
         </Button>
         <Button size="sm" variant="outline" onClick={showPreview}>
           Print Preview
@@ -199,6 +256,11 @@ export function BillPrintActions({
         )}
       </div>
 
+      {status.kind === "waiting" && (
+        <p role="status" className="text-sm text-fg-muted">
+          {status.text}
+        </p>
+      )}
       {status.kind === "sent" && (
         <p role="status" className="text-sm text-success">
           {status.text}

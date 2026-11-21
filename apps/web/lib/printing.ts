@@ -229,6 +229,9 @@ export async function deliver(payload: PrintPayload, jobKey: string | null): Pro
       return sendViaWebUsb(bytesOf(payload.escpos_base64));
     case "bluetooth":
       return sendViaBluetooth(bytesOf(payload.escpos_base64));
+    case "station":
+      // The print station prints it. Printing here as well would make two originals.
+      throw new Error("This bill was sent to the counter printer.");
     default:
       return printViaBrowser(payload);
   }
