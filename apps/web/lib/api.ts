@@ -65,6 +65,9 @@ import type {
   LegacyImportReport,
   PrintJob,
   PrintJobStatus,
+  PrintStation,
+  StationTest,
+  StationWork,
   PrintPayload,
   ReceiptSettings,
   TerminalPrinterSettings,
@@ -623,6 +626,20 @@ export const api = {
 
   reportPrintJob: (token: string, jobId: number, status: PrintJobStatus, error: string | null) =>
     request<PrintJob>(`/print-jobs/${jobId}`, { method: "PATCH", token, body: { status, error: error ?? undefined } }),
+
+  listPrintStations: (token: string) => request<PrintStation[]>("/print/stations", { token }),
+
+  /** Held open by the server for up to 20 seconds until there's something to print. */
+  takeStationWork: (token: string, stationId: string) =>
+    request<StationWork>(`/print/stations/${stationId}/work?wait=1`, { method: "POST", token }),
+
+  sendStationTest: (token: string, stationId: string) =>
+    request<StationTest>(`/print/stations/${stationId}/test`, { method: "POST", token, body: {} }),
+
+  getStationTest: (token: string, testId: number) => request<StationTest>(`/print/station-tests/${testId}`, { token }),
+
+  reportStationTest: (token: string, testId: number, status: "sent" | "failed", error: string | null) =>
+    request<StationTest>(`/print/station-tests/${testId}`, { method: "PATCH", token, body: { status, error: error ?? undefined } }),
 
   listBackups: (token: string) => request<BackupFile[]>("/backup", { token }),
 

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { OilCompany, PrintPayload, PrinterConnection, ReceiptLogo, ReceiptSettings, TerminalPrinterSettings } from "@petropro/shared-types";
+import type { OilCompany, PrintPayload, PrintStation, PrinterConnection, ReceiptLogo, ReceiptSettings, TerminalPrinterSettings } from "@petropro/shared-types";
 import { api, ApiError } from "@/lib/api";
 import { checkBridge, deliver, getBridgeConfig, getTerminalId, saveBridgeConfig, type BridgeConfig } from "@/lib/printing";
 import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/ui/Button";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
+import { PRINT_SETTINGS_CHANGED } from "@/components/PrintStationRunner";
 
 const CONNECTIONS: { value: PrinterConnection; label: string; hint: string }[] = [
   { value: "browser", label: "Browser print dialog", hint: "No setup. Works with any installed printer, but someone has to confirm the dialog, and it can't report failures." },
@@ -15,7 +16,14 @@ const CONNECTIONS: { value: PrinterConnection; label: string; hint: string }[] =
   { value: "bridge_usb", label: "USB printer, through the print bridge", hint: "Silent printing to a printer installed on this computer. The print bridge must run here." },
   { value: "webusb", label: "USB printer, direct from Chrome or Edge", hint: "No bridge. Suits Android. On Windows the printer's driver usually has to be replaced first." },
   { value: "bluetooth", label: "Bluetooth printer", hint: "Chrome on Android or a computer. Works only with BLE printers. You pick the printer once each session." },
+  {
+    value: "station",
+    label: "Counter printer (another computer prints it)",
+    hint: "For tablets and phones. Bills are sent to the counter computer, which prints them on its own printer. That computer must be a print station with PetroPro open.",
+  },
 ];
+/** Connections that print without anyone at the screen, so a print station can use them. */
+const UNATTENDED: PrinterConnection[] = ["bridge_usb", "bridge_lan", "webusb", "bluetooth"];
 
 const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm";
 /** 203 dpi: what nearly every receipt printer draws at, so a logo made at this prints at its size. */
@@ -150,6 +158,7 @@ export default function PrinterSettingsPage() {
   // black-and-white version is saved, which would blur if it were scaled again.
   const [uploaded, setUploaded] = useState<File | null>(null);
   const [customSize, setCustomSize] = useState<string | null>(null);
+  const [stations, setStations] = useState<PrintStation[]>([]);
 
   const token = session?.token;
 
@@ -158,6 +167,7 @@ export default function PrinterSettingsPage() {
     api.getTerminalPrinter(token, terminalId).then(setTerminal, (err) => setMessage({ ok: false, text: messageOf(err, "Printer settings couldn't be loaded") }));
     api.getReceiptSettings(token).then(setReceipt, () => undefined);
     api.listPrintTerminals(token).then(setOthers, () => undefined);
+    api.listPrintStations(token).then(setStations, () => undefined);
   }, [terminalId, token]);
 
   // A paired bridge lists this computer's printers straight away, so a printer renamed in Windows
@@ -180,6 +190,8 @@ export default function PrinterSettingsPage() {
   const set = <K extends keyof TerminalPrinterSettings>(key: K, value: TerminalPrinterSettings[K]) => setTerminal({ ...terminal, [key]: value });
   const setR = <K extends keyof ReceiptSettings>(key: K, value: ReceiptSettings[K]) => setReceipt({ ...receipt, [key]: value });
   const usesBridge = terminal.connection === "bridge_lan" || terminal.connection === "bridge_usb";
+  const toStation = terminal.connection === "station";
+  const otherStations = stations.filter((st) => st.terminal_id !== terminalId);
   const hint = CONNECTIONS.find((c) => c.value === terminal.connection)?.hint;
 
   function choosePaper(mm: 58 | 80) {
@@ -187,6 +199,10 @@ export default function PrinterSettingsPage() {
   }
 
   async function saveAll() {
+    if (terminal!.print_station && !terminal!.terminal_name.trim()) {
+      setMessage({ ok: false, text: "Give this terminal a name, such as Counter 1, so tablets can choose it as their printer." });
+      return;
+    }
     setWorking(true);
     setMessage(null);
     try {
@@ -194,7 +210,9 @@ export default function PrinterSettingsPage() {
       setTerminal(await api.saveTerminalPrinter(token!, terminalId, terminal!));
       setReceipt(await api.saveReceiptSettings(token!, receipt!));
       setOthers(await api.listPrintTerminals(token!));
-      setMessage({ ok: true, text: "Saved." });
+      setStations(await api.listPrintStations(token!).catch(() => stations));
+      window.dispatchEvent(new Event(PRINT_SETTINGS_CHANGED));
+      setMessage({ ok: true, text: terminal!.print_station ? "Saved. This computer now prints bills sent from other devices while PetroPro is open." : "Saved." });
     } catch (err) {
       setMessage({ ok: false, text: messageOf(err, "Save failed") });
     } finally {
@@ -214,7 +232,33 @@ export default function PrinterSettingsPage() {
     }
   }
 
+  /** A tablet's test page goes to its counter printer, and this waits to hear how it went. */
+  async function testStation() {
+    const station = stations.find((s) => s.terminal_id === terminal!.station_id);
+    if (!station) {
+      setMessage({ ok: false, text: "Choose the counter printer first." });
+      return;
+    }
+    setWorking(true);
+    setMessage({ ok: true, text: `Test page sent to ${station.name}. Waiting for it to print...` });
+    try {
+      const sent = await api.sendStationTest(token!, station.terminal_id);
+      for (let waited = 0; waited < 30_000; waited += 1500) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const now = await api.getStationTest(token!, sent.id);
+        if (now.status === "sent") return setMessage({ ok: true, text: `${station.name} printed the test page. Check the paper there.` });
+        if (now.status === "failed") return setMessage({ ok: false, text: `${station.name} couldn't print it: ${now.error ?? "no reason given"}` });
+      }
+      setMessage({ ok: false, text: `${station.name} hasn't picked it up. Check that PetroPro is open on that computer. It will print as soon as it is.` });
+    } catch (err) {
+      setMessage({ ok: false, text: messageOf(err, "The test page couldn't be sent") });
+    } finally {
+      setWorking(false);
+    }
+  }
+
   async function testPrint() {
+    if (terminal!.connection === "station") return testStation();
     setWorking(true);
     setMessage(null);
     saveBridgeConfig(bridge);
@@ -316,6 +360,28 @@ export default function PrinterSettingsPage() {
               </select>
             </Field>
 
+            {toStation && (
+              <Field
+                label="Counter printer"
+                htmlFor="station"
+                hint={
+                  otherStations.length === 0
+                    ? "No computer is a print station yet. On the counter computer, open Printer Settings and turn on Print station."
+                    : "Green means PetroPro is open there and listening."
+                }
+              >
+                <select id="station" className={inputClass} value={terminal.station_id} onChange={(e) => set("station_id", e.target.value)}>
+                  <option value="">Choose a counter printer</option>
+                  {otherStations.map((st) => (
+                    <option key={st.terminal_id} value={st.terminal_id}>
+                      {st.online ? "🟢" : "⚪"} {st.name}
+                      {st.online ? "" : " (not open right now)"}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
             {terminal.connection === "bridge_lan" && (
               <>
                 <Field label="IP address" htmlFor="printer-host">
@@ -354,6 +420,8 @@ export default function PrinterSettingsPage() {
               </Field>
             )}
 
+            {!toStation && (
+              <>
             <Field label="Paper width" htmlFor="paper">
               <select id="paper" className={inputClass} value={terminal.paper_mm} onChange={(e) => choosePaper(Number(e.target.value) as 58 | 80)}>
                 <option value={80}>80 mm (3 inch)</option>
@@ -376,13 +444,37 @@ export default function PrinterSettingsPage() {
             <Field label="Receipt copies" htmlFor="copies" hint="For the first print. A reprint is always one copy.">
               <input id="copies" type="number" min={1} max={5} className={inputClass} value={terminal.copies} onChange={(e) => set("copies", Number(e.target.value))} />
             </Field>
+              </>
+            )}
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <Toggle id="auto-print" label="Auto-print after finalizing a bill" checked={terminal.auto_print} onChange={(v) => set("auto_print", v)} />
-            <Toggle id="auto-cut" label="Auto-cut" checked={terminal.auto_cut} onChange={(v) => set("auto_cut", v)} />
-            <Toggle id="show-logo" label="Print logo" checked={terminal.show_logo} onChange={(v) => set("show_logo", v)} />
-            <Toggle id="show-qr" label="Print QR code" checked={terminal.show_qr} onChange={(v) => set("show_qr", v)} />
+            {!toStation && (
+              <>
+                <Toggle id="auto-cut" label="Auto-cut" checked={terminal.auto_cut} onChange={(v) => set("auto_cut", v)} />
+                <Toggle id="show-logo" label="Print logo" checked={terminal.show_logo} onChange={(v) => set("show_logo", v)} />
+                <Toggle id="show-qr" label="Print QR code" checked={terminal.show_qr} onChange={(v) => set("show_qr", v)} />
+              </>
+            )}
           </div>
+          {toStation && (
+            <p className="text-sm text-fg-muted">Paper, logo and cutting come from the counter printer&apos;s own settings.</p>
+          )}
+
+          {UNATTENDED.includes(terminal.connection) && (
+            <div className="rounded-lg border border-border p-3">
+              <Toggle
+                id="print-station"
+                label="Print station: also print bills sent from tablets and phones"
+                checked={terminal.print_station}
+                onChange={(v) => set("print_station", v)}
+              />
+              <p className="mt-1 text-xs text-fg-muted">
+                Keep PetroPro open on this computer while the outlet is open: it prints whatever other devices send here. Tablets choose it by its
+                Terminal name.
+              </p>
+            </div>
+          )}
 
           {usesBridge && (
             <div className="grid grid-cols-1 gap-4 rounded-lg border border-border p-3 md:grid-cols-2">

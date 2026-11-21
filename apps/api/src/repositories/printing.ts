@@ -1,5 +1,7 @@
 import type {
   OilCompany,
+  PrintStation,
+  StationTest,
   PrintJob,
   PrintJobStatus,
   PrintKind,
@@ -54,9 +56,14 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalPrinterSettings = {
   auto_cut: true,
   auto_print: false,
   copies: 1,
+  print_station: false,
+  station_id: "",
 };
 
-const CONNECTIONS: PrinterConnection[] = ["browser", "bridge_lan", "bridge_usb", "webusb", "bluetooth"];
+const CONNECTIONS: PrinterConnection[] = ["browser", "bridge_lan", "bridge_usb", "webusb", "bluetooth", "station"];
+const TERMINAL_ID = /^[A-Za-z0-9_-]{8,64}$/;
+/** A station that asked for work this recently is listening. It asks at least every 25 seconds. */
+const STATION_ONLINE_SECONDS = 45;
 const ENCODINGS: PrinterEncoding[] = ["ascii", "cp437", "cp858"];
 
 function text(value: unknown, max: number, fallback: string): string {
@@ -125,11 +132,19 @@ export function cleanTerminalSettings(input: Partial<TerminalPrinterSettings>, b
   const host = text(input.host, 64, base.host);
   if (host && !/^[A-Za-z0-9.-]+$/.test(host)) throw new Error("The printer address isn't valid");
   const paper = input.paper_mm === 58 || input.paper_mm === 80 ? input.paper_mm : base.paper_mm;
+  const connection = CONNECTIONS.includes(input.connection as PrinterConnection) ? (input.connection as PrinterConnection) : base.connection;
+  const stationId = typeof input.station_id === "string" ? (TERMINAL_ID.test(input.station_id) ? input.station_id : "") : base.station_id;
+  const printStation = bool(input.print_station, base.print_station);
+  // A station prints unattended, so it needs a printer it can reach without a dialog, and it
+  // can't hand its own work on to yet another station.
+  if (printStation && (connection === "browser" || connection === "station")) {
+    throw new Error("A print station prints on its own printer. Choose a USB, LAN or Bluetooth printer for it first.");
+  }
   return {
     terminal_name: text(input.terminal_name, 40, base.terminal_name),
     printer_name: text(input.printer_name, 60, base.printer_name),
     printer_model: text(input.printer_model, 60, base.printer_model),
-    connection: CONNECTIONS.includes(input.connection as PrinterConnection) ? (input.connection as PrinterConnection) : base.connection,
+    connection,
     host,
     port: int(input.port, 1, 65535, base.port),
     windows_printer: text(input.windows_printer, 120, base.windows_printer),
@@ -142,6 +157,8 @@ export function cleanTerminalSettings(input: Partial<TerminalPrinterSettings>, b
     auto_cut: bool(input.auto_cut, base.auto_cut),
     auto_print: bool(input.auto_print, base.auto_print),
     copies: int(input.copies, 1, 5, base.copies),
+    print_station: printStation,
+    station_id: connection === "station" ? stationId : "",
   };
 }
 
@@ -172,6 +189,29 @@ export const printSettingsRepo = {
        ON CONFLICT(terminal_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`,
     ).run(terminalId, JSON.stringify(settings));
     return settings;
+  },
+
+  /** Terminals that print for others, with whether each is listening right now. */
+  listStations(): PrintStation[] {
+    const rows = db
+      .prepare(
+        `SELECT terminal_id, settings, last_seen, (last_seen IS NOT NULL AND last_seen >= datetime('now', ?)) AS online
+         FROM print_terminals ORDER BY updated_at DESC`,
+      )
+      .all(`-${STATION_ONLINE_SECONDS} seconds`) as unknown as { terminal_id: string; settings: string; last_seen: string | null; online: number }[];
+    return rows
+      .map((r) => ({ ...r, parsed: { ...DEFAULT_TERMINAL_SETTINGS, ...(JSON.parse(r.settings) as Partial<TerminalPrinterSettings>) } }))
+      .filter((r) => r.parsed.print_station)
+      .map((r) => ({ terminal_id: r.terminal_id, name: r.parsed.terminal_name || "Counter printer", last_seen: r.last_seen, online: r.online === 1 }));
+  },
+
+  getStation(terminalId: string): PrintStation | undefined {
+    return printSettingsRepo.listStations().find((s) => s.terminal_id === terminalId);
+  },
+
+  /** A station asking for work is a station that's listening. */
+  touchStation(terminalId: string): void {
+    db.prepare("UPDATE print_terminals SET last_seen = datetime('now') WHERE terminal_id = ?").run(terminalId);
   },
 
   listTerminals(): { terminal_id: string; settings: TerminalPrinterSettings; updated_at: string }[] {
@@ -225,23 +265,54 @@ export const printJobsRepo = {
     copies: number;
     request_key: string;
     created_by: string;
+    /** A job for a print station starts queued, and the station prints it. */
+    station_id?: string | null;
   }): PrintJob {
     const result = db
       .prepare(
-        `INSERT INTO print_jobs (bill_no, kind, terminal_id, connection, copies, request_key, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO print_jobs (bill_no, kind, terminal_id, connection, copies, request_key, created_by, station_id, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(input.bill_no, input.kind, input.terminal_id, input.connection, input.copies, input.request_key, input.created_by);
+      .run(
+        input.bill_no,
+        input.kind,
+        input.terminal_id,
+        input.connection,
+        input.copies,
+        input.request_key,
+        input.created_by,
+        input.station_id ?? null,
+        input.station_id ? "queued" : "pending",
+      );
     return printJobsRepo.get(Number(result.lastInsertRowid))!;
   },
 
-  /** Hands a pending or failed job to a sender, so a retry reprints the same job. */
-  claim(id: number, terminalId: string | null, connection: string): PrintJob {
+  /** Hands a pending or failed job to a sender, so a retry reprints the same job. With a station, the
+   *  job goes back in that station's queue instead. */
+  claim(id: number, terminalId: string | null, connection: string, stationId: string | null = null): PrintJob {
     db.prepare(
-      `UPDATE print_jobs SET status = 'pending', attempts = attempts + 1, error = NULL, terminal_id = ?, connection = ?,
-         updated_at = datetime('now') WHERE id = ?`,
-    ).run(terminalId, connection, id);
+      `UPDATE print_jobs SET status = ?, attempts = attempts + 1, error = NULL, terminal_id = ?, connection = ?,
+         station_id = ?, updated_at = datetime('now') WHERE id = ?`,
+    ).run(stationId ? "queued" : "pending", terminalId, connection, stationId, id);
     return printJobsRepo.get(id)!;
+  },
+
+  /** The oldest job waiting for this station, now marked as being printed there. The status check in
+   *  the update means two windows on the same station can't both take it. */
+  takeForStation(stationId: string, connection: string): PrintJob | undefined {
+    for (;;) {
+      const next = db
+        .prepare("SELECT id FROM print_jobs WHERE station_id = ? AND status = 'queued' ORDER BY id LIMIT 1")
+        .get(stationId) as { id: number } | undefined;
+      if (!next) return undefined;
+      const taken = db
+        .prepare(
+          `UPDATE print_jobs SET status = 'pending', terminal_id = ?, connection = ?, updated_at = datetime('now')
+           WHERE id = ? AND status = 'queued'`,
+        )
+        .run(stationId, connection, next.id);
+      if (taken.changes === 1) return printJobsRepo.get(next.id);
+    }
   },
 
   /** A job that reached the printer stays that way, so a late failure report can't invite a second print. */
@@ -250,5 +321,40 @@ export const printJobsRepo = {
       `UPDATE print_jobs SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ? AND status != 'sent'`,
     ).run(status, status === "failed" ? error : null, id);
     return printJobsRepo.get(id)!;
+  },
+};
+
+/** Test pages sent to a print station from another terminal's Printer Settings. Not print jobs: no
+ *  bill, nothing to audit. */
+export const stationTestsRepo = {
+  create(stationId: string, requestedBy: string): StationTest {
+    const result = db.prepare("INSERT INTO print_station_tests (station_id, requested_by) VALUES (?, ?)").run(stationId, requestedBy);
+    return stationTestsRepo.get(Number(result.lastInsertRowid))!;
+  },
+
+  get(id: number): StationTest | undefined {
+    return db.prepare("SELECT id, station_id, status, error, created_at FROM print_station_tests WHERE id = ?").get(id) as unknown as
+      | StationTest
+      | undefined;
+  },
+
+  take(stationId: string): (StationTest & { requested_by: string }) | undefined {
+    const next = db
+      .prepare("SELECT id, requested_by FROM print_station_tests WHERE station_id = ? AND status = 'queued' ORDER BY id LIMIT 1")
+      .get(stationId) as { id: number; requested_by: string } | undefined;
+    if (!next) return undefined;
+    const taken = db
+      .prepare("UPDATE print_station_tests SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND status = 'queued'")
+      .run(next.id);
+    return taken.changes === 1 ? { ...stationTestsRepo.get(next.id)!, requested_by: next.requested_by } : undefined;
+  },
+
+  report(id: number, status: "sent" | "failed", error: string | null): StationTest | undefined {
+    db.prepare("UPDATE print_station_tests SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ? AND status != 'sent'").run(
+      status,
+      status === "failed" ? error : null,
+      id,
+    );
+    return stationTestsRepo.get(id);
   },
 };

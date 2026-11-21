@@ -454,6 +454,23 @@ export function applySchema(db: DatabaseSync): void {
   // default: it hands out a bill link that lives for days rather than the QR's 30 minutes.
   ensureColumn(db, "communication_settings", "qr_whatsapp_enabled", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "communication_settings", "qr_whatsapp_link_days", "INTEGER NOT NULL DEFAULT 7");
+  // Print stations: a tablet's bill can print on the counter computer's printer. station_id is
+  // the terminal that should print a queued job; last_seen is when a station last asked for work,
+  // so a tablet can tell the counter isn't listening.
+  ensureColumn(db, "print_jobs", "station_id", "TEXT");
+  ensureColumn(db, "print_terminals", "last_seen", "TEXT");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS print_station_tests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      station_id TEXT NOT NULL,
+      requested_by TEXT NOT NULL REFERENCES users(user_id),
+      status TEXT NOT NULL DEFAULT 'queued',
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_print_jobs_station_queue ON print_jobs(station_id, status);
+  `);
 
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_transactions_client_ref ON pending_transactions(client_ref) WHERE client_ref IS NOT NULL",

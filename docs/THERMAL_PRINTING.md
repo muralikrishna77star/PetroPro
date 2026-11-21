@@ -160,9 +160,35 @@ printer bytes, and `services/billReceiptPdf.ts` into a PDF, so all outputs come 
 | USB, through bridge | Yes | Bridge, installed printer | Counter with a USB printer |
 | USB, direct | Yes after first pick | Chrome or Edge | Android tablets. On Windows, the driver usually blocks it |
 | Bluetooth | After first pick each session | Chrome, BLE printer | Attendant phones. Classic Bluetooth printers won't work |
+| Counter printer (print station) | Yes | A print station with PetroPro open | Tablets and phones that bill, with the receipt collected at the counter |
 
 For the browser dialog, set the printer's paper to 80 mm roll and margins to none, and turn off headers and
 footers in the dialog.
+
+On Chrome 158 and later, a site on the internet must be allowed both **Local network access** and **Apps on
+device** (loopback) before it can reach the bridge. Without both, the bridge "isn't answering" though it runs.
+Set them in `chrome://settings/content/siteDetails?site=<the PetroPro address>`.
+
+### Printing a tablet's bills at the counter
+
+A tablet can't run the bridge, so it hands its prints to a computer that can: a **print station**.
+
+1. On the counter computer, set up its own printer as usual (USB or LAN through the bridge, USB direct or
+   Bluetooth), give it a **Terminal name** such as *Counter 1*, tick **Print station** and save. A badge in the
+   corner shows it's listening. It prints only while a PetroPro page is open there.
+2. On the tablet, choose **Counter printer** as the connection, pick *Counter 1* and save. Test Print sends a
+   test page to the counter and reports whether it printed.
+3. Save and Print on the tablet queues the job for the station, which prints it within a second or two. The
+   tablet follows it: *Printed at Counter 1*, the station's error with Retry, or after 30 seconds a warning that
+   the counter hasn't picked it up, with Print from browser instead.
+
+How it works: the job is created `queued` with `print_jobs.station_id`. The station holds a request open
+(`POST /print/stations/:id/work?wait=1`, up to 20 seconds) and is handed the oldest queued job, marked
+`pending` in the same update, so two windows can't both take it. It prints with its own terminal settings
+(paper, logo, copies) and reports through the usual `PATCH /print-jobs/:id`. Originals, duplicates, the
+reprint audit entry and the double-click guard are unchanged. A station that asked for work in the last 45
+seconds shows as listening. If a counter's browser data is cleared it becomes a new terminal, so set it up
+again and choose the new one on the tablets.
 
 ### Installing the bridge on a billing computer
 
