@@ -684,6 +684,9 @@ export interface ReceiptLogo {
   preview_data_url: string;
 }
 
+/** Indian Oil, Hindustan Petroleum, Bharat Petroleum. */
+export type OilCompany = "iocl" | "hpcl" | "bpcl";
+
 /** What every receipt from this bunk says. */
 export interface ReceiptSettings {
   /** Contact and statutory lines under the address. Nothing is assumed: an empty list prints nothing. */
@@ -691,6 +694,9 @@ export interface ReceiptSettings {
   show_tagline: boolean;
   show_gstin: boolean;
   footer_text: string;
+  /** The oil company whose dealership this outlet is. Choosing one fills in `logo` from that company's
+   *  artwork, bundled with the web app. Null when there's no company logo or the logo was uploaded. */
+  oil_company: OilCompany | null;
   logo: ReceiptLogo | null;
   qr_link_days: number;
   show_customer: boolean;

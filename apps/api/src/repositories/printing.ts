@@ -1,4 +1,5 @@
 import type {
+  OilCompany,
   PrintJob,
   PrintJobStatus,
   PrintKind,
@@ -10,11 +11,14 @@ import type {
 } from "@petropro/shared-types";
 import { db } from "../db/client.js";
 
+const OIL_COMPANIES: OilCompany[] = ["iocl", "hpcl", "bpcl"];
+
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   header_lines: [],
   show_tagline: true,
   show_gstin: true,
   footer_text: "THANK YOU VISIT AGAIN",
+  oil_company: null,
   logo: null,
   qr_link_days: 7,
   show_customer: true,
@@ -89,6 +93,10 @@ export function cleanReceiptSettings(input: Partial<ReceiptSettings>, base: Rece
     show_tagline: bool(input.show_tagline, base.show_tagline),
     show_gstin: bool(input.show_gstin, base.show_gstin),
     footer_text: text(input.footer_text, 120, base.footer_text),
+    oil_company:
+      input.oil_company === null || (OIL_COMPANIES as unknown[]).includes(input.oil_company)
+        ? (input.oil_company ?? null)
+        : base.oil_company,
     logo: cleanLogo(input.logo, base.logo),
     qr_link_days: int(input.qr_link_days, 1, 90, base.qr_link_days),
     show_customer: bool(input.show_customer, base.show_customer),

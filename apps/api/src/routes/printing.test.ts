@@ -9,7 +9,7 @@ const { createSession } = await import("../services/sessions.js");
 const { requestPrint } = await import("../services/printing.js");
 const { encodeText, renderEscPos } = await import("../services/escpos.js");
 const { wrapText, renderText } = await import("../services/receipt.js");
-const { DEFAULT_TERMINAL_SETTINGS, DEFAULT_RECEIPT_SETTINGS } = await import("../repositories/printing.js");
+const { DEFAULT_TERMINAL_SETTINGS, DEFAULT_RECEIPT_SETTINGS, cleanReceiptSettings } = await import("../repositories/printing.js");
 
 db.exec(`
   INSERT INTO users (user_id, name, password_hash, role) VALUES
@@ -596,4 +596,14 @@ test("a preview's plain text matches what the document holds", () => {
   const text = renderText({ width: 20, blocks: [{ kind: "text", text: "Hi", align: "right" }, { kind: "rule" }, { kind: "logo" }, { kind: "qr", data: "x" }] });
   assert.equal(text.split("\n")[0], " ".repeat(18) + "Hi");
   assert.equal(text.split("\n")[1], "-".repeat(20));
+});
+
+test("the oil company is one of the three, kept when not sent, and clearable", () => {
+  const base = { ...DEFAULT_RECEIPT_SETTINGS, oil_company: "hpcl" as const };
+  assert.equal(DEFAULT_RECEIPT_SETTINGS.oil_company, null);
+  assert.equal(cleanReceiptSettings({ oil_company: "iocl" }, base).oil_company, "iocl");
+  assert.equal(cleanReceiptSettings({ oil_company: "bpcl" }, base).oil_company, "bpcl");
+  assert.equal(cleanReceiptSettings({}, base).oil_company, "hpcl");
+  assert.equal(cleanReceiptSettings({ oil_company: "shell" as never }, base).oil_company, "hpcl");
+  assert.equal(cleanReceiptSettings({ oil_company: null }, base).oil_company, null);
 });
