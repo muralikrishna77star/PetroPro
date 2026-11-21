@@ -1,6 +1,7 @@
-const CACHE_NAME = "petropro-shell-v6";
+const CACHE_NAME = "petropro-shell-v7";
+// "/" is the public website. The app starts at /start, which sends staff to their home screen.
 const SHELL_URLS = [
-  "/",
+  "/start",
   "/login",
   "/attendant",
   "/cashier",
@@ -56,7 +57,7 @@ self.addEventListener("fetch", (event) => {
       .catch(() =>
         caches
           .match(request)
-          .then((cached) => cached ?? (request.mode === "navigate" ? caches.match("/") : Response.error())),
+          .then((cached) => cached ?? (request.mode === "navigate" ? caches.match("/start") : Response.error())),
       ),
   );
 });

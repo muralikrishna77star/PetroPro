@@ -4,13 +4,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, homeRouteForRole } from "@/lib/auth";
 
-export default function Home() {
+/** Staff who are already signed in go straight to their own screen rather than the website. */
+export function StaffRedirect() {
   const router = useRouter();
-
   useEffect(() => {
     const session = getSession();
-    router.replace(session ? homeRouteForRole(session.role) : "/login");
+    if (session) router.replace(homeRouteForRole(session.role));
   }, [router]);
-
   return null;
 }
