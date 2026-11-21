@@ -180,7 +180,16 @@ export default function DashboardPage() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={trendData}>
               <XAxis dataKey="date" stroke="var(--pp-fg-muted)" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="var(--pp-fg-muted)" fontSize={12} tickLine={false} axisLine={false} width={40} />
+              {/* Six-digit totals were cut to their last five digits at this width, so 3,80,000
+                  read as 80000. Lakhs and thousands fit, and read the way the station counts. */}
+              <YAxis
+                stroke="var(--pp-fg-muted)"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                width={52}
+                tickFormatter={(v: number) => (v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`)}
+              />
               <Tooltip
                 contentStyle={{
                   background: "var(--pp-card)",
