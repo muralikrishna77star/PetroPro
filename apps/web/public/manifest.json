@@ -2,7 +2,7 @@
   "name": "PetroPro",
   "short_name": "PetroPro",
   "description": "The Complete Petrol Station Management Platform",
-  "start_url": "/",
+  "start_url": "/start",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

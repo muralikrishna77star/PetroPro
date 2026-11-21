@@ -87,8 +87,21 @@ function sendWindows(printer, data) {
       { timeout: 30000 },
       (err, _stdout, stderr) => {
         fs.rmSync(file, { force: true });
-        if (err) reject(new Error(`Windows couldn't print to "${printer}": ${(stderr || err.message).trim().slice(0, 200)}`));
-        else resolve();
+        if (!err) return resolve();
+        const detail = (stderr || err.message).trim();
+        // 1801 is Windows' "invalid printer name": usually a printer renamed or reinstalled as a copy.
+        if (/error 1801\b/.test(detail)) {
+          return listWindowsPrinters().then((names) =>
+            reject(
+              new Error(
+                `Windows has no printer called "${printer}". ` +
+                  (names.length ? `Its printers are: ${names.join(", ")}. ` : "") +
+                  "Choose the right one in Printer Settings and save.",
+              ),
+            ),
+          );
+        }
+        reject(new Error(`Windows couldn't print to "${printer}": ${detail.slice(0, 200)}`));
       },
     );
   });
@@ -241,7 +254,7 @@ function loadConfig() {
   const config = {
     port: 9147,
     token: crypto.randomBytes(24).toString("base64url"),
-    origins: ["https://petropro-demo.vercel.app", "http://localhost:3000"],
+    origins: ["https://petropro.online", "https://www.petropro.online", "https://petropro-demo.vercel.app", "http://localhost:3000"],
     allowedPorts: [9100, 9101, 9102, 9103],
   };
   fs.mkdirSync(path.dirname(file), { recursive: true });

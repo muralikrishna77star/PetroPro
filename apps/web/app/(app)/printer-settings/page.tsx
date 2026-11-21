@@ -160,6 +160,14 @@ export default function PrinterSettingsPage() {
     api.listPrintTerminals(token).then(setOthers, () => undefined);
   }, [terminalId, token]);
 
+  // A paired bridge lists this computer's printers straight away, so a printer renamed in Windows
+  // shows up as missing here rather than as an error at the counter. Quietly does nothing unpaired.
+  const pairedUsb = terminal?.connection === "bridge_usb" && Boolean(bridge.token);
+  useEffect(() => {
+    if (!pairedUsb) return;
+    checkBridge().then((r) => setWindowsPrinters(r.printers), () => undefined);
+  }, [pairedUsb]);
+
   if (!session || !token) return null;
   if (!terminal || !receipt) {
     return (
@@ -319,13 +327,30 @@ export default function PrinterSettingsPage() {
               </>
             )}
             {terminal.connection === "bridge_usb" && (
-              <Field label="Printer on this computer" htmlFor="windows-printer" hint="The name Windows shows for it, or a path such as /dev/usb/lp0 on Linux.">
-                <input id="windows-printer" list="windows-printers" className={inputClass} value={terminal.windows_printer} onChange={(e) => set("windows_printer", e.target.value)} />
-                <datalist id="windows-printers">
-                  {windowsPrinters.map((p) => (
-                    <option key={p} value={p} />
-                  ))}
-                </datalist>
+              <Field
+                label="Printer on this computer"
+                htmlFor="windows-printer"
+                hint={windowsPrinters.length > 0 ? "The printers Windows has on this computer." : "Click Check connection to list this computer's printers, or type a path such as /dev/usb/lp0 on Linux."}
+              >
+                {windowsPrinters.length > 0 ? (
+                  <select id="windows-printer" className={inputClass} value={terminal.windows_printer} onChange={(e) => set("windows_printer", e.target.value)}>
+                    {!windowsPrinters.includes(terminal.windows_printer) && (
+                      <option value={terminal.windows_printer}>{terminal.windows_printer ? `${terminal.windows_printer} (not on this computer)` : "Choose a printer"}</option>
+                    )}
+                    {windowsPrinters.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input id="windows-printer" className={inputClass} value={terminal.windows_printer} onChange={(e) => set("windows_printer", e.target.value)} />
+                )}
+                {windowsPrinters.length > 0 && terminal.windows_printer && !windowsPrinters.includes(terminal.windows_printer) && (
+                  <p role="alert" className="mt-1 text-sm text-error">
+                    Windows has no printer called &quot;{terminal.windows_printer}&quot; now. It may have been renamed. Choose it again from this list, then Save.
+                  </p>
+                )}
               </Field>
             )}
 
@@ -507,6 +532,14 @@ export default function PrinterSettingsPage() {
               )}
             </div>
             <p className="mt-1 text-xs text-fg-muted">Converted to black and white, as the printer will draw it. Turn on &quot;Print logo&quot; for each terminal that should print it.</p>
+            {receipt.logo && !terminal.show_logo && (
+              <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 text-sm text-error">
+                <span>Print logo is off for this computer, so its bills print without the logo.</span>
+                <Button size="sm" variant="outline" onClick={() => set("show_logo", true)}>
+                  Turn it on
+                </Button>
+              </div>
+            )}
             {logoMessage && (
               <p role={logoMessage.ok ? "status" : "alert"} className={`mt-1 text-sm ${logoMessage.ok ? "text-success" : "text-error"}`}>
                 {logoMessage.text}
