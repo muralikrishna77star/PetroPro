@@ -21,6 +21,9 @@ const inputClass = "w-full rounded-lg border border-border bg-bg-elevated px-3 p
 const LOGO_MAX_WIDTH = 384;
 /** 32 mm on a 203 dpi printer: clearly the brand, without spending a lot of paper on every bill. */
 const COMPANY_LOGO_WIDTH = 256;
+/** The square border round a company logo: 4 dots is half a millimetre, then a 1 mm gap to the logo. */
+const FRAME_DOTS = 4;
+const FRAME_GAP_DOTS = 8;
 
 const OIL_COMPANIES: { value: OilCompany; label: string }[] = [
   { value: "iocl", label: "Indian Oil (IOCL)" },
@@ -33,7 +36,7 @@ async function loadCompanyLogo(company: OilCompany): Promise<ReceiptLogo> {
   for (const ext of ["png", "jpg", "jpeg", "webp"]) {
     const res = await fetch(`/brand-logos/${company}.${ext}`, { cache: "no-cache" }).catch(() => null);
     if (res?.ok && (res.headers.get("content-type") ?? "").startsWith("image/")) {
-      return imageToLogo(await res.blob(), COMPANY_LOGO_WIDTH);
+      return imageToLogo(await res.blob(), COMPANY_LOGO_WIDTH, true);
     }
   }
   const label = OIL_COMPANIES.find((c) => c.value === company)?.label ?? company;
@@ -71,7 +74,7 @@ function Toggle({ id, label, checked, onChange }: { id: string; label: string; c
  * orange and yellow, which looks like each company's own one-colour artwork. Shading (dithering) was
  * tried and turned Bharat Petroleum's blue-on-yellow into an unreadable grey.
  */
-function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH): Promise<ReceiptLogo> {
+function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH, framed = false): Promise<ReceiptLogo> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -84,7 +87,8 @@ function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH): Promise<ReceiptLogo
       if (!img.width || !img.height) return reject(new Error("That picture has no size"));
       const scale = Math.min(1, maxWidth / img.width);
       const width = Math.max(8, Math.floor((img.width * scale) / 8) * 8);
-      const height = Math.min(400, Math.max(1, Math.round((img.height / img.width) * width)));
+      // A framed logo is a square, with the picture fitted inside it.
+      const height = framed ? width : Math.min(400, Math.max(1, Math.round((img.height / img.width) * width)));
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
@@ -92,7 +96,20 @@ function imageToLogo(file: Blob, maxWidth = LOGO_MAX_WIDTH): Promise<ReceiptLogo
       if (!ctx) return reject(new Error("This browser can't process pictures"));
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
+      if (framed) {
+        const inset = FRAME_DOTS + FRAME_GAP_DOTS;
+        const fit = Math.min((width - 2 * inset) / img.width, (height - 2 * inset) / img.height);
+        const w = img.width * fit;
+        const h = img.height * fit;
+        ctx.drawImage(img, (width - w) / 2, (height - h) / 2, w, h);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, width, FRAME_DOTS);
+        ctx.fillRect(0, height - FRAME_DOTS, width, FRAME_DOTS);
+        ctx.fillRect(0, 0, FRAME_DOTS, height);
+        ctx.fillRect(width - FRAME_DOTS, 0, FRAME_DOTS, height);
+      } else {
+        ctx.drawImage(img, 0, 0, width, height);
+      }
       const image = ctx.getImageData(0, 0, width, height);
       const raster = new Uint8Array((width / 8) * height);
       for (let y = 0; y < height; y++) {
