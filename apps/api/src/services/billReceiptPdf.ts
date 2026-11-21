@@ -1,10 +1,10 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import type { ReceiptDocument, ReceiptSettings, TerminalPrinterSettings } from "@petropro/shared-types";
+import { DOTS_PER_MM } from "./escpos.js";
 
 const MM = 72 / 25.4;
 const QR_SIZE_MM = 30;
-const LOGO_WIDTH_MM = 40;
 
 /** The thermal receipt as a PDF of the same width and exactly its own length, so it prints the same
  *  from any device. Courier's 0.6 em advance is what lets the character columns line up. */
@@ -15,7 +15,9 @@ export async function renderReceiptPdf(doc: ReceiptDocument, terminal: TerminalP
   const fontSize = printable / doc.width / 0.6;
   const lineHeight = fontSize * 1.25;
   const logo = settings.logo && terminal.show_logo ? settings.logo : null;
-  const logoHeight = logo ? ((LOGO_WIDTH_MM * MM) / logo.width) * logo.height : 0;
+  // The size the thermal printer draws it at, which is the size chosen in Printer Settings.
+  const logoWidth = logo ? Math.min(printable, (logo.width / DOTS_PER_MM) * MM) : 0;
+  const logoHeight = logo ? (logoWidth / logo.width) * logo.height : 0;
 
   let height = margin * 2;
   for (const block of doc.blocks) {
@@ -45,7 +47,7 @@ export async function renderReceiptPdf(doc: ReceiptDocument, terminal: TerminalP
       } else if (block.kind === "logo") {
         if (logo) {
           const data = Buffer.from(logo.preview_data_url.split(",")[1], "base64");
-          pdf.image(data, (pageWidth - LOGO_WIDTH_MM * MM) / 2, y, { width: LOGO_WIDTH_MM * MM });
+          pdf.image(data, (pageWidth - logoWidth) / 2, y, { width: logoWidth });
           y += logoHeight + lineHeight / 2;
         }
       } else if (block.kind === "qr") {

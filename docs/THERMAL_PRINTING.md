@@ -107,7 +107,7 @@ changes.
 | MileAge | `MAGE.MILEAGE` | `mileage_log.mileage` |
 | KMR | `MAGE.OR`, `CR` | `mileage_log.odometer_prev`, `odometer_curr` |
 | Footer | Fixed text | `print_settings.footer_text` |
-| Logo, QR | None | New, off by default. The logo is uploaded, or chosen by oil company (`print_settings.oil_company`: IOCL, HPCL, BPCL) from `apps/web/public/brand-logos` |
+| Logo, QR | None | New, off by default. The logo is uploaded, or chosen by oil company (`print_settings.oil_company`: IOCL, HPCL, BPCL) from `apps/web/public/brand-logos`, inside a square border. It prints `print_settings.logo_width_mm` wide (2.5, 3 or 3.5 cm, or custom from 1.5 to 7.2 cm), and the PDF and browser dialog follow that too |
 
 UPI and card have no Petbill equivalent and print as `UPI SALES` and `CARD SALES`.
 

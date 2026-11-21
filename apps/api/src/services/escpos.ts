@@ -4,6 +4,8 @@ import type { PrinterEncoding, ReceiptDocument, ReceiptLogo, TerminalPrinterSett
 const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
+/** 203 dpi, the resolution of nearly every 58 and 80 mm receipt printer. Logos are drawn at this. */
+export const DOTS_PER_MM = 8;
 
 const CP437_UPPER =
   "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ";

@@ -185,7 +185,7 @@ async function receiptHtml(doc: ReceiptDocument, payload: PrintPayload): Promise
     body { width: ${settings.printable_mm}mm; margin: 0 auto; padding: 2mm 0; font: ${fontMm.toFixed(3)}mm/1.25 "Courier New", Courier, monospace; }
     div { white-space: pre; }
     .c { text-align: center; } .r { text-align: right; } .b { font-weight: bold; } .d { font-size: 2em; }
-    .logo { width: 40mm; } .qr { width: 30mm; margin-top: 2mm; }
+    .logo { width: ${Math.min(settings.printable_mm, payload.logo_width_mm ?? 40)}mm; } .qr { width: 30mm; margin-top: 2mm; }
   </style></head><body>${rows.join("")}</body></html>`;
 }
 

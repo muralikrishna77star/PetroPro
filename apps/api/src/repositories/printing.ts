@@ -12,6 +12,10 @@ import type {
 import { db } from "../db/client.js";
 
 const OIL_COMPANIES: OilCompany[] = ["iocl", "hpcl", "bpcl"];
+/** 1.5 cm is about as small as a logo stays recognisable. 72 mm is the printable width of 80 mm paper,
+ *  and 576 dots, the most an 80 mm printer can draw across. */
+const LOGO_MIN_MM = 15;
+const LOGO_MAX_MM = 72;
 
 export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   header_lines: [],
@@ -19,6 +23,7 @@ export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   show_gstin: true,
   footer_text: "THANK YOU VISIT AGAIN",
   oil_company: null,
+  logo_width_mm: 30,
   logo: null,
   qr_link_days: 7,
   show_customer: true,
@@ -72,7 +77,8 @@ function cleanLogo(value: unknown, fallback: ReceiptLogo | null): ReceiptLogo | 
   if (typeof value !== "object" || value === undefined) return fallback;
   const logo = value as ReceiptLogo;
   const width = int(logo.width, 8, 576, 0);
-  const height = int(logo.height, 1, 400, 0);
+  // A framed logo is square, so it can be as tall as the widest one is wide.
+  const height = int(logo.height, 1, 576, 0);
   if (!width || !height || typeof logo.raster_base64 !== "string" || typeof logo.preview_data_url !== "string") {
     throw new Error("That logo couldn't be read");
   }
@@ -97,6 +103,12 @@ export function cleanReceiptSettings(input: Partial<ReceiptSettings>, base: Rece
       input.oil_company === null || (OIL_COMPANIES as unknown[]).includes(input.oil_company)
         ? (input.oil_company ?? null)
         : base.oil_company,
+    logo_width_mm: (() => {
+      const mm = Number(input.logo_width_mm);
+      return input.logo_width_mm !== undefined && Number.isFinite(mm) && mm >= LOGO_MIN_MM && mm <= LOGO_MAX_MM
+        ? Math.round(mm * 10) / 10
+        : base.logo_width_mm;
+    })(),
     logo: cleanLogo(input.logo, base.logo),
     qr_link_days: int(input.qr_link_days, 1, 90, base.qr_link_days),
     show_customer: bool(input.show_customer, base.show_customer),

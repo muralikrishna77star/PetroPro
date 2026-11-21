@@ -697,6 +697,9 @@ export interface ReceiptSettings {
   /** The oil company whose dealership this outlet is. Choosing one fills in `logo` from that company's
    *  artwork, bundled with the web app. Null when there's no company logo or the logo was uploaded. */
   oil_company: OilCompany | null;
+  /** How wide the logo prints, in millimetres. The browser makes `logo` at this width, at the
+   *  printer's 8 dots per millimetre, so changing it means making the logo again. */
+  logo_width_mm: number;
   logo: ReceiptLogo | null;
   qr_link_days: number;
   show_customer: boolean;
@@ -763,4 +766,6 @@ export interface PrintPayload {
   escpos_base64: string;
   settings: TerminalPrinterSettings;
   logo_preview: string | null;
+  /** The logo's printed width, so the browser dialog and PDF draw it the size the printer does. */
+  logo_width_mm: number | null;
 }
