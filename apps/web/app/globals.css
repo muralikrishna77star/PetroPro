@@ -67,3 +67,12 @@ body {
   color: var(--pp-fg);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Full-screen mode (Billing's top-right toggle): hide the menu and top bar and drop the content
+   frame's width cap, so the page fills a tablet's whole screen. Set as data-full-screen on <html>. */
+html[data-full-screen] :is([data-app-sidebar], [data-app-header]) {
+  display: none;
+}
+html[data-full-screen] [data-app-content] {
+  max-width: none;
+}
