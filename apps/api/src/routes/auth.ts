@@ -53,7 +53,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     reply.header("Set-Cookie", refreshCookie(refreshToken));
     return {
       token: fastify.signAccessToken(user, sessionId),
-      user: { user_id: user.user_id, name: user.name, role: user.role },
+      user: { user_id: user.user_id, name: user.name, role: user.role, billing_only: user.billing_only === 1 },
     };
   });
 

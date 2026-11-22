@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, homeRouteForRole } from "@/lib/auth";
+import { getSession, homeRouteFor } from "@/lib/auth";
 
 /**
  * Where the installed app opens (manifest start_url) and the service worker's offline fallback.
@@ -13,7 +13,7 @@ export default function Start() {
 
   useEffect(() => {
     const session = getSession();
-    router.replace(session ? homeRouteForRole(session.role) : "/login");
+    router.replace(session ? homeRouteFor(session) : "/login");
   }, [router]);
 
   return null;

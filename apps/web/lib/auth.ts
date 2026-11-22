@@ -7,7 +7,12 @@ export interface Session {
   userId: string;
   name: string;
   role: Role;
+  /** A cashier limited to the Billing screen. The API enforces it too; this only shapes the app. */
+  billingOnly?: boolean;
 }
+
+/** The one screen a "Billing screen only" account may open. */
+export const BILLING_ONLY_HOME = "/billing";
 
 const STORAGE_KEY = "petropro.session";
 
@@ -27,6 +32,11 @@ export function clearSession() {
 
 export function homeRouteForRole(role: Role): string {
   return role === "field_operator" ? "/attendant" : "/cashier";
+}
+
+/** Where a signed-in user starts: their role's home, or Billing for a billing-only cashier. */
+export function homeRouteFor(session: Pick<Session, "role" | "billingOnly">): string {
+  return session.billingOnly ? BILLING_ONLY_HOME : homeRouteForRole(session.role);
 }
 
 /** Display label for a role's account tier (used in the sidebar/header user menu). */

@@ -7,6 +7,7 @@ import { useRequireSession } from "@/lib/useSession";
 import { Card } from "@/components/Card";
 
 const ROLES: Role[] = ["super_admin", "owner", "operator", "field_operator"];
+const BILLING_ONLY_HINT = "For tablet and mobile cashiers: after signing in they see only the Billing screen.";
 
 export default function UsersPage() {
   const session = useRequireSession(["super_admin"]);
@@ -15,12 +16,14 @@ export default function UsersPage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>("operator");
   const [email, setEmail] = useState("");
+  const [billingOnly, setBillingOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<Role>("operator");
   const [editEmail, setEditEmail] = useState("");
+  const [editBillingOnly, setEditBillingOnly] = useState(false);
 
   function refresh(token: string) {
     api.listUsers(token).then(setUsers).catch(() => undefined);
@@ -37,11 +40,18 @@ export default function UsersPage() {
     setError(null);
     setNotice(null);
     try {
-      const created = await api.createUser(session.token, { user_id: userId, name, role, email: email || null });
+      const created = await api.createUser(session.token, {
+        user_id: userId,
+        name,
+        role,
+        email: email || null,
+        billing_only: role === "operator" && billingOnly,
+      });
       setUserId("");
       setName("");
       setRole("operator");
       setEmail("");
+      setBillingOnly(false);
       refresh(session.token);
       if (created.temporaryPassword) {
         setNotice(`Created ${created.user_id} — temporary password: ${created.temporaryPassword} (shown once)`);
@@ -56,13 +66,19 @@ export default function UsersPage() {
     setEditName(user.name);
     setEditRole(user.role);
     setEditEmail(user.email ?? "");
+    setEditBillingOnly(user.billing_only === 1);
   }
 
   async function saveEdit(id: string) {
     if (!session) return;
     setError(null);
     try {
-      await api.updateUser(session.token, id, { name: editName, role: editRole, email: editEmail || null });
+      await api.updateUser(session.token, id, {
+        name: editName,
+        role: editRole,
+        email: editEmail || null,
+        billing_only: editRole === "operator" && editBillingOnly,
+      });
       setEditingId(null);
       refresh(session.token);
     } catch (err) {
@@ -151,7 +167,14 @@ export default function UsersPage() {
               </option>
             ))}
           </select>
+          {role === "operator" && (
+            <label className="flex items-center gap-2 text-sm" title={BILLING_ONLY_HINT}>
+              <input type="checkbox" checked={billingOnly} onChange={(e) => setBillingOnly(e.target.checked)} />
+              Billing screen only
+            </label>
+          )}
           <button className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-white">Add user</button>
+          {role === "operator" && <p className="w-full text-xs text-fg-muted">{BILLING_ONLY_HINT}</p>}
         </Card>
 
         {error && <p className="text-sm text-error">{error}</p>}
@@ -208,6 +231,12 @@ export default function UsersPage() {
                             </option>
                           ))}
                         </select>
+                        {editRole === "operator" && (
+                          <label className="mt-1 flex items-center gap-1.5 text-xs" title={BILLING_ONLY_HINT}>
+                            <input type="checkbox" checked={editBillingOnly} onChange={(e) => setEditBillingOnly(e.target.checked)} />
+                            Billing screen only
+                          </label>
+                        )}
                       </td>
                       <td className="py-2 pr-4">{u.active ? "Active" : "Inactive"}</td>
                       <td className="py-2 pr-4">{u.created_at}</td>
@@ -227,7 +256,10 @@ export default function UsersPage() {
                         {u.email ?? "—"}
                         {u.google_linked ? <span className="ml-2 text-xs text-success">Google linked</span> : null}
                       </td>
-                      <td className="py-2 pr-4">{u.role}</td>
+                      <td className="py-2 pr-4">
+                        {u.role}
+                        {u.billing_only ? <span className="ml-2 text-xs text-warning">Billing only</span> : null}
+                      </td>
                       <td className="py-2 pr-4">
                         <span className={u.active ? "text-success" : "text-error"}>
                           {u.active ? "Active" : "Inactive"}

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Fuel } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { saveSession, homeRouteForRole } from "@/lib/auth";
+import { saveSession, homeRouteFor } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import type { LoginResponse } from "@petropro/shared-types";
@@ -22,8 +22,9 @@ export default function LoginCallbackPage() {
   const [submitting, setSubmitting] = useState(false);
 
   function finish({ token, user }: LoginResponse) {
-    saveSession({ token, userId: user.user_id, name: user.name, role: user.role });
-    router.replace(homeRouteForRole(user.role));
+    const billingOnly = user.billing_only === true;
+    saveSession({ token, userId: user.user_id, name: user.name, role: user.role, billingOnly });
+    router.replace(homeRouteFor({ role: user.role, billingOnly }));
   }
 
   useEffect(() => {

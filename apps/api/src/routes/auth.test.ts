@@ -36,7 +36,7 @@ const actions = (entityId: string) => auditLogsRepo.list({ entityId }).map((l) =
 test("password login gives a short-lived token and an HttpOnly refresh cookie", async () => {
   const { res, token } = await login("cash");
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.json().user, { user_id: "cash", name: "cash", role: "operator" });
+  assert.deepEqual(res.json().user, { user_id: "cash", name: "cash", role: "operator", billing_only: false });
   const claims = app.jwt.decode(token) as { exp: number; iat: number; sid: string };
   assert.equal(claims.exp - claims.iat, 15 * 60);
   assert.ok(claims.sid);

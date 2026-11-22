@@ -458,6 +458,9 @@ export function applySchema(db: DatabaseSync): void {
   // the terminal that should print a queued job; last_seen is when a station last asked for work,
   // so a tablet can tell the counter isn't listening.
   ensureColumn(db, "print_jobs", "station_id", "TEXT");
+  // A cashier account limited to the Billing screen, for tablets and phones. Enforced per request
+  // in plugins/auth.ts, so turning it on takes effect at once.
+  ensureColumn(db, "users", "billing_only", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "print_terminals", "last_seen", "TEXT");
   db.exec(`
     CREATE TABLE IF NOT EXISTS print_station_tests (

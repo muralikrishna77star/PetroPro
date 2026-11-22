@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Fuel, Loader2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { API_URL, GOOGLE_SSO_ENABLED } from "@/lib/config";
-import { saveSession, homeRouteForRole } from "@/lib/auth";
+import { saveSession, homeRouteFor } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
@@ -55,8 +55,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { token, user } = await api.login(userId, password);
-      saveSession({ token, userId: user.user_id, name: user.name, role: user.role });
-      router.push(homeRouteForRole(user.role));
+      const billingOnly = user.billing_only === true;
+      saveSession({ token, userId: user.user_id, name: user.name, role: user.role, billingOnly });
+      router.push(homeRouteFor({ role: user.role, billingOnly }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed");
     } finally {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   api,
   ApiError,
@@ -95,6 +96,44 @@ export default function BillingPage() {
   const [offlineModeAllowed, setOfflineModeAllowed] = useState(false);
   const [queuedBillCount, setQueuedBillCount] = useState(0);
   const [syncingBills, setSyncingBills] = useState(false);
+
+  // Full-screen mode for tablets: hides the app menu and top bar (CSS keyed off
+  // html[data-full-screen], see globals.css) and, where the browser allows it, also asks for real
+  // browser full screen so the address bar goes too. Browsers without element full screen (iPhone
+  // Safari) still get the menu-less layout.
+  const [fullScreen, setFullScreen] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (fullScreen) root.dataset.fullScreen = "";
+    else delete root.dataset.fullScreen;
+    return () => {
+      delete root.dataset.fullScreen;
+    };
+  }, [fullScreen]);
+
+  useEffect(() => {
+    // Leaving browser full screen another way (Esc, Android back) also brings the menu back.
+    function onFullscreenChange() {
+      if (!document.fullscreenElement) setFullScreen(false);
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      // Navigating away from Billing shouldn't leave the browser stuck in full screen.
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined);
+    };
+  }, []);
+
+  function toggleFullScreen() {
+    if (!fullScreen) {
+      setFullScreen(true);
+      document.documentElement.requestFullscreen?.().catch(() => undefined);
+    } else {
+      setFullScreen(false);
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined);
+    }
+  }
 
   const refreshQueuedBillCount = useCallback(() => {
     getQueuedBills()
@@ -451,7 +490,7 @@ export default function BillingPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className={`mx-auto flex w-full flex-1 flex-col gap-6 px-4 ${fullScreen ? "py-2" : "max-w-6xl py-8"}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold text-primary">Just Billing</h1>
           <div className="flex items-center gap-3">
@@ -469,13 +508,24 @@ export default function BillingPage() {
                 {syncingBills ? "Syncing..." : `${queuedBillCount} bill(s) queued — sync now`}
               </button>
             )}
+            {/* Closing the day closes it for the whole station, which a tablet or phone shouldn't do. */}
+            {!session.billingOnly && (
+              <button
+                onClick={handleCloseDay}
+                disabled={closingDay || !businessDate}
+                title="Close billing for the current date and move the running date forward one day"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+              >
+                {closingDay ? "Closing..." : "Close Day"}
+              </button>
+            )}
             <button
-              onClick={handleCloseDay}
-              disabled={closingDay || !businessDate}
-              title="Close billing for the current date and move the running date forward one day"
-              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+              onClick={toggleFullScreen}
+              aria-label={fullScreen ? "Exit full screen" : "Full screen"}
+              title={fullScreen ? "Exit full screen and show the menu again" : "Full screen — hide the menu so Billing fills the screen"}
+              className="rounded-lg border border-border p-2 text-fg-muted hover:bg-card-hover hover:text-fg"
             >
-              {closingDay ? "Closing..." : "Close Day"}
+              {fullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
           </div>
         </div>
@@ -638,17 +688,19 @@ export default function BillingPage() {
 
         {/* Detail: line items */}
         <Card color="orange" className="overflow-x-auto">
-          <table className="w-full table-fixed text-left text-sm">
+          <table className="w-full min-w-[640px] table-fixed text-left text-sm">
             <colgroup>
-              <col className="w-[42%]" />
               <col className="w-[15%]" />
+              <col className="w-[29%]" />
               <col className="w-[13%]" />
+              <col className="w-[12%]" />
               <col className="w-[15%]" />
-              <col className="w-[15%]" />
+              <col className="w-[16%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-border ">
-                <th className="py-2 pr-4">Item</th>
+                <th className="py-2 pr-4">Item Code</th>
+                <th className="py-2 pr-4">Item Name</th>
                 <th className="py-2 pr-4">Qty</th>
                 <th className="py-2 pr-4">Rate</th>
                 <th className="py-2 pr-4">Amount</th>
@@ -661,8 +713,9 @@ export default function BillingPage() {
                 const rate = rateFor(line.item_code);
                 return (
                   <tr key={i} className="border-b border-border ">
+                    <td className="truncate py-2 pr-4 font-mono text-fg">{line.item_code}</td>
                     <td className="py-2 pr-4 font-medium text-fg">
-                      {item?.name ?? line.item_code}
+                      {item?.name ?? "—"}
                       {line.odometerOpening !== undefined && line.odometerClosing !== undefined && (
                         <div className="text-xs font-normal text-fg-muted">
                           {line.odometerOpening} → {line.odometerClosing} km
@@ -687,18 +740,16 @@ export default function BillingPage() {
               })}
               <tr>
                 <td className="py-2 pr-4">
-                  <div className="flex items-center gap-2">
-                    <Combobox
-                      options={items.map((item) => ({ value: item.code, label: item.name }))}
-                      value={lineItemCode}
-                      onChange={handleItemChange}
-                      className="w-28 shrink-0"
-                      placeholder="Item..."
-                    />
-                    {selectedItemName && (
-                      <span className="truncate text-sm font-medium text-fg">{selectedItemName}</span>
-                    )}
-                  </div>
+                  <Combobox
+                    options={items.map((item) => ({ value: item.code, label: item.name }))}
+                    value={lineItemCode}
+                    onChange={handleItemChange}
+                    className="w-full"
+                    placeholder="Code..."
+                  />
+                </td>
+                <td className="truncate py-2 pr-4 font-medium text-fg">
+                  {selectedItemName || <span className="font-normal text-fg-muted">—</span>}
                 </td>
                 <td className="py-2 pr-4">
                   <input
@@ -743,7 +794,7 @@ export default function BillingPage() {
             {lines.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border font-semibold ">
-                  <td className="py-2 pr-4" colSpan={3}>
+                  <td className="py-2 pr-4" colSpan={4}>
                     Grand total
                   </td>
                   <td className="py-2 pr-4" colSpan={2}>
