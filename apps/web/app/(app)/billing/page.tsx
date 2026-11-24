@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import {
   api,
@@ -60,6 +60,7 @@ export default function BillingPage() {
   const [pumpCode, setPumpCode] = useState("");
   const [orderNo, setOrderNo] = useState("");
   const [lineItemCode, setLineItemCode] = useState("");
+  const lineItemCodeRef = useRef<HTMLInputElement>(null);
   const [lineQty, setLineQty] = useState("");
   const [lineAmount, setLineAmount] = useState("");
   const [lineTrackMileage, setLineTrackMileage] = useState(false);
@@ -312,6 +313,17 @@ export default function BillingPage() {
       },
     ]);
     resetEntryRow();
+    // Ready for the next line: cursor back on Item Code with the last code selected, so typing
+    // the next code replaces it.
+    lineItemCodeRef.current?.focus();
+    lineItemCodeRef.current?.select();
+  }
+
+  // Enter in Qty or Amount adds the line, so a bill can be keyed in without the mouse.
+  function addLineOnEnter(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    addLine();
   }
 
   function removeLine(index: number) {
@@ -741,6 +753,7 @@ export default function BillingPage() {
               <tr>
                 <td className="py-2 pr-4">
                   <Combobox
+                    ref={lineItemCodeRef}
                     options={items.map((item) => ({ value: item.code, label: item.name }))}
                     value={lineItemCode}
                     onChange={handleItemChange}
@@ -760,6 +773,7 @@ export default function BillingPage() {
                     className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm  bg-bg-elevated"
                     value={lineQty}
                     onChange={(e) => handleQtyChange(e.target.value)}
+                    onKeyDown={addLineOnEnter}
                   />
                 </td>
                 <td className="py-2 pr-4 text-fg-muted">₹{rateFor(lineItemCode).toFixed(2)}</td>
@@ -773,6 +787,7 @@ export default function BillingPage() {
                     className="w-24 rounded-lg border border-border px-2 py-1.5 text-sm bg-bg-elevated"
                     value={lineAmount}
                     onChange={(e) => handleAmountChange(e.target.value)}
+                    onKeyDown={addLineOnEnter}
                   />
                 </td>
                 <td className="py-2 pr-4">
