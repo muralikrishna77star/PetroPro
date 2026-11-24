@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Fuel, Loader2 } from "lucide-react";
+import { BookOpen, Fuel, Loader2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { API_URL, GOOGLE_SSO_ENABLED } from "@/lib/config";
 import { saveSession, homeRouteFor } from "@/lib/auth";
@@ -178,6 +178,12 @@ export default function LoginPage() {
           </>
         )}
         <a href="/customer/login" className="mt-5 block text-center text-sm text-primary hover:underline">Customer login — view your reports</a>
+        <a
+          href="/guide"
+          className="mt-3 flex items-center justify-center gap-1.5 border-t border-border pt-4 text-sm text-fg-muted hover:text-primary hover:underline"
+        >
+          <BookOpen size={16} aria-hidden="true" /> Product Tour Guide — how to use PetroPro
+        </a>
       </form>
     </div>
   );
