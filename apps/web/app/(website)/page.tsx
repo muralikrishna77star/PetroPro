@@ -40,14 +40,14 @@ export default async function HomePage() {
       <StaffRedirect />
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-4 pb-20 pt-16 text-white sm:pt-24">
+      <section className="gloss-hero px-4 pb-20 pt-16 text-white sm:pt-24">
         <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
           <div>
-            <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-3 py-1 text-sm font-medium text-orange-300">
+            <p className="glass-pill mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-orange-200">
               <Fuel className="h-4 w-4" aria-hidden="true" /> Fuel station management software
             </p>
             <h1 className="font-heading text-4xl font-bold leading-tight sm:text-5xl">
-              Run your fuel station from <span className="text-orange-400">forecourt to final report</span>
+              Run your fuel station from <span className="gloss-text">forecourt to final report</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg text-slate-300">
               Attendant entry, billing, credit customers, thermal receipts, stock and GST for petrol bunks. On the counter PC and
@@ -56,13 +56,13 @@ export default async function HomePage() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/tour"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-7 py-3 font-semibold text-white shadow-lg shadow-orange-900/30 transition-colors hover:bg-orange-600"
+                className="gloss-btn inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3 font-semibold"
               >
                 <PlayCircle className="h-5 w-5" aria-hidden="true" /> Take the Product Tour
               </Link>
               <Link
                 href="/#contact"
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-600 px-7 py-3 font-semibold text-white transition-colors hover:bg-slate-800"
+                className="glass-btn inline-flex items-center justify-center gap-1.5 rounded-xl px-7 py-3 font-semibold"
               >
                 Book a demo <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
@@ -71,11 +71,11 @@ export default async function HomePage() {
           </div>
 
           <div className="relative pb-10 sm:pr-16">
-            <Link href="/tour" aria-label="Open the Product Tour" className="block overflow-hidden rounded-xl border border-slate-700 shadow-2xl">
+            <Link href="/tour" aria-label="Open the Product Tour" className="gloss-frame relative block rounded-xl">
               {/* eslint-disable-next-line @next/next/no-img-element -- a static screenshot */}
               <img src="/assets/tour/dashboard.jpg" alt="PetroPro station dashboard with today's sales, bills, pending queue and customer dues" width={1440} height={900} className="h-auto w-full" />
             </Link>
-            <div className="absolute -bottom-2 right-0 hidden w-36 overflow-hidden rounded-[1.4rem] border-4 border-slate-800 shadow-2xl sm:block lg:w-40">
+            <div className="gloss-frame gloss-float absolute -bottom-2 right-0 hidden w-36 rounded-[1.4rem] border-4 border-slate-800 sm:block lg:w-40">
               {/* eslint-disable-next-line @next/next/no-img-element -- a static screenshot */}
               <img src="/assets/tour/attendant.jpg" alt="Attendant entry screen on a phone" width={390} height={844} className="h-auto w-full" />
             </div>
@@ -84,13 +84,13 @@ export default async function HomePage() {
       </section>
 
       {/* How it works */}
-      <section className="border-b border-slate-200 bg-slate-50 px-4 py-14">
+      <section className="gloss-section px-4 py-14">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-center font-heading text-2xl font-bold sm:text-3xl">One entry, from the pump to the books</h2>
           <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((s, i) => (
-              <li key={s.title} className="rounded-xl border border-slate-200 bg-white p-5">
-                <span className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white">{i + 1}</span>
+              <li key={s.title} className="gloss-card gloss-card-hover rounded-xl p-5">
+                <span className="gloss-orb mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">{i + 1}</span>
                 <h3 className="font-semibold">{s.title}</h3>
                 <p className="mt-1 text-sm text-slate-600">{s.text}</p>
               </li>
@@ -109,11 +109,11 @@ export default async function HomePage() {
               Walk through the screens your team will use every day: the attendant app, the cashier queue, billing, thermal
               receipts, credit statements, vehicle mileage, stock and the customer portal.
             </p>
-            <Link href="/tour" className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-700">
+            <Link href="/tour" className="gloss-btn-dark inline-flex items-center gap-2 rounded-xl px-6 py-3 font-semibold">
               Go through the tour <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
-          <Link href="/tour#10" aria-label="Open the vehicle mileage slide of the Product Tour" className="group block overflow-hidden rounded-xl border border-slate-200 shadow-lg">
+          <Link href="/tour#10" aria-label="Open the vehicle mileage slide of the Product Tour" className="gloss-frame gloss-frame-light group relative block rounded-xl">
             {/* eslint-disable-next-line @next/next/no-img-element -- a static screenshot */}
             <img
               src="/assets/tour/report-mileage.jpg"
@@ -127,7 +127,7 @@ export default async function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="scroll-mt-16 bg-slate-50 px-4 py-20">
+      <section id="features" className="gloss-section scroll-mt-16 px-4 py-20">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-center font-heading text-3xl font-bold">Everything a petrol bunk needs</h2>
           <p className="mx-auto mb-12 mt-4 max-w-2xl text-center text-slate-500">
@@ -137,8 +137,8 @@ export default async function HomePage() {
             {FEATURES.map((f, i) => {
               const Icon = FEATURE_ICONS[i] ?? Fuel;
               return (
-                <div key={f.title} className="rounded-xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md">
-                  <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100">
+                <div key={f.title} className="gloss-card gloss-card-hover rounded-xl p-6">
+                  <span className="gloss-orb-soft mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl">
                     <Icon className="h-5 w-5 text-orange-600" strokeWidth={2} aria-hidden="true" />
                   </span>
                   <h3 className="mb-2 text-lg font-semibold">{f.title}</h3>
@@ -156,11 +156,11 @@ export default async function HomePage() {
           <h2 className="mb-4 font-heading text-3xl font-bold">See it on your station&apos;s data</h2>
           <p className="mb-8 text-slate-500">Call or write for a live demo, in person or online.</p>
           <div className="space-y-3 text-left">
-            <a href={`mailto:${SALES_CONTACT.email}?subject=${encodeURIComponent("PetroPro demo")}`} className="flex items-center gap-3 break-all rounded-xl border border-slate-200 px-5 py-4 hover:border-orange-300 hover:bg-orange-50">
+            <a href={`mailto:${SALES_CONTACT.email}?subject=${encodeURIComponent("PetroPro demo")}`} className="gloss-card gloss-card-hover flex items-center gap-3 break-all rounded-xl px-5 py-4">
               <Mail className="h-5 w-5 shrink-0 text-orange-600" aria-hidden="true" />
               <span>{SALES_CONTACT.email}</span>
             </a>
-            <a href={SALES_CONTACT.phoneHref} className="flex items-center gap-3 rounded-xl border border-slate-200 px-5 py-4 hover:border-orange-300 hover:bg-orange-50">
+            <a href={SALES_CONTACT.phoneHref} className="gloss-card gloss-card-hover flex items-center gap-3 rounded-xl px-5 py-4">
               <Phone className="h-5 w-5 shrink-0 text-orange-600" aria-hidden="true" />
               <span>{SALES_CONTACT.phone}</span>
             </a>

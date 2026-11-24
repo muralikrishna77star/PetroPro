@@ -73,9 +73,9 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
   const isLast = index === total - 1;
 
   return (
-    <main className="bg-slate-50 print:bg-white">
+    <main className="gloss-section print:bg-white">
       {/* Toolbar */}
-      <div className="border-b border-slate-200 bg-white print:hidden">
+      <div className="glass-header print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-orange-600">Product Tour</p>
@@ -85,7 +85,7 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="gloss-btn-light inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium"
             >
               <Printer className="h-4 w-4" aria-hidden="true" /> Save as PDF
             </button>
@@ -95,14 +95,14 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
                 e.preventDefault();
                 go(total - 1);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-white hover:bg-orange-600"
+              className="gloss-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium"
             >
               Book a demo
             </a>
           </div>
         </div>
         <div className="h-1 bg-slate-100" aria-hidden="true">
-          <div className="h-1 bg-orange-500 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%` }} />
+          <div className="gloss-bar h-1 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%` }} />
         </div>
       </div>
 
@@ -124,7 +124,7 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
             aria-hidden={i !== index}
             className={`${i === index ? "block" : "hidden"} print:block print:break-after-page print:[break-inside:avoid]`}
           >
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:min-h-[560px] print:rounded-none print:border-0 print:shadow-none">
+            <div className="gloss-card gloss-print-flat overflow-hidden rounded-2xl lg:min-h-[560px] print:rounded-none">
               <SlideBody slide={slide} contact={contact} />
             </div>
             <p className="mt-2 hidden text-right text-xs text-slate-400 print:block">
@@ -138,7 +138,7 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
             type="button"
             onClick={() => go(index - 1)}
             disabled={index === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="gloss-btn-light inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Previous
           </button>
@@ -153,7 +153,7 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
                 aria-label={`Slide ${i + 1}: ${s.title}`}
                 title={s.eyebrow}
                 onClick={() => go(i)}
-                className={`h-2.5 rounded-full transition-all ${i === index ? "w-6 bg-orange-500" : "w-2.5 bg-slate-300 hover:bg-slate-400"}`}
+                className={`h-2.5 rounded-full transition-all ${i === index ? "gloss-bar w-6" : "w-2.5 bg-slate-300 hover:bg-slate-400"}`}
               />
             ))}
           </div>
@@ -162,14 +162,14 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
           </span>
 
           {isLast ? (
-            <Link href="/" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <Link href="/" className="gloss-btn-light inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium">
               Back to home
             </Link>
           ) : (
             <button
               type="button"
               onClick={() => go(index + 1)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600"
+              className="gloss-btn inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium"
             >
               Next <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -184,7 +184,7 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
 function Screenshot({ screen }: { screen: Screen }) {
   if (screen.width < screen.height) {
     return (
-      <figure className="mx-auto w-full max-w-[260px] overflow-hidden rounded-[2rem] border-[6px] border-slate-800 bg-slate-800 shadow-xl">
+      <figure className="gloss-frame relative mx-auto w-full max-w-[260px] rounded-[2rem] border-[6px] border-slate-800 bg-slate-800">
         {/* eslint-disable-next-line @next/next/no-img-element -- a static screenshot */}
         <img src={screen.src} alt={screen.alt} width={screen.width} height={screen.height} className="h-auto w-full rounded-[1.5rem]" />
       </figure>
@@ -192,7 +192,7 @@ function Screenshot({ screen }: { screen: Screen }) {
   }
   const visible = Math.round(screen.height * (screen.cropTop ?? 1));
   return (
-    <figure className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-lg">
+    <figure className="gloss-frame gloss-frame-light relative rounded-xl bg-slate-100">
       <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-200/70 px-3 py-2" aria-hidden="true">
         <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
@@ -210,7 +210,7 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact: Contact }) {
   switch (slide.kind) {
     case "cover":
       return (
-        <div className="grid items-center gap-8 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white sm:p-10 lg:min-h-[560px] lg:grid-cols-2 lg:p-12 print:[print-color-adjust:exact]">
+        <div className="gloss-hero grid items-center gap-8 p-6 text-white sm:p-10 lg:min-h-[560px] lg:grid-cols-2 lg:p-12 print:[print-color-adjust:exact]">
           <div>
             <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-orange-300">{slide.eyebrow}</p>
             <h1 className="mb-5 font-heading text-3xl font-bold leading-tight sm:text-4xl">{slide.title}</h1>
@@ -227,7 +227,7 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact: Contact }) {
           {slide.intro && <p className="mb-8 max-w-3xl text-slate-600">{slide.intro}</p>}
           <div className={`grid gap-4 sm:grid-cols-2 sm:gap-5 ${slide.points.length > 4 ? "lg:grid-cols-3" : ""} ${slide.intro ? "" : "mt-8"}`}>
             {slide.points.map((p, i) => (
-              <div key={p.title} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <div key={p.title} className="gloss-card gloss-card-hover rounded-xl p-5">
                 <p className="mb-1 text-sm font-semibold tabular-nums text-orange-600">0{i + 1}</p>
                 <h3 className="mb-1.5 font-semibold">{p.title}</h3>
                 <p className="text-sm text-slate-600">{p.text}</p>
@@ -244,8 +244,8 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact: Contact }) {
           <p className="mb-8 max-w-3xl text-slate-600">{slide.intro}</p>
           <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {slide.steps.map((s, i) => (
-              <li key={s.title} className="relative rounded-xl border-2 border-orange-100 bg-orange-50/50 p-5">
-                <span className="mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white print:[print-color-adjust:exact]">
+              <li key={s.title} className="gloss-card gloss-card-hover rounded-xl p-5">
+                <span className="gloss-orb mb-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold print:[print-color-adjust:exact]">
                   {i + 1}
                 </span>
                 <h3 className="mb-1.5 font-semibold">{s.title}</h3>
@@ -301,18 +301,18 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact: Contact }) {
               ))}
             </ul>
           </div>
-          <div id="contact-us" className="space-y-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white sm:p-8 print:[print-color-adjust:exact]">
+          <div id="contact-us" className="gloss-hero space-y-5 rounded-2xl p-6 text-white sm:p-8 print:[print-color-adjust:exact]">
             <p className="text-lg font-semibold">Book your demo</p>
             <a
               href={`mailto:${contact.email}?subject=${encodeURIComponent("PetroPro demo")}`}
-              className="flex items-center gap-3 break-all rounded-xl bg-white/10 px-4 py-3 transition-colors hover:bg-white/20"
+              className="glass-btn flex items-center gap-3 break-all rounded-xl px-4 py-3"
             >
               <Mail className="h-5 w-5 shrink-0 text-orange-300" aria-hidden="true" /> {contact.email}
             </a>
-            <a href={contact.phoneHref} className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3 transition-colors hover:bg-white/20">
+            <a href={contact.phoneHref} className="glass-btn flex items-center gap-3 rounded-xl px-4 py-3">
               <Phone className="h-5 w-5 shrink-0 text-orange-300" aria-hidden="true" /> {contact.phone}
             </a>
-            <Link href="/login" className="flex items-center gap-3 rounded-xl border border-white/30 px-4 py-3 text-slate-200 transition-colors hover:bg-white/10 print:hidden">
+            <Link href="/login" className="glass-btn flex items-center gap-3 rounded-xl px-4 py-3 text-slate-200 print:hidden">
               <LogIn className="h-5 w-5 shrink-0" aria-hidden="true" /> Already a customer? Sign in
             </Link>
           </div>

@@ -1,0 +1,404 @@
+/* The public website's glossy finish (home, /tour, /guide). Imported by the website layout only.
+   Next keeps a loaded stylesheet when navigating client-side, so every rule here hangs off a
+   `gloss-*` / `glass-*` class and never restyles plain elements the staff app also uses.
+
+   Plain CSS, unlayered: it beats Tailwind utilities, so an element given one of these classes
+   should not also carry Tailwind bg-/border-colour/shadow classes for the same property.
+   Motion stops under prefers-reduced-motion, and print gets the flat look back. */
+
+/* ---------- Glass header ---------- */
+.glass-header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.72));
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.6),
+    0 8px 30px -12px rgba(15, 23, 42, 0.18);
+}
+
+/* ---------- Dark hero with drifting light ---------- */
+.gloss-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(60rem 30rem at 10% -10%, rgba(249, 115, 22, 0.28), transparent 60%),
+    radial-gradient(50rem 30rem at 95% 10%, rgba(59, 130, 246, 0.32), transparent 60%),
+    radial-gradient(40rem 25rem at 60% 120%, rgba(14, 165, 233, 0.22), transparent 60%),
+    linear-gradient(135deg, #020617 0%, #0f172a 45%, #172554 100%);
+}
+.gloss-hero::before {
+  /* slow aurora */
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    rgba(251, 146, 60, 0.16) 60deg,
+    transparent 120deg,
+    rgba(96, 165, 250, 0.16) 200deg,
+    transparent 260deg,
+    rgba(251, 191, 36, 0.1) 320deg,
+    transparent 360deg
+  );
+  filter: blur(60px);
+  animation: gloss-spin 28s linear infinite;
+  pointer-events: none;
+}
+.gloss-hero::after {
+  /* faint grid that fades out at the edges */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 80%);
+  pointer-events: none;
+}
+
+/* ---------- Shining text ---------- */
+.gloss-text {
+  background: linear-gradient(100deg, #fb923c 0%, #fbbf24 30%, #fff7ed 45%, #fbbf24 60%, #f97316 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gloss-text-shine 6s ease-in-out infinite;
+}
+
+/* A light pill, e.g. the hero's eyebrow */
+.glass-pill {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(251, 146, 60, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 0 24px -6px rgba(249, 115, 22, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---------- Buttons ---------- */
+.gloss-btn,
+.gloss-btn-dark,
+.glass-btn,
+.gloss-btn-light {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+.gloss-btn {
+  color: #fff;
+  background: linear-gradient(180deg, #fdba74 0%, #f97316 48%, #ea580c 52%, #c2410c 100%);
+  border: 1px solid rgba(194, 65, 12, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(124, 45, 18, 0.35),
+    0 10px 28px -8px rgba(249, 115, 22, 0.75);
+  text-shadow: 0 1px 1px rgba(124, 45, 18, 0.45);
+}
+.gloss-btn-dark {
+  color: #fff;
+  background: linear-gradient(180deg, #475569 0%, #1e293b 48%, #0f172a 52%, #020617 100%);
+  border: 1px solid #020617;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 10px 24px -10px rgba(15, 23, 42, 0.7);
+}
+.glass-btn {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.gloss-btn-light {
+  color: #334155;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 50%, #eef2f7 100%);
+  border: 1px solid #dbe2ea;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 4px 12px -6px rgba(15, 23, 42, 0.25);
+}
+/* the light streak that runs across a button on hover */
+.gloss-btn::after,
+.gloss-btn-dark::after,
+.glass-btn::after,
+.gloss-btn-light::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: translateX(-160%) skewX(-20deg);
+  pointer-events: none;
+}
+.gloss-btn:hover,
+.gloss-btn-dark:hover,
+.glass-btn:hover,
+.gloss-btn-light:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+.gloss-btn:hover::after,
+.gloss-btn-dark:hover::after,
+.glass-btn:hover::after,
+.gloss-btn-light:hover::after {
+  animation: gloss-sweep 0.8s ease-out;
+}
+.gloss-btn:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 6px rgba(124, 45, 18, 0.35),
+    0 14px 34px -8px rgba(249, 115, 22, 0.9);
+}
+.gloss-btn:active,
+.gloss-btn-dark:active,
+.glass-btn:active,
+.gloss-btn-light:active {
+  transform: translateY(0);
+}
+.gloss-btn-light:disabled,
+.gloss-btn:disabled {
+  transform: none;
+  filter: none;
+}
+.gloss-btn-light:disabled::after,
+.gloss-btn:disabled::after {
+  animation: none;
+}
+
+/* ---------- Cards ---------- */
+.gloss-card {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #fbfcfe 60%, #f5f8fc 100%) padding-box,
+    linear-gradient(140deg, rgba(251, 146, 60, 0.55), rgba(226, 232, 240, 0.9) 35%, rgba(226, 232, 240, 0.9) 65%, rgba(96, 165, 250, 0.5)) border-box;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px -18px rgba(15, 23, 42, 0.25);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.gloss-card::before {
+  /* a soft gloss across the top of the card */
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: -1;
+  height: 55%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  opacity: 0.6;
+  pointer-events: none;
+}
+.gloss-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 2px 4px rgba(15, 23, 42, 0.04),
+    0 22px 44px -18px rgba(249, 115, 22, 0.35),
+    0 18px 36px -22px rgba(37, 99, 235, 0.35);
+}
+
+/* ---------- Glossy orbs: step numbers and feature icons ---------- */
+.gloss-orb {
+  color: #fff;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.75) 0 12%, rgba(255, 255, 255, 0) 45%),
+    linear-gradient(180deg, #fb923c, #ea580c);
+  box-shadow:
+    inset 0 -2px 4px rgba(124, 45, 18, 0.4),
+    0 6px 14px -4px rgba(234, 88, 12, 0.6);
+  text-shadow: 0 1px 1px rgba(124, 45, 18, 0.5);
+}
+.gloss-orb-soft {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.95) 0 15%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(160deg, #ffedd5, #fed7aa);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 4px rgba(234, 88, 12, 0.15),
+    0 6px 14px -6px rgba(234, 88, 12, 0.45);
+}
+
+/* ---------- Screenshot frames with a reflection ----------
+   No position here (it would beat a Tailwind `absolute`): give the element `relative` or `absolute`. */
+.gloss-frame {
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 30px 60px -20px rgba(2, 6, 23, 0.55),
+    0 0 80px -20px rgba(59, 130, 246, 0.45);
+  transition:
+    transform 0.4s ease,
+    box-shadow 0.4s ease;
+}
+.gloss-frame-light {
+  box-shadow:
+    0 0 0 1px rgba(226, 232, 240, 0.9),
+    0 24px 50px -22px rgba(15, 23, 42, 0.35),
+    0 0 70px -25px rgba(249, 115, 22, 0.4);
+}
+.gloss-frame::after {
+  /* glass reflection plus a streak that crosses on hover */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 28%, transparent 40%),
+    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%);
+  background-size:
+    100% 100%,
+    250% 100%;
+  background-position:
+    0 0,
+    150% 0;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  transition: background-position 1.1s ease;
+}
+.gloss-frame:hover::after,
+a:hover > .gloss-frame::after,
+a.gloss-frame:hover::after {
+  background-position:
+    0 0,
+    -60% 0;
+}
+.gloss-float {
+  animation: gloss-float 7s ease-in-out infinite;
+}
+
+/* ---------- Light sections with a soft tint ---------- */
+.gloss-section {
+  background:
+    radial-gradient(40rem 20rem at 0% 0%, rgba(254, 215, 170, 0.35), transparent 60%),
+    radial-gradient(40rem 20rem at 100% 100%, rgba(191, 219, 254, 0.45), transparent 60%),
+    linear-gradient(180deg, #f8fafc, #f1f5f9);
+}
+
+/* A thin glowing line, e.g. a progress bar */
+.gloss-bar {
+  background: linear-gradient(90deg, #f97316, #fbbf24, #f97316);
+  background-size: 200% 100%;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.7);
+  animation: gloss-text-shine 4s linear infinite;
+}
+
+/* Divider with a highlight in the middle */
+.gloss-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(249, 115, 22, 0.5), rgba(59, 130, 246, 0.5), transparent);
+}
+
+/* ---------- Motion ---------- */
+@keyframes gloss-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes gloss-text-shine {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@keyframes gloss-sweep {
+  from {
+    transform: translateX(-160%) skewX(-20deg);
+  }
+  to {
+    transform: translateX(330%) skewX(-20deg);
+  }
+}
+@keyframes gloss-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gloss-hero::before,
+  .gloss-text,
+  .gloss-bar,
+  .gloss-float {
+    animation: none;
+  }
+  .gloss-btn:hover::after,
+  .gloss-btn-dark:hover::after,
+  .glass-btn:hover::after,
+  .gloss-btn-light:hover::after {
+    animation: none;
+  }
+  .gloss-card-hover:hover,
+  .gloss-btn:hover,
+  .gloss-btn-dark:hover,
+  .glass-btn:hover,
+  .gloss-btn-light:hover {
+    transform: none;
+  }
+  .gloss-frame::after {
+    transition: none;
+  }
+}
+
+/* ---------- Print: flat and ink-friendly ---------- */
+@media print {
+  .gloss-hero::before,
+  .gloss-hero::after,
+  .gloss-card::before,
+  .gloss-frame::after {
+    display: none;
+  }
+  .gloss-text {
+    animation: none;
+    color: #ea580c;
+    -webkit-text-fill-color: #ea580c;
+    background: none;
+  }
+  .gloss-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    box-shadow: none;
+  }
+  .gloss-card.gloss-print-flat {
+    border: 0;
+  }
+  .gloss-frame,
+  .gloss-frame-light {
+    box-shadow: none;
+  }
+  .gloss-float {
+    animation: none;
+  }
+  .gloss-section {
+    background: #fff;
+  }
+}

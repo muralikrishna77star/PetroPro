@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SITE_URL } from "@/lib/marketing/productTour";
+import "./website.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -23,12 +24,12 @@ export const metadata: Metadata = {
 export default function WebsiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-900 [color-scheme:light]">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur print:hidden">
+      <header className="glass-header sticky top-0 z-20 print:hidden">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element -- a fixed 32 px app icon */}
-            <img src="/icons/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
-            <span className="font-heading text-lg font-bold text-slate-900">PetroPro</span>
+            <img src="/icons/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg shadow-md shadow-orange-500/30 ring-1 ring-white/60" />
+            <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-orange-600 bg-clip-text font-heading text-lg font-bold text-transparent">PetroPro</span>
           </Link>
           <nav className="flex items-center gap-1 sm:gap-6" aria-label="Main">
             <Link href="/tour" className="rounded-lg px-2 py-2 text-sm font-semibold text-orange-600 hover:text-orange-700">
@@ -43,14 +44,15 @@ export default function WebsiteLayout({ children }: { children: React.ReactNode 
             <Link href="/#contact" className="hidden text-sm text-slate-600 hover:text-slate-900 md:inline">
               Contact
             </Link>
-            <Link href="/login" className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 sm:px-4">
+            <Link href="/login" className="gloss-btn-dark inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium sm:px-4">
               Staff Login
             </Link>
           </nav>
         </div>
       </header>
       <div className="flex-1">{children}</div>
-      <footer className="border-t border-slate-200 py-8 print:hidden">
+      <footer className="gloss-section pb-8 print:hidden">
+        <div className="gloss-divider mb-8" aria-hidden="true" />
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 text-sm text-slate-500 sm:flex-row sm:px-6 lg:px-8">
           <p>© {new Date().getFullYear()} PetroPro. Fuel station management software.</p>
           <div className="flex gap-5">
