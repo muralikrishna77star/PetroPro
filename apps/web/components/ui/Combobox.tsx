@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState, type InputHTMLAttributes } from "react";
+import { useId, useMemo, useState, type InputHTMLAttributes, type Ref } from "react";
 import { cn } from "@/lib/cn";
 
 export interface ComboboxOption {
@@ -12,6 +12,8 @@ interface ComboboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "val
   options: ComboboxOption[];
   value: string;
   onChange: (value: string) => void;
+  /** The text input, e.g. to focus and select it after a line is added. */
+  ref?: Ref<HTMLInputElement>;
 }
 
 const MAX_VISIBLE_OPTIONS = 50;
@@ -22,7 +24,7 @@ const MAX_VISIBLE_OPTIONS = 50;
  *  styling across browsers, no keyboard highlight). `value` still updates on every keystroke
  *  (not only on selecting a suggestion) — callers rely on free text being possible, e.g. typing
  *  a customer code that isn't in the loaded list yet. */
-export function Combobox({ options, value, onChange, className, id, ...props }: ComboboxProps) {
+export function Combobox({ options, value, onChange, className, id, ref, ...props }: ComboboxProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const listboxId = `${inputId}-listbox`;
@@ -79,6 +81,7 @@ export function Combobox({ options, value, onChange, className, id, ...props }: 
     <div className="relative">
       <input
         {...props}
+        ref={ref}
         id={inputId}
         role="combobox"
         aria-expanded={open}
