@@ -13,13 +13,13 @@ export const metadata: Metadata = {
 
 export default function ProductGuidePage() {
   return (
-    <main className="bg-slate-50 print:bg-white">
+    <main className="gloss-section print:bg-white">
       {/* Intro */}
-      <section className="bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white print:[print-color-adjust:exact]">
+      <section className="gloss-hero text-white print:[print-color-adjust:exact]">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
           <p className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">Product Tour Guide</p>
           <h1 className="mb-4 max-w-3xl font-heading text-3xl font-bold leading-tight sm:text-4xl">
-            How to use PetroPro, screen by screen
+            How to use PetroPro, <span className="gloss-text">screen by screen</span>
           </h1>
           <p className="max-w-3xl text-lg text-slate-300">
             A walk through every part of the app for attendants, cashiers, owners and administrators: what each screen is for,
@@ -28,7 +28,7 @@ export default function ProductGuidePage() {
           <div className="mt-8 flex flex-wrap gap-3 print:hidden">
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600"
+              className="gloss-btn inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium"
             >
               <LogIn className="h-4 w-4" aria-hidden="true" /> Staff Login
             </Link>
@@ -47,7 +47,7 @@ export default function ProductGuidePage() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {GUIDE_ROLES.map((r) => (
-              <div key={r.key} className="rounded-xl border border-slate-200 bg-white p-5 print:[break-inside:avoid]">
+              <div key={r.key} className="gloss-card gloss-card-hover rounded-xl p-5 print:[break-inside:avoid]">
                 <h3 className="font-semibold">{r.name}</h3>
                 <p className="mb-3 text-sm text-slate-500">{r.also}</p>
                 <p className="mb-2 text-sm text-slate-700">{r.sees}</p>
@@ -68,9 +68,9 @@ export default function ProductGuidePage() {
               <li key={s.title}>
                 <a
                   href={`#${s.chapter}`}
-                  className="block h-full rounded-xl border-2 border-orange-100 bg-white p-4 transition-colors hover:border-orange-300"
+                  className="gloss-card gloss-card-hover block h-full rounded-xl p-4"
                 >
-                  <span className="mb-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white print:[print-color-adjust:exact]">
+                  <span className="gloss-orb mb-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold print:[print-color-adjust:exact]">
                     {i + 1}
                   </span>
                   <h3 className="mb-1 font-semibold">{s.title}</h3>
@@ -108,16 +108,16 @@ export default function ProductGuidePage() {
               <Chapter key={c.id} chapter={c} number={i + 1} />
             ))}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 print:hidden">
+            <section className="gloss-card rounded-2xl p-6 sm:p-8 print:hidden">
               <h2 className="mb-2 font-heading text-xl font-bold">Ready to start?</h2>
               <p className="mb-5 text-slate-600">
                 Sign in with your PetroPro account. If you don&apos;t have one yet, ask your station&apos;s administrator.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link href="/login" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700">
+                <Link href="/login" className="gloss-btn-dark inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium">
                   Staff Login <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
-                <Link href="/customer/login" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <Link href="/customer/login" className="gloss-btn-light inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium">
                   Customer Login
                 </Link>
               </div>
@@ -132,7 +132,7 @@ export default function ProductGuidePage() {
 function Chapter({ chapter: c, number }: { chapter: GuideChapter; number: number }) {
   const isPhone = c.image.width < c.image.height;
   return (
-    <section id={c.id} aria-labelledby={`${c.id}-title`} className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 print:break-before-page print:border-0 print:p-0">
+    <section id={c.id} aria-labelledby={`${c.id}-title`} className="gloss-card gloss-print-flat scroll-mt-24 rounded-2xl p-6 sm:p-8 print:break-before-page print:p-0">
       <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-orange-600">
         {number}. {c.nav}
       </p>
@@ -159,7 +159,7 @@ function Chapter({ chapter: c, number }: { chapter: GuideChapter; number: number
           <ol className="space-y-3">
             {c.steps.map((s, i) => (
               <li key={s} className="flex gap-3 text-slate-700">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700 print:[print-color-adjust:exact]">
+                <span className="gloss-orb-soft flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-orange-700 print:[print-color-adjust:exact]">
                   {i + 1}
                 </span>
                 <span>{s}</span>
@@ -188,14 +188,14 @@ function Chapter({ chapter: c, number }: { chapter: GuideChapter; number: number
 function Screenshot({ screen }: { screen: Screen }) {
   if (screen.width < screen.height) {
     return (
-      <figure className="mx-auto w-full max-w-[240px] self-start overflow-hidden rounded-[2rem] border-[6px] border-slate-800 bg-slate-800 shadow-xl print:max-w-[200px]">
+      <figure className="gloss-frame relative mx-auto w-full max-w-[240px] self-start rounded-[2rem] border-[6px] border-slate-800 bg-slate-800 print:max-w-[200px]">
         {/* eslint-disable-next-line @next/next/no-img-element -- a static screenshot */}
         <img src={screen.src} alt={screen.alt} width={screen.width} height={screen.height} loading="lazy" className="h-auto w-full rounded-[1.5rem]" />
       </figure>
     );
   }
   return (
-    <figure className="self-start overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-md print:[break-inside:avoid]">
+    <figure className="gloss-frame gloss-frame-light relative self-start rounded-xl bg-slate-100 print:[break-inside:avoid]">
       {/* eslint-disable-next-line @next/next/no-img-element -- a static screenshot */}
       <img src={screen.src} alt={screen.alt} width={screen.width} height={screen.height} loading="lazy" className="h-auto w-full" />
     </figure>
