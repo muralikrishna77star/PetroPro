@@ -34,6 +34,9 @@ export default function WebsiteLayout({ children }: { children: React.ReactNode 
             <Link href="/tour" className="rounded-lg px-2 py-2 text-sm font-semibold text-orange-600 hover:text-orange-700">
               Product Tour
             </Link>
+            <Link href="/guide" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:inline">
+              Guide
+            </Link>
             <Link href="/#features" className="hidden text-sm text-slate-600 hover:text-slate-900 md:inline">
               Features
             </Link>
@@ -52,6 +55,7 @@ export default function WebsiteLayout({ children }: { children: React.ReactNode 
           <p>© {new Date().getFullYear()} PetroPro. Fuel station management software.</p>
           <div className="flex gap-5">
             <Link href="/tour" className="hover:text-slate-800">Product Tour</Link>
+            <Link href="/guide" className="hover:text-slate-800">Product Tour Guide</Link>
             <Link href="/customer/login" className="hover:text-slate-800">Customer Login</Link>
             <Link href="/login" className="hover:text-slate-800">Staff Login</Link>
           </div>
