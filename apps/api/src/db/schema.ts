@@ -441,6 +441,26 @@ export function applySchema(db: DatabaseSync): void {
   // Billing pre-fills. Existing orders stay strict (0).
   ensureColumn(db, "orders", "allow_extra_items", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "orders", "vehicle_no", "TEXT");
+  // When a bill was really keyed in (UTC). bill_date carries the business date, which can lag
+  // behind or (with Close Day's "tomorrow straight away") run a day ahead of the clock, so shift
+  // cash totals go by this instead. Null on imported/older bills, which fall back to bill_date.
+  ensureColumn(db, "bills", "entered_at", "TEXT");
+  // Vehicle master: vehicle_key is the number reduced to capitals and digits (repositories/
+  // vehicles.ts vehicleKey), so "TN 01 AB 1234" finds the TN01AB1234 already on file instead of
+  // creating a second vehicle. Not unique: legacy data has such duplicates until they're merged.
+  ensureColumn(db, "vehicles", "vehicle_key", "TEXT");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_vehicles_key ON vehicles(vehicle_key);
+    CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON vehicles(customer_code);
+    -- Near-matching numbers someone confirmed are different vehicles (Vehicles screen), so the
+    -- merge tool stops suggesting them. Keys as in vehicles.vehicle_key, key_a < key_b.
+    CREATE TABLE IF NOT EXISTS vehicle_distinct_pairs (
+      key_a TEXT NOT NULL,
+      key_b TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (key_a, key_b)
+    );
+  `);
   ensureColumn(db, "items", "hsn_code", "TEXT");
   // Optional Google SSO identity for a staff user — see routes/googleAuth.ts. Nullable so
   // user-id/password login keeps working for anyone with no email on file.

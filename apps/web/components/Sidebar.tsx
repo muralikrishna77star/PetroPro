@@ -44,6 +44,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/catalog", label: "Catalog", roles: ["super_admin", "owner"] },
       { href: "/customers", label: "Customers", roles: ["super_admin", "owner", "operator"] },
+      { href: "/vehicles", label: "Vehicles", roles: ["super_admin", "owner", "operator"] },
       { href: "/purchases", label: "Purchases", roles: ["super_admin", "owner"] },
     ],
   },
@@ -78,6 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
     color: "teal",
     icon: Settings,
     items: [
+      { href: "/close-day", label: "Close Day", roles: ["super_admin", "owner", "operator"] },
       { href: "/users", label: "Users", roles: ["super_admin"] },
       { href: "/audit-logs", label: "Audit Logs", roles: ["super_admin", "owner"] },
       { href: "/settings", label: "Settings", roles: ["super_admin", "owner"] },

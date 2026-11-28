@@ -1,5 +1,25 @@
 import { db } from "../db/client.js";
-import { stockRepo, todayDateOnly } from "./stock.js";
+import { stockRepo } from "./stock.js";
+import { closeDaySettingsRepo } from "./closeDaySettings.js";
+import { config } from "../config.js";
+
+/** The station's calendar date ("YYYY-MM-DD") at `instant`. */
+export function stationDate(instant: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: config.stationTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}
+
+/** Today's date for billing: the station's date, changing over at Close Day's change-over time
+ *  instead of midnight — at 03:00 with a 05:30 change-over it's still yesterday. With the default
+ *  change-over this equals the UTC date (todayDateOnly), as it always has. */
+export function businessToday(now = new Date()): string {
+  const [hours, minutes] = closeDaySettingsRepo.get().day_changeover_time.split(":").map(Number);
+  return stationDate(new Date(now.getTime() - (hours * 60 + minutes) * 60_000));
+}
 
 function nextDay(date: string): string {
   return (db.prepare("SELECT date(?, '+1 day') AS d").get(date) as { d: string }).d;
@@ -19,8 +39,8 @@ export const businessDateRepo = {
     const row = db.prepare("SELECT running_date FROM business_date WHERE id = 1").get() as
       | { running_date: string }
       | undefined;
-    let current = row?.running_date ?? todayDateOnly();
-    const today = todayDateOnly();
+    let current = row?.running_date ?? businessToday();
+    const today = businessToday();
     while (current < today && stockRepo.isDateClosed(current)) {
       current = nextDay(current);
     }
@@ -30,12 +50,16 @@ export const businessDateRepo = {
     return current;
   },
 
-  /** Advances the running date by one day, capped at the real calendar date so it never gets
-   *  ahead of "now" — call right after a cashier closes the current running date. */
+  /** Advances the running date by one day — call right after a cashier closes the current
+   *  running date. Normally capped at the real calendar date so it never gets ahead of "now";
+   *  with Close Day's "tomorrow straight away" setting it moves on to the next date regardless,
+   *  which can put it one day ahead (closing a date that hasn't begun is refused in
+   *  services/closeDay.ts, so it can't run further than that). */
   advance(): string {
     const current = businessDateRepo.get();
-    const today = todayDateOnly();
-    const next = current < today ? nextDay(current) : today;
+    const today = businessToday();
+    const next =
+      current < today || closeDaySettingsRepo.get().next_date === "tomorrow" ? nextDay(current) : today;
     db.prepare("UPDATE business_date SET running_date = ? WHERE id = 1").run(next);
     return next;
   },

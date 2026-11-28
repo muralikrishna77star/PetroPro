@@ -331,6 +331,29 @@ export interface PurchaseGroupItemRow {
   value: number;
 }
 
+/** A vehicle in the vehicle master (apps/api's repositories/vehicles.ts). */
+export interface Vehicle {
+  vehicle_no: string;
+  customer_code: string | null;
+  fleet_card: string | null;
+}
+
+/** Vehicle numbers that look like one vehicle keyed in different ways — the Vehicles screen's
+ *  merge tool. "same" differ only in spaces/hyphens/case; "similar" are one character apart. */
+export interface VehicleNearMatchGroup {
+  kind: "same" | "similar";
+  vehicles: (Vehicle & { bill_count: number; last_bill_date: string | null })[];
+}
+
+export interface VehicleMergeResult {
+  kept: string;
+  merged: string[];
+  bills: number;
+  pending_transactions: number;
+  mileage_entries: number;
+  orders: number;
+}
+
 export interface VehicleSalesRow {
   vehicle_no: string;
   bill_count: number;
@@ -808,4 +831,45 @@ export interface PrintPayload {
   logo_width_mm: number | null;
   /** Set when the job went to a print station rather than to this terminal's own printer. */
   station: { id: string; name: string } | null;
+}
+
+/** Close Day's sales for one business date (apps/api's services/closeDay.ts). */
+export interface CloseDaySales {
+  bill_count: number;
+  amount: number;
+  items: { item_code: string; item_name: string; qty: number; amount: number }[];
+}
+
+/** An item as the customer portal's Purchase Order screen sees it (GET /customer/items) — no cost
+ *  or wholesale prices. */
+export interface CustomerItem {
+  code: string;
+  name: string;
+  price_retail: number;
+}
+
+/** Close Day's settings (apps/api's repositories/closeDaySettings.ts). */
+export interface CloseDaySettings {
+  /** Earliest station time ("HH:MM") a date can be closed on that date itself; null = any time. */
+  min_close_time: string | null;
+  /** After closing today's date: move billing straight on to tomorrow, or wait for the date to change. */
+  next_date: "tomorrow" | "wait";
+  /** Station time ("HH:MM") the billing date changes over — 05:30 (midnight UTC) by default. */
+  day_changeover_time: string;
+}
+
+export interface CloseDaySummary {
+  date: string;
+  next_date: string;
+  next_date_mode: CloseDaySettings["next_date"];
+  /** False when billing stays shut after closing — until `next_date_opens_at`. */
+  next_date_open_now: boolean;
+  /** Station-local time `next_date` opens for billing, e.g. "29 Nov, 05:30". */
+  next_date_opens_at: string;
+  /** Whether the date can be closed now; if not, `close_blocked_reason` says why. */
+  can_close: boolean;
+  close_blocked_reason: string | null;
+  min_close_time: string | null;
+  day: CloseDaySales;
+  cashier: CloseDaySales & { user_id: string; name: string };
 }

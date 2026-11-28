@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
-import { api, customerApi, ApiError, type Item, type Order } from "@/lib/api";
+import { customerApi, ApiError, type CustomerItem, type Order } from "@/lib/api";
 import { useRequireCustomerSession } from "@/lib/useCustomerSession";
 import { clearCustomerSession } from "@/lib/customerAuth";
 import { Card } from "@/components/Card";
 import { DesignSwitcher } from "@/components/DesignSwitcher";
 import { SectionLabel } from "@/components/SectionLabel";
 import { Combobox } from "@/components/ui/Combobox";
+import { findVehicle, similarVehicles, vehicleKey } from "@/lib/vehicles";
 
 interface DraftLine {
   item_code: string;
@@ -33,10 +34,12 @@ const QTY_DECIMALS = 3;
 export default function CustomerOrdersPage() {
   const session = useRequireCustomerSession();
   const router = useRouter();
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<CustomerItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
 
   const [vehicleNo, setVehicleNo] = useState("");
+  // The customer's own vehicles, from the station's vehicle master.
+  const [vehicles, setVehicles] = useState<{ vehicle_no: string }[]>([]);
   const [allowExtraItems, setAllowExtraItems] = useState(false);
   const [lineItemCode, setLineItemCode] = useState("");
   const lineItemCodeRef = useRef<HTMLInputElement>(null);
@@ -49,7 +52,7 @@ export default function CustomerOrdersPage() {
 
   useEffect(() => {
     if (!session) return;
-    api
+    customerApi
       .listItems(session.token)
       .then((data) => {
         setItems(data);
@@ -57,8 +60,21 @@ export default function CustomerOrdersPage() {
       })
       .catch(() => undefined);
     refreshOrders();
+    refreshVehicles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  function refreshVehicles() {
+    if (!session) return;
+    customerApi
+      .listVehicles(session.token)
+      .then((own) => {
+        setVehicles(own);
+        // Only one vehicle on file: it's the one being ordered for.
+        if (own.length === 1) setVehicleNo((current) => current || own[0].vehicle_no);
+      })
+      .catch(() => undefined);
+  }
 
   function refreshOrders() {
     if (!session) return;
@@ -135,11 +151,12 @@ export default function CustomerOrdersPage() {
       const order = await customerApi.createOrder(session.token, {
         lines,
         allow_extra_items: allowExtraItems,
-        vehicle_no: vehicleNo.trim() || undefined,
+        vehicle_no: vehicleNo.trim(),
       });
       setMessage(`Purchase order #${order.order_no} placed.`);
       clearForm();
       refreshOrders();
+      refreshVehicles();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not place the order");
     } finally {
@@ -198,13 +215,41 @@ export default function CustomerOrdersPage() {
                 />
                 <Lock size={14} aria-hidden className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted" />
               </label>
-              <input
-                placeholder="Vehicle no. (optional)"
-                className="flex-1 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm uppercase"
-                value={vehicleNo}
-                onChange={(e) => setVehicleNo(e.target.value)}
-              />
+              <div className="flex-1">
+                <Combobox
+                  options={vehicles.map((v) => ({ value: v.vehicle_no, label: v.vehicle_no }))}
+                  value={vehicleNo}
+                  onChange={setVehicleNo}
+                  normalize={vehicleKey}
+                  placeholder="Vehicle no."
+                  aria-label="Vehicle no."
+                  required
+                  className="uppercase"
+                />
+              </div>
             </div>
+            {vehicleKey(vehicleNo).length >= 2 && !findVehicle(vehicles, vehicleNo) && (
+              <p className="mt-2 text-sm">
+                {similarVehicles(vehicles, vehicleNo).length > 0 ? (
+                  <>
+                    <span className="text-warning">Not one of your vehicles. Did you mean </span>
+                    {similarVehicles(vehicles, vehicleNo).map((v) => (
+                      <button
+                        key={v.vehicle_no}
+                        onClick={() => setVehicleNo(v.vehicle_no)}
+                        className="mr-2 rounded-lg border border-border px-2 py-0.5 font-mono hover:bg-card-hover"
+                      >
+                        {v.vehicle_no}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <span className="text-fg-muted">
+                    New vehicle {vehicleKey(vehicleNo)} — it will be added to your account with this order.
+                  </span>
+                )}
+              </p>
+            )}
             <p className="mt-2 text-sm text-fg-muted">
               <span className="font-medium text-fg">{session.name}</span> — the order is billed to this account on credit.
             </p>
@@ -339,7 +384,8 @@ export default function CustomerOrdersPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={handleSubmit}
-              disabled={submitting || lines.length === 0}
+              disabled={submitting || lines.length === 0 || vehicleKey(vehicleNo).length < 2}
+              title={vehicleKey(vehicleNo).length < 2 ? "Enter the vehicle number first" : undefined}
               className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {submitting ? "Placing order..." : "Place purchase order"}

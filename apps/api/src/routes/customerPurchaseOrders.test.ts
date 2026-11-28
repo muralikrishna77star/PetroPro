@@ -46,7 +46,7 @@ test("a customer's purchase order is always their own, with the extra-items choi
 });
 
 test("Billing lists the customer's open purchase orders and bills one, refusing extras on a strict order", async () => {
-  const placed = await call("POST", "/customer/orders", customer, { lines: [{ item_code: "DSL", qty: 50 }] });
+  const placed = await call("POST", "/customer/orders", customer, { vehicle_no: "TN01AB1234", lines: [{ item_code: "DSL", qty: 50 }] });
   assert.equal(placed.statusCode, 201, placed.body);
   const order = placed.json();
   assert.equal(order.allow_extra_items, 0);
@@ -76,7 +76,7 @@ test("Billing lists the customer's open purchase orders and bills one, refusing 
 });
 
 test("Billing can't bill a purchase order under another customer", async () => {
-  const order = (await call("POST", "/customer/orders", customer, { lines: [{ item_code: "DSL", qty: 10 }] })).json();
+  const order = (await call("POST", "/customer/orders", customer, { vehicle_no: "TN01AB1234", lines: [{ item_code: "DSL", qty: 10 }] })).json();
   const res = await call("POST", "/bills", staff, {
     paymentType: "credit",
     customerCode: "OTHER",
@@ -85,4 +85,28 @@ test("Billing can't bill a purchase order under another customer", async () => {
   });
   assert.equal(res.statusCode, 400);
   assert.match(res.json().error, /different customer/);
+});
+
+test("the Purchase Order screen's item list works with a customer sign-in and shows no cost prices", async () => {
+  assert.equal((await call("GET", "/items", customer)).statusCode, 403);
+  const res = await call("GET", "/customer/items", customer);
+  assert.equal(res.statusCode, 200, res.body);
+  assert.deepEqual(res.json(), [
+    { code: "DSL", name: "DIESEL", price_retail: 92.75 },
+    { code: "OIL", name: "ENGINE OIL", price_retail: 399 },
+  ]);
+  assert.equal((await call("GET", "/customer/items", staff)).statusCode, 403);
+});
+
+test("a purchase order needs a vehicle, can't use another account's vehicle, and lists the customer's own", async () => {
+  const noVehicle = await call("POST", "/customer/orders", customer, { lines: [{ item_code: "DSL", qty: 5 }] });
+  assert.equal(noVehicle.statusCode, 400);
+
+  db.prepare("INSERT INTO vehicles (vehicle_no, customer_code) VALUES ('KL07ZZ0007', 'OTHER')").run();
+  const theirs = await call("POST", "/customer/orders", customer, { vehicle_no: "kl 07 zz 0007", lines: [{ item_code: "DSL", qty: 5 }] });
+  assert.equal(theirs.statusCode, 400);
+  assert.match(theirs.json().error, /another account/);
+
+  const mine = await call("GET", "/customer/vehicles", customer);
+  assert.deepEqual(mine.json(), [{ vehicle_no: "TN01AB1234" }]);
 });

@@ -7,6 +7,10 @@ import type {
   Bill,
   BillLine,
   CashierSalesRow,
+  CloseDaySales,
+  CloseDaySettings,
+  CloseDaySummary,
+  CustomerItem,
   CommunicationChannel,
   CommunicationLogEntry,
   CommunicationSettings,
@@ -49,6 +53,9 @@ import type {
   StockRow,
   StockSummaryRow,
   Tenant,
+  Vehicle,
+  VehicleMergeResult,
+  VehicleNearMatchGroup,
   VehicleSalesRow,
   TechDashboard,
   TechService,
@@ -92,6 +99,10 @@ export type {
   Bill,
   BillLine,
   CashierSalesRow,
+  CloseDaySales,
+  CloseDaySettings,
+  CloseDaySummary,
+  CustomerItem,
   CommunicationChannel,
   CommunicationLogEntry,
   CommunicationSettings,
@@ -134,6 +145,9 @@ export type {
   StockRow,
   StockSummaryRow,
   Tenant,
+  Vehicle,
+  VehicleMergeResult,
+  VehicleNearMatchGroup,
   VehicleSalesRow,
 };
 
@@ -657,10 +671,34 @@ export const api = {
       body: { confirm: true },
     }),
 
+  listVehicles: (token: string) => request<Vehicle[]>("/vehicles", { token }),
+
+  createVehicle: (token: string, body: { vehicle_no: string; customer_code: string | null }) =>
+    request<Vehicle>("/vehicles", { method: "POST", token, body }),
+
+  setVehicleOwner: (token: string, vehicleNo: string, customerCode: string | null) =>
+    request<Vehicle>(`/vehicles/${encodeURIComponent(vehicleNo)}`, { method: "PUT", token, body: { customer_code: customerCode } }),
+
+  getVehicleNearMatches: (token: string) => request<VehicleNearMatchGroup[]>("/vehicles/near-matches", { token }),
+
+  mergeVehicles: (token: string, keep: string, merge: string[]) =>
+    request<VehicleMergeResult>("/vehicles/merge", { method: "POST", token, body: { keep, merge } }),
+
+  markVehiclesDistinct: (token: string, vehicleNos: string[]) =>
+    request<{ ok: true }>("/vehicles/distinct", { method: "POST", token, body: { vehicle_nos: vehicleNos } }),
+
   getBusinessDate: (token: string) => request<{ date: string }>("/business-date", { token }),
 
+  getCloseDaySettings: (token: string) => request<CloseDaySettings>("/close-day/settings", { token }),
+
+  updateCloseDaySettings: (token: string, body: Partial<CloseDaySettings>) =>
+    request<CloseDaySettings>("/close-day/settings", { method: "PUT", token, body }),
+
+  /** What Close Day asks the cashier to confirm: the running date's sales and their own. */
+  getCloseDaySummary: (token: string) => request<CloseDaySummary>("/stock/close/summary", { token }),
+
   closeDay: (token: string) =>
-    request<{ closedDate: string; rowsClosed: number; runningDate: string }>("/stock/close", {
+    request<{ closedDate: string; rowsClosed: number; runningDate: string; summary: CloseDaySummary }>("/stock/close", {
       method: "POST",
       token,
       body: {},
@@ -716,6 +754,12 @@ export const customerApi = {
 
   login: (email: string, password: string) =>
     request<CustomerLoginResponse>("/customer/auth/login", { method: "POST", body: { email, password } }),
+
+  /** The signed-in customer's own vehicles, for the Purchase Order screen. */
+  listVehicles: (token: string) => request<{ vehicle_no: string }[]>("/customer/vehicles", { token }),
+
+  /** Items for the Purchase Order screen — code, name and selling rate only. */
+  listItems: (token: string) => request<CustomerItem[]>("/customer/items", { token }),
 
   listOrders: (token: string) => request<Order[]>("/customer/orders", { token }),
 

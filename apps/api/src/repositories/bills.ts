@@ -100,8 +100,8 @@ export const billsRepo = {
       const billResult = input.bill_date
         ? db
             .prepare(
-              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, bill_date, client_ref)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, bill_date, client_ref, entered_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
             )
             .run(
               input.vehicle_no ?? null,
@@ -118,8 +118,8 @@ export const billsRepo = {
             )
         : db
             .prepare(
-              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, client_ref)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO bills (vehicle_no, customer_code, user_id, sub_total, tax_total, grand_total, payment_type, order_no, pump_code, client_ref, entered_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
             )
             .run(
               input.vehicle_no ?? null,
