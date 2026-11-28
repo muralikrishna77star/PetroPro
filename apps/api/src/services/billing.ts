@@ -249,7 +249,15 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
     }
   }
 
-  const vehicle = input.vehicleNo ? vehiclesRepo.findOrCreate(input.vehicleNo) : undefined;
+  // Checked before the vehicle is looked up, since a new vehicle is added under this customer.
+  if (input.customerCode && !customersRepo.get(input.customerCode)) {
+    throw new Error(`Unknown customer code: ${input.customerCode}`);
+  }
+  // A number typed with different spacing/case resolves to the vehicle on file; a new number is
+  // added to the vehicle master under the bill's customer (see vehiclesRepo.findOrCreate).
+  const vehicle = input.vehicleNo?.trim()
+    ? vehiclesRepo.findOrCreate(input.vehicleNo, input.customerCode ?? null)
+    : undefined;
   const customerCode = input.customerCode ?? vehicle?.customer_code ?? null;
 
   validateOrderFulfillment(input, customerCode);

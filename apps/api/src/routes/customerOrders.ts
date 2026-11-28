@@ -1,10 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import { ordersRepo } from "../repositories/orders.js";
 import { itemsRepo } from "../repositories/items.js";
+import { vehiclesRepo } from "../repositories/vehicles.js";
 
 /** Customer-facing order placement/history — the customer's own Order Entry screen. Staff-side
  *  lookup of a customer's pending orders (for billing/fulfillment) lives in routes/orders.ts. */
 export default async function customerOrderRoutes(fastify: FastifyInstance) {
+  // The items a customer can put on a purchase order. The staff GET /items refuses customer
+  // tokens, and would hand out cost prices besides — this returns only what the order screen
+  // shows: code, name and today's selling rate.
+  fastify.get("/customer/items", { preHandler: fastify.authenticateCustomer }, async () =>
+    itemsRepo.list().map((item) => ({ code: item.code, name: item.name, price_retail: item.price_retail })),
+  );
+
+  // The customer's own vehicles, for the Purchase Order screen's vehicle box.
+  fastify.get("/customer/vehicles", { preHandler: fastify.authenticateCustomer }, async (request) =>
+    vehiclesRepo.listByCustomer(request.user.sub).map((v) => ({ vehicle_no: v.vehicle_no })),
+  );
+
   fastify.get(
     "/customer/orders",
     { preHandler: fastify.authenticateCustomer },
@@ -26,8 +39,23 @@ export default async function customerOrderRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ error: "Each line needs an item_code and a positive qty" });
         }
       }
+      if (!vehicle_no?.trim()) {
+        return reply.code(400).send({ error: "Enter the vehicle number this order is for" });
+      }
+      // A vehicle already on another customer's account can't be ordered for here; a new number
+      // joins the vehicle master under this customer.
+      const onFile = vehiclesRepo.resolve(vehicle_no);
+      if (onFile?.customer_code && onFile.customer_code !== request.user.sub) {
+        return reply
+          .code(400)
+          .send({ error: `${onFile.vehicle_no} is registered to another account. Please contact the station.` });
+      }
 
       try {
+        for (const line of lines) {
+          if (!itemsRepo.get(line.item_code)) throw new Error(`Unknown item code: ${line.item_code}`);
+        }
+        const vehicle = vehiclesRepo.findOrCreate(vehicle_no, request.user.sub);
         const orderLines = lines.map((line) => {
           const item = itemsRepo.get(line.item_code);
           if (!item) throw new Error(`Unknown item code: ${line.item_code}`);
@@ -37,7 +65,7 @@ export default async function customerOrderRoutes(fastify: FastifyInstance) {
           customerCode: request.user.sub,
           lines: orderLines,
           allowExtraItems: allow_extra_items === true,
-          vehicleNo: vehicle_no?.trim().toUpperCase() || null,
+          vehicleNo: vehicle.vehicle_no,
         });
         return reply.code(201).send(order);
       } catch (err) {

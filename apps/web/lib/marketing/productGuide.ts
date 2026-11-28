@@ -55,7 +55,7 @@ export const DAY_FLOW: { title: string; text: string; chapter: string }[] = [
   { title: "Fill at the pump", text: "The attendant enters the vehicle, fuel and litres.", chapter: "attendant" },
   { title: "Settle the bill", text: "The cashier picks it from the queue and prints the bill.", chapter: "cashier" },
   { title: "Close shift", text: "Count the cash. PetroPro shows any shortfall.", chapter: "shifts" },
-  { title: "Close Day", text: "Billing moves on to the next date.", chapter: "billing" },
+  { title: "Close Day", text: "Utilities → Close Day. Shows the day's sales, then moves billing on to the next date.", chapter: "billing" },
 ];
 
 export type GuideChapter = {
@@ -125,18 +125,19 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
     intro: "Billing is for walk-in and credit sales made at the counter. The billing date is shown at the top.",
     steps: [
       "Pick the Sale Type: Cash, Credit, Card or UPI. A Credit bill needs the customer code.",
-      "Fill in Vehicle Details and Pump Details if you need them on the bill.",
-      "If the customer is collecting against an order, enter its number under Pending Order.",
+      "Enter the Vehicle no. first. For a customer's vehicle, the Customer code fills itself in on a Credit sale. A new number is added to the Vehicles list, and a near miss shows “Did you mean”.",
+      "Fill in Pump Details if you need it on the bill.",
+      "For a Credit customer with a purchase order, pick it under Purchase Orders and press Bill this order. Its items come onto the bill.",
       "Add each item by its code or name. Enter the Qty, or enter the Amount and PetroPro works out the quantity from the rate.",
       "Press Save, or Save and Print to print the bill straight away.",
-      "At the end of the day, press Close Day. Billing then moves to the next date.",
+      "At the end of the day, open Utilities → Close Day and press Close Day. It shows the day's sales and your own sales, item by item. Press Close Day again to confirm, and it shows the next billing date.",
     ],
     tips: [
       "Save as draft sets a bill aside so you can serve the next customer. Resume it later from the Draft queue.",
       "Full screen hides the menu so Billing fills a tablet or small screen.",
       "Look up / cancel a bill finds any bill by number to reprint it. Only an Owner or Super Admin can cancel one.",
       "For fuel that tracks mileage, Mileage Check appears. Tick “Record mileage for this fill” and enter the opening and closing km. One mileage entry is allowed per sale.",
-      "Close Day is not shown on “Billing screen only” accounts, so a tablet can't close the day for the whole station.",
+      "Close Day is not on the Billing screen, and “Billing screen only” accounts can't reach it, so a tablet can't close the day for the whole station. An Owner can set the earliest time the day can be closed, and whether bills after closing go to tomorrow straight away.",
     ],
     image: shot("billing", "Billing screen with sale type, vehicle, item lines and totals"),
   },
@@ -169,7 +170,10 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
       "Use Set opening balance for dues carried over from before PetroPro.",
       "To give them access to the customer portal, save their email under Customer Login and press Set/reset password. Pass the temporary password on to them.",
     ],
-    tips: ["The WhatsApp number is used by Send Invoice to send credit bills to the customer."],
+    tips: [
+      "The WhatsApp number is used by Send Invoice to send credit bills to the customer.",
+      "Maintenance › Vehicles lists every vehicle and the customer it belongs to. Use Change customer to move one, and Find near matches to merge numbers keyed in different ways. Merging corrects the old bills too.",
+    ],
     image: shot("customers", "Customers screen with dues, credit limit and ledger"),
   },
   {
@@ -260,6 +264,7 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
       "The customer opens Customer login and signs in with the email and password you set for them, or with Google.",
       "They see their purchases, payments, ledger and credit statement.",
       "Fleet customers also see mileage for each of their vehicles.",
+      "Under Purchase orders they order fuel and other items for one of their vehicles. They can allow the station to add other essential items at billing.",
       "Everything can be downloaded as CSV or PDF.",
     ],
     image: shot("portal", "Customer portal with purchases, payments and closing balance"),

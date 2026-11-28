@@ -34,7 +34,8 @@ export const shiftsRepo = {
   },
 
   /** Cash sales (non-cancelled) posted by this user since `since`, up to now — used to compute
-   *  a shift's expected closing cash. Upper bound is SQLite's own `datetime('now')` rather than
+   *  a shift's expected closing cash. Goes by when each bill was keyed in (entered_at), not its
+   *  business date, which can lag behind or run a day ahead of the clock (see Close Day). Upper bound is SQLite's own `datetime('now')` rather than
    *  a JS timestamp, so both sides of the comparison share the same "YYYY-MM-DD HH:MM:SS"
    *  format (mixing in a JS `toISOString()` value here would compare against a different
    *  string format and silently misbehave — see Project_Status.md's date-range-query gap). */
@@ -43,7 +44,7 @@ export const shiftsRepo = {
       .prepare(
         `SELECT COALESCE(SUM(grand_total), 0) AS total FROM bills
          WHERE user_id = ? AND payment_type = 'cash' AND status != 'cancelled'
-           AND bill_date BETWEEN ? AND datetime('now')`,
+           AND COALESCE(entered_at, bill_date) BETWEEN ? AND datetime('now')`,
       )
       .get(userId, since) as unknown as { total: number };
     return row.total;

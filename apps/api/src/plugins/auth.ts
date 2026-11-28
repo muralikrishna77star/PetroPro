@@ -65,6 +65,7 @@ declare module "fastify" {
 export const BILLING_ONLY_ROUTES = new Set([
   "GET /items",
   "GET /pumps",
+  "GET /vehicles",
   "GET /customers",
   "GET /customers/:code",
   "GET /orders",

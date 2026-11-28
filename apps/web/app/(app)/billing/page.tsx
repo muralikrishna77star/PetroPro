@@ -13,7 +13,9 @@ import {
   type Pump,
   type SettleResponse,
   type Tenant,
+  type Vehicle,
 } from "@/lib/api";
+import { findVehicle, similarVehicles, vehicleKey } from "@/lib/vehicles";
 import { useRequireSession } from "@/lib/useSession";
 import { BillPrintActions } from "@/components/BillPrintActions";
 import { Card } from "@/components/Card";
@@ -46,6 +48,8 @@ export default function BillingPage() {
   const [printOnSave, setPrintOnSave] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  // The vehicle master, for the vehicle box: picking a customer's vehicle fills in the customer.
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [pumps, setPumps] = useState<Pump[]>([]);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
@@ -87,8 +91,6 @@ export default function BillingPage() {
   const [drafts, setDrafts] = useState<BillingDraft[]>([]);
 
   const [businessDate, setBusinessDate] = useState<string | null>(null);
-  const [closingDay, setClosingDay] = useState(false);
-  const [closeDayError, setCloseDayError] = useState<string | null>(null);
 
   const [offlineModeAllowed, setOfflineModeAllowed] = useState(false);
   const [queuedBillCount, setQueuedBillCount] = useState(0);
@@ -161,6 +163,7 @@ export default function BillingPage() {
       })
       .catch(() => undefined);
     api.listCustomers(session.token).then(setCustomers).catch(() => undefined);
+    refreshVehicles();
     api.listPumps(session.token).then(setPumps).catch(() => undefined);
     api.getTenant(session.token).then(setTenant).catch(() => undefined);
     api
@@ -188,24 +191,9 @@ export default function BillingPage() {
     api.getBusinessDate(session.token).then((r) => setBusinessDate(r.date)).catch(() => undefined);
   }
 
-  async function handleCloseDay() {
-    if (!session || !businessDate) return;
-    if (
-      !window.confirm(
-        `Close billing for ${businessDate}? No further bills can post to this date afterwards, and the running date will move forward.`,
-      )
-    )
-      return;
-    setClosingDay(true);
-    setCloseDayError(null);
-    try {
-      const result = await api.closeDay(session.token);
-      setBusinessDate(result.runningDate);
-    } catch (err) {
-      setCloseDayError(err instanceof ApiError ? err.message : "Failed to close the day");
-    } finally {
-      setClosingDay(false);
-    }
+  function refreshVehicles() {
+    if (!session) return;
+    api.listVehicles(session.token).then(setVehicles).catch(() => undefined);
   }
 
   function refreshRecentBills() {
@@ -247,6 +235,10 @@ export default function BillingPage() {
       setOrderNo("");
       // Purchase orders are credit-only, so their lines go with the credit sale type.
       dropOrderLines();
+    } else if (!customerCode.trim()) {
+      // Vehicle entered before switching to Credit: its owner becomes the customer.
+      const owner = findVehicle(vehicles, vehicleNo)?.customer_code;
+      if (owner) setCustomerCode(owner);
     }
   }
 
@@ -254,6 +246,19 @@ export default function BillingPage() {
   function handleCustomerChange(code: string) {
     setCustomerCode(code);
     if (selectedOrderNo !== null) dropOrderLines();
+    // A customer with just one vehicle on file gets it filled in.
+    const own = vehicles.filter((v) => v.customer_code === code.trim().toUpperCase());
+    if (own.length === 1 && !vehicleNo.trim()) setVehicleNo(own[0].vehicle_no);
+  }
+
+  // Vehicle entered first: a vehicle on file under a customer fills in that customer for a Credit
+  // sale (and is shown for the others, whose bill picks the owner up on the server anyway).
+  function handleVehicleChange(value: string) {
+    setVehicleNo(value);
+    const onFile = findVehicle(vehicles, value);
+    if (onFile?.customer_code && paymentType === "credit" && !customerCode.trim()) {
+      setCustomerCode(onFile.customer_code);
+    }
   }
 
   function rateFor(itemCode: string): number {
@@ -415,9 +420,19 @@ export default function BillingPage() {
     lines.every((l) => l.qty > 0) &&
     overServedLineIds.size === 0 &&
     (!strictOrder || lines.every((l) => l.orderLineId !== undefined)) &&
-    (paymentType !== "credit" || customerCode.trim().length > 0) &&
+    (paymentType !== "credit" || (customerCode.trim().length > 0 && vehicleNo.trim().length > 0)) &&
     (paymentType !== "upi" || upiConfirmed);
   const selectedItemName = items.find((i) => i.code === lineItemCode)?.name ?? "";
+  const customerNameFor = (code: string) => customers.find((c) => c.code === code)?.name ?? "";
+  const creditCustomer = paymentType === "credit" ? customerCode.trim().toUpperCase() : "";
+  const creditCustomerVehicles = creditCustomer ? vehicles.filter((v) => v.customer_code === creditCustomer) : [];
+  // With a Credit customer chosen, the box offers that customer's vehicles; otherwise every vehicle.
+  const vehicleOptions = (creditCustomerVehicles.length > 0 ? creditCustomerVehicles : vehicles).map((v) => ({
+    value: v.vehicle_no,
+    label: v.customer_code ? `${v.vehicle_no} — ${v.customer_code} ${customerNameFor(v.customer_code)}` : v.vehicle_no,
+  }));
+  const vehicleOnFile = findVehicle(vehicles, vehicleNo);
+  const vehicleSuggestions = vehicleOnFile ? [] : similarVehicles(vehicles, vehicleNo);
   const selectedItemTracksMileage = items.find((i) => i.code === lineItemCode)?.track_mileage === 1;
   // Legacy MAGE only ever tracked one odometer pair per bill (one tank, one fill) — so once a
   // line carries mileage, the option is withdrawn for every other line in this sale.
@@ -454,6 +469,7 @@ export default function BillingPage() {
       setInvoiceCustomer(paymentType === "credit" ? customerInfo : null);
       resetForm();
       refreshRecentBills();
+      refreshVehicles();
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -568,17 +584,6 @@ export default function BillingPage() {
                 {syncingBills ? "Syncing..." : `${queuedBillCount} bill(s) queued — sync now`}
               </button>
             )}
-            {/* Closing the day closes it for the whole station, which a tablet or phone shouldn't do. */}
-            {!session.billingOnly && (
-              <button
-                onClick={handleCloseDay}
-                disabled={closingDay || !businessDate}
-                title="Close billing for the current date and move the running date forward one day"
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-              >
-                {closingDay ? "Closing..." : "Close Day"}
-              </button>
-            )}
             <button
               onClick={toggleFullScreen}
               aria-label={fullScreen ? "Exit full screen" : "Full screen"}
@@ -589,7 +594,6 @@ export default function BillingPage() {
             </button>
           </div>
         </div>
-        {closeDayError && <p className="text-sm text-error">{closeDayError}</p>}
 
         <DraftsQueueTable drafts={drafts} items={items} onResume={handleResumeDraft} onDelete={handleDeleteDraft} />
 
@@ -625,24 +629,68 @@ export default function BillingPage() {
           <div>
             <SectionLabel>Vehicle Details</SectionLabel>
             <div className="flex flex-wrap gap-2">
+              <div className="flex-1">
+                <Combobox
+                  options={vehicleOptions}
+                  value={vehicleNo}
+                  onChange={handleVehicleChange}
+                  normalize={vehicleKey}
+                  placeholder="Vehicle no."
+                  aria-label="Vehicle no."
+                  className="uppercase"
+                />
+              </div>
               {paymentType === "credit" && (
                 <div className="flex-1">
                   <Combobox
-                    options={customers.map((c) => ({ value: c.code, label: c.name }))}
+                    options={customers.map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
                     value={customerCode}
                     onChange={handleCustomerChange}
-                    placeholder="Customer code (required)"
+                    placeholder="Customer code"
+                    aria-label="Customer code"
                     className="uppercase"
                   />
                 </div>
               )}
-              <input
-                placeholder="Vehicle no. (optional)"
-                className="flex-1 rounded-lg border border-border px-3 py-2 text-sm uppercase  bg-bg-elevated"
-                value={vehicleNo}
-                onChange={(e) => setVehicleNo(e.target.value)}
-              />
             </div>
+
+            {vehicleNo.trim() && vehicleOnFile?.customer_code && (
+              <p className="mt-2 text-sm text-fg-muted">
+                {vehicleOnFile.vehicle_no} belongs to{" "}
+                <span className="font-medium text-fg">
+                  {vehicleOnFile.customer_code} {customerNameFor(vehicleOnFile.customer_code)}
+                </span>
+                {paymentType === "credit" &&
+                  customerCode.trim() &&
+                  customerCode.trim().toUpperCase() !== vehicleOnFile.customer_code && (
+                    <span className="text-warning"> — not the customer on this bill</span>
+                  )}
+              </p>
+            )}
+            {vehicleKey(vehicleNo).length >= 2 && !vehicleOnFile && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                {vehicleSuggestions.length > 0 ? (
+                  <>
+                    <span className="text-warning">Not on file. Did you mean</span>
+                    {vehicleSuggestions.map((v) => (
+                      <button
+                        key={v.vehicle_no}
+                        onClick={() => handleVehicleChange(v.vehicle_no)}
+                        className="rounded-lg border border-border px-2 py-0.5 font-mono hover:bg-card-hover"
+                      >
+                        {v.vehicle_no}
+                        {v.customer_code ? ` (${v.customer_code})` : ""}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <span className="text-fg-muted">
+                    New vehicle {vehicleKey(vehicleNo)} — it will be added to the vehicle master
+                    {paymentType === "credit" && customerCode.trim() ? ` under ${customerCode.trim().toUpperCase()}` : ""}.
+                  </span>
+                )}
+              </div>
+            )}
 
             {paymentType === "credit" && (
               <div className="mt-2">

@@ -88,6 +88,7 @@ test("everything else answers that the account can only use Billing, and Close D
   const tab = (await login("tab1", "tab-pass")).token;
   const refused: [method: "GET" | "POST" | "PUT", url: string][] = [
     ["POST", "/stock/close"],
+    ["GET", "/stock/close/summary"],
     ["GET", "/reports/gst?from=2026-01-01&to=2026-12-31"],
     ["GET", "/shifts"],
     ["GET", "/pending-transactions"],

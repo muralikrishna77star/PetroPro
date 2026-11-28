@@ -14,6 +14,9 @@ interface ComboboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "val
   onChange: (value: string) => void;
   /** The text input, e.g. to focus and select it after a line is added. */
   ref?: Ref<HTMLInputElement>;
+  /** Applied to both the typed text and each option before matching — e.g. vehicle numbers
+   *  match with spaces and hyphens ignored, so "tn 01" finds "TN01AB1234". */
+  normalize?: (text: string) => string;
 }
 
 const MAX_VISIBLE_OPTIONS = 50;
@@ -24,7 +27,7 @@ const MAX_VISIBLE_OPTIONS = 50;
  *  styling across browsers, no keyboard highlight). `value` still updates on every keystroke
  *  (not only on selecting a suggestion) — callers rely on free text being possible, e.g. typing
  *  a customer code that isn't in the loaded list yet. */
-export function Combobox({ options, value, onChange, className, id, ref, ...props }: ComboboxProps) {
+export function Combobox({ options, value, onChange, className, id, ref, normalize, ...props }: ComboboxProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const listboxId = `${inputId}-listbox`;
@@ -32,12 +35,13 @@ export function Combobox({ options, value, onChange, className, id, ref, ...prop
   const [highlighted, setHighlighted] = useState(0);
 
   const filtered = useMemo(() => {
-    const needle = value.trim().toLowerCase();
+    const clean = (text: string) => (normalize ? normalize(text) : text).trim().toLowerCase();
+    const needle = clean(value);
     const matches = needle
-      ? options.filter((o) => o.label.toLowerCase().includes(needle) || o.value.toLowerCase().includes(needle))
+      ? options.filter((o) => clean(o.label).includes(needle) || clean(o.value).includes(needle))
       : options;
     return matches.slice(0, MAX_VISIBLE_OPTIONS);
-  }, [options, value]);
+  }, [options, value, normalize]);
 
   // Derived, not stored — clamping via a useEffect+setState would cause an extra render every
   // time the filtered set shrinks (e.g. on every keystroke that narrows the match list).
