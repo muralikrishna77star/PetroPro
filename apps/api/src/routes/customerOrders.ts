@@ -11,16 +11,18 @@ export default async function customerOrderRoutes(fastify: FastifyInstance) {
     async (request) => ordersRepo.listByCustomer(request.user.sub),
   );
 
-  fastify.post<{ Body: { lines: { item_code: string; qty: number }[] } }>(
+  fastify.post<{
+    Body: { lines: { item_code: string; qty: number }[]; allow_extra_items?: boolean; vehicle_no?: string };
+  }>(
     "/customer/orders",
     { preHandler: fastify.authenticateCustomer },
     async (request, reply) => {
-      const { lines } = request.body ?? {};
+      const { lines, allow_extra_items, vehicle_no } = request.body ?? {};
       if (!lines?.length) {
         return reply.code(400).send({ error: "An order needs at least one line" });
       }
       for (const line of lines) {
-        if (!line.item_code || !line.qty || line.qty <= 0) {
+        if (!line.item_code || typeof line.qty !== "number" || !(line.qty > 0)) {
           return reply.code(400).send({ error: "Each line needs an item_code and a positive qty" });
         }
       }
@@ -31,7 +33,12 @@ export default async function customerOrderRoutes(fastify: FastifyInstance) {
           if (!item) throw new Error(`Unknown item code: ${line.item_code}`);
           return { item_code: line.item_code, qty_ordered: line.qty, rate_at_order: item.price_retail };
         });
-        const order = ordersRepo.create({ customerCode: request.user.sub, lines: orderLines });
+        const order = ordersRepo.create({
+          customerCode: request.user.sub,
+          lines: orderLines,
+          allowExtraItems: allow_extra_items === true,
+          vehicleNo: vehicle_no?.trim().toUpperCase() || null,
+        });
         return reply.code(201).send(order);
       } catch (err) {
         return reply.code(400).send({ error: (err as Error).message });

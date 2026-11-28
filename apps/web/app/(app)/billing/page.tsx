@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import {
   api,
@@ -17,6 +17,7 @@ import {
 import { useRequireSession } from "@/lib/useSession";
 import { BillPrintActions } from "@/components/BillPrintActions";
 import { Card } from "@/components/Card";
+import { SectionLabel } from "@/components/SectionLabel";
 import { Combobox } from "@/components/ui/Combobox";
 import { PaymentQrPanel } from "@/components/PaymentQrPanel";
 import { SendInvoiceButton } from "@/components/SendInvoiceButton";
@@ -34,15 +35,10 @@ const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
 
 const QTY_DECIMALS = 3;
 
-/** Dark title bar for a field grouping within a Card (Sale Type / Vehicle Details / Pump
- *  Details / Mileage Check) — deliberately not theme-reactive so the label always reads as a
- *  fixed-contrast heading regardless of light/dark mode. */
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="mb-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
-      {children}
-    </div>
-  );
+/** What's still to be served on a purchase-order line (0 for an unknown line). */
+function pendingQty(line: OrderLine | undefined): number {
+  if (!line) return 0;
+  return Math.max(Number((line.qty_ordered - line.qty_served).toFixed(QTY_DECIMALS)), 0);
 }
 
 export default function BillingPage() {
@@ -67,8 +63,8 @@ export default function BillingPage() {
   const [lineOdoOpening, setLineOdoOpening] = useState("");
   const [lineOdoClosing, setLineOdoClosing] = useState("");
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  // The customer purchase order this bill is drawing on (picked from pendingOrders), if any.
   const [selectedOrderNo, setSelectedOrderNo] = useState<number | null>(null);
-  const [pendingOrderLineTag, setPendingOrderLineTag] = useState<number | null>(null);
   const [lines, setLines] = useState<BillingDraftLine[]>([]);
   const [invoice, setInvoice] = useState<SettleResponse | null>(null);
   // Snapshot of who the bill was for, captured before resetForm() clears customerCode/
@@ -249,7 +245,15 @@ export default function BillingPage() {
       setCustomerCode("");
       setCustomerInfo(null);
       setOrderNo("");
+      // Purchase orders are credit-only, so their lines go with the credit sale type.
+      dropOrderLines();
     }
+  }
+
+  // A purchase order belongs to one customer — changing the customer code takes its lines off the bill.
+  function handleCustomerChange(code: string) {
+    setCustomerCode(code);
+    if (selectedOrderNo !== null) dropOrderLines();
   }
 
   function rateFor(itemCode: string): number {
@@ -281,21 +285,51 @@ export default function BillingPage() {
     setLineTrackMileage(false);
     setLineOdoOpening("");
     setLineOdoClosing("");
-    setPendingOrderLineTag(null);
   }
 
-  // Pre-fills the entry row from a pending order line (capped to what's left) and tags the
-  // *next* addLine() call with it — the same one-shot "tag on add" mechanic as mileage above.
-  function selectPendingLine(line: OrderLine) {
-    const pending = Math.max(line.qty_ordered - line.qty_served, 0);
-    setLineItemCode(line.item_code);
-    setLineQty(String(pending));
-    const rate = rateFor(line.item_code);
-    setLineAmount(rate > 0 ? (pending * rate).toFixed(2) : "");
-    setPendingOrderLineTag(line.id);
+  function orderLineFor(line: OrderLine): BillingDraftLine {
+    return { item_code: line.item_code, qty: pendingQty(line), orderLineId: line.id };
+  }
+
+  // Picking a purchase order brings its still-pending items onto the bill, each tagged with its
+  // order line so the server draws the quantity off the order. Lines already on the bill that
+  // aren't from an order stay only if this order allows extra items.
+  function applyOrder(order: Order) {
+    const otherLines = lines.filter((l) => l.orderLineId === undefined);
+    if (otherLines.length > 0 && !order.allow_extra_items) {
+      if (
+        !window.confirm(
+          `PO #${order.order_no} allows only its own items. Remove the ${otherLines.length} other line(s) already on this bill?`,
+        )
+      )
+        return;
+    }
+    const orderLines = order.lines.filter((l) => pendingQty(l) > 0).map(orderLineFor);
+    setLines([...orderLines, ...(order.allow_extra_items ? otherLines : [])]);
+    setSelectedOrderNo(order.order_no);
+    if (!vehicleNo && order.vehicle_no) setVehicleNo(order.vehicle_no);
+    // The free-text order number is what prints on the invoice, so it carries the PO number.
+    if (!orderNo || orderNo === String(selectedOrderNo)) setOrderNo(String(order.order_no));
+  }
+
+  function dropOrderLines() {
+    setLines((prev) => prev.filter((l) => l.orderLineId === undefined));
+    if (selectedOrderNo !== null && orderNo === String(selectedOrderNo)) setOrderNo("");
+    setSelectedOrderNo(null);
+  }
+
+  // Brings back an order line the biller removed from this bill.
+  function addBackOrderLine(line: OrderLine) {
+    setLines((prev) => [...prev, orderLineFor(line)]);
+  }
+
+  // Serving part of an order line today (e.g. 60 of 100 L): the biller edits the line's qty.
+  function setLineQtyAt(index: number, value: string) {
+    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, qty: Number(value) || 0 } : l)));
   }
 
   function addLine() {
+    if (strictOrder) return;
     if (!lineItemCode || !lineQty || Number(lineQty) <= 0) return;
     if (lineTrackMileage) {
       if (lines.some((l) => l.odometerOpening !== undefined)) return;
@@ -309,7 +343,6 @@ export default function BillingPage() {
         ...(lineTrackMileage
           ? { odometerOpening: Number(lineOdoOpening), odometerClosing: Number(lineOdoClosing) }
           : {}),
-        ...(pendingOrderLineTag !== null ? { orderLineId: pendingOrderLineTag } : {}),
       },
     ]);
     resetEntryRow();
@@ -348,7 +381,6 @@ export default function BillingPage() {
     setLineTrackMileage(false);
     setLineOdoOpening("");
     setLineOdoClosing("");
-    setPendingOrderLineTag(null);
   }
 
   function handleCancelEntry() {
@@ -361,8 +393,28 @@ export default function BillingPage() {
   }
 
   const grandTotal = lines.reduce((sum, l) => sum + rateFor(l.item_code) * l.qty, 0);
+  const selectedOrder =
+    paymentType === "credit" ? pendingOrders.find((o) => o.order_no === selectedOrderNo) : undefined;
+  // A purchase order the customer placed without "allow other items": only its own lines can be billed.
+  const strictOrder = selectedOrder !== undefined && !selectedOrder.allow_extra_items;
+  const orderLineById = new Map((selectedOrder?.lines ?? []).map((l) => [l.id, l]));
+  // Total of each order line already on this bill, to catch serving more than is pending.
+  const billedPerOrderLine = new Map<number, number>();
+  for (const l of lines) {
+    if (l.orderLineId !== undefined) billedPerOrderLine.set(l.orderLineId, (billedPerOrderLine.get(l.orderLineId) ?? 0) + l.qty);
+  }
+  const overServedLineIds = new Set(
+    [...billedPerOrderLine].filter(([id, qty]) => qty > pendingQty(orderLineById.get(id)) + 1e-9).map(([id]) => id),
+  );
+  // Order lines the biller took off this bill, offered back in the Purchase Orders card.
+  const removedOrderLines = (selectedOrder?.lines ?? []).filter(
+    (l) => pendingQty(l) > 0 && !lines.some((bl) => bl.orderLineId === l.id),
+  );
   const canSubmit =
     lines.length > 0 &&
+    lines.every((l) => l.qty > 0) &&
+    overServedLineIds.size === 0 &&
+    (!strictOrder || lines.every((l) => l.orderLineId !== undefined)) &&
     (paymentType !== "credit" || customerCode.trim().length > 0) &&
     (paymentType !== "upi" || upiConfirmed);
   const selectedItemName = items.find((i) => i.code === lineItemCode)?.name ?? "";
@@ -373,12 +425,6 @@ export default function BillingPage() {
   const hasMileageLine = mileageLineIndex !== -1;
   const mileageLine = hasMileageLine ? lines[mileageLineIndex] : undefined;
   const mileageLineItemName = mileageLine ? items.find((i) => i.code === mileageLine.item_code)?.name ?? mileageLine.item_code : "";
-  // A lone pending order auto-selects itself; with more than one, the biller picks via the radio
-  // buttons in the Pending Order section below.
-  const selectedPendingOrder =
-    pendingOrders.find((o) => o.order_no === selectedOrderNo) ??
-    (pendingOrders.length === 1 ? pendingOrders[0] : undefined);
-
   async function submitBill(autoPrint: boolean) {
     if (!session || !canSubmit) return;
     setError(null);
@@ -399,7 +445,7 @@ export default function BillingPage() {
         customerCode: paymentType === "credit" ? customerCode : undefined,
         vehicleNo: vehicleNo || undefined,
         orderNo: paymentType === "credit" && orderNo ? orderNo : undefined,
-        fulfillOrderNo: paymentType === "credit" ? selectedPendingOrder?.order_no : undefined,
+        fulfillOrderNo: selectedOrder?.order_no,
         pumpCode: pumpCode || undefined,
         lines: billLines,
       });
@@ -420,6 +466,7 @@ export default function BillingPage() {
           customerCode: paymentType === "credit" ? customerCode : undefined,
           vehicleNo: vehicleNo || undefined,
           orderNo: paymentType === "credit" && orderNo ? orderNo : undefined,
+          fulfillOrderNo: selectedOrder?.order_no,
           pumpCode: pumpCode || undefined,
           lines: billLines,
           queuedAt: new Date().toISOString(),
@@ -437,7 +484,7 @@ export default function BillingPage() {
 
   function handleSaveDraft() {
     if (lines.length === 0) return;
-    saveDraft({ paymentType, customerCode, vehicleNo, orderNo, pumpCode, lines });
+    saveDraft({ paymentType, customerCode, vehicleNo, orderNo, fulfillOrderNo: selectedOrder?.order_no, pumpCode, lines });
     setDrafts(listDrafts());
     resetForm();
   }
@@ -447,6 +494,7 @@ export default function BillingPage() {
     setCustomerCode(draft.customerCode);
     setVehicleNo(draft.vehicleNo);
     setOrderNo(draft.orderNo);
+    setSelectedOrderNo(draft.fulfillOrderNo ?? null);
     setPumpCode(draft.pumpCode);
     setLines(draft.lines);
     setUpiConfirmed(false);
@@ -582,7 +630,7 @@ export default function BillingPage() {
                   <Combobox
                     options={customers.map((c) => ({ value: c.code, label: c.name }))}
                     value={customerCode}
-                    onChange={setCustomerCode}
+                    onChange={handleCustomerChange}
                     placeholder="Customer code (required)"
                     className="uppercase"
                   />
@@ -635,65 +683,69 @@ export default function BillingPage() {
           </div>
         </Card>
 
-        {/* Credit sales only — shows the customer's still-open order(s) so the biller can bill
-            against one instead of re-typing what was already agreed. */}
+        {/* Credit sales only — the customer's open purchase orders (placed from the customer
+            portal). Picking one loads its pending items onto the bill below. */}
         {paymentType === "credit" && pendingOrders.length > 0 && (
-          <Card color="orange">
-            <SectionLabel>Pending Order</SectionLabel>
-            {pendingOrders.length > 1 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {pendingOrders.map((order) => (
+          <Card color="orange" className="overflow-x-auto">
+            <SectionLabel>Purchase Orders</SectionLabel>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-fg-muted">
+                  <th className="py-1 pr-3 font-normal">PO #</th>
+                  <th className="py-1 pr-3 font-normal">Placed</th>
+                  <th className="py-1 pr-3 font-normal">Vehicle</th>
+                  <th className="py-1 pr-3 font-normal">Pending items</th>
+                  <th className="py-1 pr-3 font-normal">Other items</th>
+                  <th className="py-1 pr-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {pendingOrders.map((order) => {
+                  const selected = selectedOrder?.order_no === order.order_no;
+                  const pendingLines = order.lines.filter((l) => pendingQty(l) > 0);
+                  return (
+                    <tr key={order.order_no} className={`border-b border-border ${selected ? "bg-primary/10" : ""}`}>
+                      <td className="py-1.5 pr-3 font-mono">#{order.order_no}</td>
+                      <td className="py-1.5 pr-3 text-fg-muted">{order.created_at.slice(0, 10)}</td>
+                      <td className="py-1.5 pr-3">{order.vehicle_no ?? "—"}</td>
+                      <td className="py-1.5 pr-3">
+                        {pendingLines
+                          .map((l) => `${items.find((i) => i.code === l.item_code)?.name ?? l.item_code} × ${pendingQty(l)}`)
+                          .join(", ")}
+                      </td>
+                      <td className="py-1.5 pr-3">{order.allow_extra_items ? "Allowed" : "Not allowed"}</td>
+                      <td className="py-1.5 pr-3 text-right">
+                        {selected ? (
+                          <button onClick={dropOrderLines} className="whitespace-nowrap text-error hover:underline">
+                            Stop using
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => applyOrder(order)}
+                            className="whitespace-nowrap font-medium text-primary hover:underline"
+                          >
+                            Bill this order
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {removedOrderLines.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-fg-muted">Not on this bill:</span>
+                {removedOrderLines.map((l) => (
                   <button
-                    key={order.order_no}
-                    onClick={() => setSelectedOrderNo(order.order_no)}
-                    className={`rounded-lg border px-3 py-1.5 text-sm ${
-                      selectedPendingOrder?.order_no === order.order_no
-                        ? "border-primary bg-primary/10"
-                        : "border-border"
-                    }`}
+                    key={l.id}
+                    onClick={() => addBackOrderLine(l)}
+                    className="rounded-lg border border-border px-2 py-1 hover:bg-card-hover"
                   >
-                    Order #{order.order_no}
+                    + {items.find((i) => i.code === l.item_code)?.name ?? l.item_code} × {pendingQty(l)}
                   </button>
                 ))}
               </div>
-            )}
-            {selectedPendingOrder && (
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-fg-muted">
-                    <th className="py-1 pr-3 font-normal">Item</th>
-                    <th className="py-1 pr-3 font-normal">Ordered</th>
-                    <th className="py-1 pr-3 font-normal">Served</th>
-                    <th className="py-1 pr-3 font-normal">Pending</th>
-                    <th className="py-1 pr-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedPendingOrder.lines.map((line) => {
-                    const pending = line.qty_ordered - line.qty_served;
-                    return (
-                      <tr key={line.id} className="border-b border-border">
-                        <td className="py-1 pr-3">
-                          {items.find((i) => i.code === line.item_code)?.name ?? line.item_code}
-                        </td>
-                        <td className="py-1 pr-3">{line.qty_ordered}</td>
-                        <td className="py-1 pr-3">{line.qty_served}</td>
-                        <td className="py-1 pr-3">{pending.toFixed(3)}</td>
-                        <td className="py-1 pr-3">
-                          {pending > 0 && (
-                            <button
-                              onClick={() => selectPendingLine(line)}
-                              className="text-primary hover:underline"
-                            >
-                              Bill this
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             )}
           </Card>
         )}
@@ -736,10 +788,33 @@ export default function BillingPage() {
                         </div>
                       )}
                       {line.orderLineId !== undefined && (
-                        <div className="text-xs font-normal text-fg-muted">Fulfills pending order</div>
+                        <div className="text-xs font-normal text-fg-muted">
+                          From PO #{selectedOrder?.order_no ?? "?"} · {pendingQty(orderLineById.get(line.orderLineId))} pending
+                        </div>
+                      )}
+                      {line.orderLineId !== undefined && overServedLineIds.has(line.orderLineId) && (
+                        <div className="text-xs font-normal text-error">More than is pending on the order</div>
                       )}
                     </td>
-                    <td className="py-2 pr-4">{line.qty}</td>
+                    <td className="py-2 pr-4">
+                      {line.orderLineId !== undefined ? (
+                        <input
+                          // Uncontrolled so typing "12." isn't reformatted mid-entry.
+                          key={`${line.orderLineId}-${i}`}
+                          type="number"
+                          min="0"
+                          max={pendingQty(orderLineById.get(line.orderLineId))}
+                          step="0.001"
+                          aria-label={`Qty of ${item?.name ?? line.item_code}`}
+                          title="Serving less than the order today? Change the quantity."
+                          className="w-20 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
+                          defaultValue={line.qty}
+                          onChange={(e) => setLineQtyAt(i, e.target.value)}
+                        />
+                      ) : (
+                        line.qty
+                      )}
+                    </td>
                     <td className="py-2 pr-4">₹{rate.toFixed(2)}</td>
                     <td className="py-2 pr-4">₹{(rate * line.qty).toFixed(2)}</td>
                     <td className="py-2 pr-4">
@@ -759,6 +834,7 @@ export default function BillingPage() {
                     onChange={handleItemChange}
                     className="w-full"
                     placeholder="Code..."
+                    disabled={strictOrder}
                   />
                 </td>
                 <td className="truncate py-2 pr-4 font-medium text-fg">
@@ -774,6 +850,7 @@ export default function BillingPage() {
                     value={lineQty}
                     onChange={(e) => handleQtyChange(e.target.value)}
                     onKeyDown={addLineOnEnter}
+                    disabled={strictOrder}
                   />
                 </td>
                 <td className="py-2 pr-4 text-fg-muted">₹{rateFor(lineItemCode).toFixed(2)}</td>
@@ -788,11 +865,16 @@ export default function BillingPage() {
                     value={lineAmount}
                     onChange={(e) => handleAmountChange(e.target.value)}
                     onKeyDown={addLineOnEnter}
+                    disabled={strictOrder}
                   />
                 </td>
                 <td className="py-2 pr-4">
                   <div className="flex gap-1">
-                    <button onClick={addLine} className="rounded-lg border border-border px-3 py-1 text-sm ">
+                    <button
+                      onClick={addLine}
+                      disabled={strictOrder}
+                      className="rounded-lg border border-border px-3 py-1 text-sm disabled:opacity-50"
+                    >
                       Add
                     </button>
                     <button
@@ -805,6 +887,14 @@ export default function BillingPage() {
                   </div>
                 </td>
               </tr>
+              {strictOrder && (
+                <tr>
+                  <td colSpan={6} className="pb-2 pr-4 text-xs text-fg-muted">
+                    PO #{selectedOrder.order_no} allows only its own items — the customer didn&apos;t allow other items
+                    on this order.
+                  </td>
+                </tr>
+              )}
             </tbody>
             {lines.length > 0 && (
               <tfoot>

@@ -27,6 +27,8 @@ export interface QueuedBill {
   customerCode?: string;
   vehicleNo?: string;
   orderNo?: string;
+  /** The customer purchase order this bill draws on, if any. */
+  fulfillOrderNo?: number;
   pumpCode?: string;
   lines: { item_code: string; qty: number; odometer?: number; odometerOpening?: number; orderLineId?: number }[];
   queuedAt: string;
@@ -165,6 +167,7 @@ export async function flushBillQueue(token: string): Promise<{ synced: number; r
         customerCode: bill.customerCode,
         vehicleNo: bill.vehicleNo,
         orderNo: bill.orderNo,
+        fulfillOrderNo: bill.fulfillOrderNo,
         pumpCode: bill.pumpCode,
         clientRef: bill.clientRef,
         lines: bill.lines,
