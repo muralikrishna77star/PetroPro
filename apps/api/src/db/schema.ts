@@ -436,6 +436,11 @@ export function applySchema(db: DatabaseSync): void {
   ensureColumn(db, "customers", "report_style", "TEXT NOT NULL DEFAULT 'legacy' CHECK (report_style IN ('legacy', 'modern'))");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_google_sub ON customers(google_sub) WHERE google_sub IS NOT NULL");
   ensureColumn(db, "bill_lines", "order_line_id", "INTEGER REFERENCES order_lines(id)");
+  // Customer purchase orders: whether the station may bill other items alongside the order's own
+  // lines (the customer ticks this when placing it), and the vehicle the order is for, which
+  // Billing pre-fills. Existing orders stay strict (0).
+  ensureColumn(db, "orders", "allow_extra_items", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "orders", "vehicle_no", "TEXT");
   ensureColumn(db, "items", "hsn_code", "TEXT");
   // Optional Google SSO identity for a staff user — see routes/googleAuth.ts. Nullable so
   // user-id/password login keeps working for anyone with no email on file.

@@ -164,6 +164,63 @@ export function settlePendingTransaction(input: SettleInput): SettleResult {
 }
 
 /**
+ * Billing against a customer's purchase order: checks every order-tagged line up front, before
+ * anything posts (the same way the credit-limit check runs before the bill exists). The bill can
+ * draw on one order only, which must be the bill's customer's and still open. Each tagged line
+ * must be that order's line for the same item, and the bill can't serve more than is still
+ * pending. Lines not on the order are allowed only when the customer allowed extra items on it.
+ */
+function validateOrderFulfillment(input: WalkInBillInput, customerCode: string | null): void {
+  const tagged = input.lines.filter((l) => l.orderLineId !== undefined);
+  if (input.fulfillOrderNo === undefined && tagged.length === 0) return;
+
+  // Older clients (and offline-queued bills) send only the line tags, so the order is worked out
+  // from the first tagged line when the bill doesn't name one.
+  let orderNo = input.fulfillOrderNo;
+  if (orderNo === undefined) {
+    const first = ordersRepo.getLine(tagged[0].orderLineId as number);
+    if (!first) throw new Error(`Order line ${tagged[0].orderLineId} not found`);
+    orderNo = first.order_no;
+  }
+
+  const order = ordersRepo.get(orderNo);
+  if (!order) throw new Error(`Order ${orderNo} not found`);
+  if (order.status !== "open" && order.status !== "partially_served") {
+    throw new Error(`Order ${orderNo} is ${order.status.replace("_", " ")} and can't be billed`);
+  }
+  if (input.paymentType !== "credit") {
+    throw new Error("Bills against a purchase order must be Credit sales");
+  }
+  if (!customerCode || order.customer_code.toUpperCase() !== customerCode.toUpperCase()) {
+    throw new Error(`Order ${orderNo} belongs to a different customer`);
+  }
+
+  const servedNow = new Map<number, number>();
+  for (const line of input.lines) {
+    if (line.orderLineId === undefined) {
+      if (!order.allow_extra_items) {
+        throw new Error(`Order ${orderNo} doesn't allow additional items — ${line.item_code} isn't on the order`);
+      }
+      continue;
+    }
+    const orderLine = ordersRepo.getLine(line.orderLineId);
+    if (!orderLine) throw new Error(`Order line ${line.orderLineId} not found`);
+    if (orderLine.order_no !== orderNo) {
+      throw new Error(`Order line ${line.orderLineId} does not belong to order ${orderNo}`);
+    }
+    if (orderLine.item_code !== line.item_code) {
+      throw new Error(`Order line ${line.orderLineId} is for ${orderLine.item_code}, not ${line.item_code}`);
+    }
+    // Two bill lines can draw on the same order line, so the room left is checked on their sum.
+    const total = (servedNow.get(orderLine.id) ?? 0) + line.qty;
+    servedNow.set(orderLine.id, total);
+    if (orderLine.qty_served + total > orderLine.qty_ordered + 1e-9) {
+      throw new Error(`Fulfilling ${total} would exceed the ordered quantity for order line ${line.orderLineId}`);
+    }
+  }
+}
+
+/**
  * Direct cashier walk-in billing (Phase 2) — no attendant pending-transaction involved, e.g. a
  * customer buying lubricants/accessories at the counter, or a cash/credit fuel sale entered
  * straight by the cashier.
@@ -192,26 +249,13 @@ export function createWalkInBill(input: WalkInBillInput): BillResult {
     }
   }
 
-  // Fulfilling a pending order: validate every tagged line up front (the order line exists,
-  // belongs to the order this bill claims to fulfill, and still has room) before anything posts —
-  // mirrors the credit-limit check below rather than discovering a problem after the bill exists.
-  for (const line of input.lines) {
-    if (line.orderLineId === undefined) continue;
-    const orderLine = ordersRepo.getLine(line.orderLineId);
-    if (!orderLine) throw new Error(`Order line ${line.orderLineId} not found`);
-    if (input.fulfillOrderNo !== undefined && orderLine.order_no !== input.fulfillOrderNo) {
-      throw new Error(`Order line ${line.orderLineId} does not belong to order ${input.fulfillOrderNo}`);
-    }
-    if (orderLine.qty_served + line.qty > orderLine.qty_ordered + 1e-9) {
-      throw new Error(`Fulfilling ${line.qty} would exceed the ordered quantity for order line ${line.orderLineId}`);
-    }
-  }
+  const vehicle = input.vehicleNo ? vehiclesRepo.findOrCreate(input.vehicleNo) : undefined;
+  const customerCode = input.customerCode ?? vehicle?.customer_code ?? null;
+
+  validateOrderFulfillment(input, customerCode);
 
   const lines = input.lines.map((l) => buildLine(l.item_code, l.qty, l.orderLineId));
   const grandTotal = lines.reduce((sum, l) => sum + l.amount, 0);
-
-  const vehicle = input.vehicleNo ? vehiclesRepo.findOrCreate(input.vehicleNo) : undefined;
-  const customerCode = input.customerCode ?? vehicle?.customer_code ?? null;
 
   if (input.paymentType === "credit") {
     if (!customerCode) throw new Error("Credit bills require a customer");
@@ -284,6 +328,11 @@ export function cancelBill(billNo: number, cancelledBy: string): Bill {
 
   if (bill.customer_code && bill.payment_type === "credit") {
     customersRepo.adjustDueAmount(bill.customer_code, -bill.grand_total);
+  }
+
+  // Whatever this bill served off a purchase order is pending on that order again.
+  for (const line of lines) {
+    if (line.order_line_id != null) ordersRepo.reverseFulfillment(line.order_line_id, line.qty);
   }
 
   return billsRepo.cancel(billNo, cancelledBy) as Bill;

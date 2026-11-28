@@ -148,6 +148,10 @@ export interface Order {
   order_no: number;
   customer_code: string;
   status: OrderStatus;
+  /** 1 when the customer allowed the station to bill other items alongside this order's lines. */
+  allow_extra_items: number;
+  /** The vehicle the order is for, if the customer named one — Billing pre-fills it. */
+  vehicle_no: string | null;
   created_at: string;
   cancelled_at: string | null;
   cancelled_by: string | null;

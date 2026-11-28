@@ -19,6 +19,8 @@ export interface BillingDraft {
   customerCode: string;
   vehicleNo: string;
   orderNo: string;
+  /** The customer purchase order the draft was billing against, if any. */
+  fulfillOrderNo?: number;
   pumpCode: string;
   lines: BillingDraftLine[];
 }

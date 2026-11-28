@@ -102,6 +102,7 @@ export default async function billRoutes(fastify: FastifyInstance) {
       customerCode?: string;
       vehicleNo?: string;
       orderNo?: string;
+      fulfillOrderNo?: number;
       pumpCode?: string;
       clientRef?: string;
       lines: WalkInLineInput[];
@@ -110,7 +111,8 @@ export default async function billRoutes(fastify: FastifyInstance) {
     "/bills",
     { preHandler: fastify.requireRole("super_admin", "owner", "operator", "field_operator") },
     async (request, reply) => {
-      const { paymentType, customerCode, vehicleNo, orderNo, pumpCode, clientRef, lines } = request.body ?? {};
+      const { paymentType, customerCode, vehicleNo, orderNo, fulfillOrderNo, pumpCode, clientRef, lines } =
+        request.body ?? {};
       if (!paymentType || !lines?.length) {
         return reply.code(400).send({ error: "paymentType and at least one line are required" });
       }
@@ -126,6 +128,7 @@ export default async function billRoutes(fastify: FastifyInstance) {
           customerCode,
           vehicleNo,
           orderNo,
+          fulfillOrderNo: fulfillOrderNo == null ? undefined : Number(fulfillOrderNo),
           pumpCode,
           clientRef,
           lines,

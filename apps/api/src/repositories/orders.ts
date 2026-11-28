@@ -6,6 +6,9 @@ export interface Order {
   order_no: number;
   customer_code: string;
   status: OrderStatus;
+  /** 1 when the customer allowed the station to bill other items alongside this order's lines. */
+  allow_extra_items: number;
+  vehicle_no: string | null;
   created_at: string;
   cancelled_at: string | null;
   cancelled_by: string | null;
@@ -31,6 +34,24 @@ export interface NewOrderLine {
 }
 
 const EPSILON = 1e-9;
+
+/** Moves an order line's qty_served by `delta` and recomputes the parent order's status in one
+ *  transaction. A cancelled order keeps its status. */
+function adjustServed(line: OrderLine, delta: number): void {
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE order_lines SET qty_served = qty_served + ? WHERE id = ?").run(delta, line.id);
+    const lines = ordersRepo.getLines(line.order_no);
+    const allServed = lines.every((l) => l.qty_served >= l.qty_ordered - EPSILON);
+    const noneServed = lines.every((l) => l.qty_served <= EPSILON);
+    const status: OrderStatus = allServed ? "completed" : noneServed ? "open" : "partially_served";
+    db.prepare("UPDATE orders SET status = ? WHERE order_no = ? AND status <> 'cancelled'").run(status, line.order_no);
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}
 
 export const ordersRepo = {
   get(orderNo: number): Order | undefined {
@@ -74,12 +95,19 @@ export const ordersRepo = {
   /** Creates an order + its lines as a single unit. Not wrapped in an app-level transaction
    *  helper because node:sqlite's DatabaseSync has no transaction() API — BEGIN/COMMIT are
    *  issued directly so a failed line insert rolls back the whole order (mirrors bills.ts). */
-  create(input: { customerCode: string; lines: NewOrderLine[] }): OrderWithLines {
+  create(input: {
+    customerCode: string;
+    lines: NewOrderLine[];
+    allowExtraItems?: boolean;
+    vehicleNo?: string | null;
+  }): OrderWithLines {
     if (input.lines.length === 0) throw new Error("An order needs at least one line");
 
     db.exec("BEGIN");
     try {
-      const orderResult = db.prepare("INSERT INTO orders (customer_code) VALUES (?)").run(input.customerCode);
+      const orderResult = db
+        .prepare("INSERT INTO orders (customer_code, allow_extra_items, vehicle_no) VALUES (?, ?, ?)")
+        .run(input.customerCode, input.allowExtraItems ? 1 : 0, input.vehicleNo || null);
       const orderNo = Number(orderResult.lastInsertRowid);
 
       for (const line of input.lines) {
@@ -104,21 +132,15 @@ export const ordersRepo = {
     if (line.qty_served + qty > line.qty_ordered + EPSILON) {
       throw new Error(`Fulfilling ${qty} would exceed the ordered quantity for order line ${orderLineId}`);
     }
+    adjustServed(line, qty);
+  },
 
-    db.exec("BEGIN");
-    try {
-      db.prepare("UPDATE order_lines SET qty_served = qty_served + ? WHERE id = ?").run(qty, orderLineId);
-      const lines = ordersRepo.getLines(line.order_no);
-      const allServed = lines.every((l) => l.qty_served >= l.qty_ordered - EPSILON);
-      db.prepare("UPDATE orders SET status = ? WHERE order_no = ?").run(
-        allServed ? "completed" : "partially_served",
-        line.order_no,
-      );
-      db.exec("COMMIT");
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
+  /** Gives `qty` back to an order line when the bill that served it is cancelled, so the
+   *  order shows it as pending again. A cancelled order stays cancelled. */
+  reverseFulfillment(orderLineId: number, qty: number): void {
+    const line = ordersRepo.getLine(orderLineId);
+    if (!line) return;
+    adjustServed(line, -Math.min(qty, line.qty_served));
   },
 
   cancel(orderNo: number, cancelledBy: string): Order {

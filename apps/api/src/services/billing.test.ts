@@ -310,3 +310,104 @@ test("createWalkInBill rejects an order line that doesn't belong to the claimed 
     /does not belong/i,
   );
 });
+
+test("createWalkInBill refuses items that aren't on a strict purchase order", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 5, rate_at_order: 399 }],
+  });
+  assert.equal(order.allow_extra_items, 0);
+  assert.throws(
+    () =>
+      createWalkInBill({
+        cashierId: "cashier1",
+        paymentType: "credit",
+        customerCode: "CUST2",
+        fulfillOrderNo: order.order_no,
+        lines: [
+          { item_code: "OIL", qty: 1, orderLineId: order.lines[0].id },
+          { item_code: "OIL", qty: 1 },
+        ],
+      }),
+    /doesn't allow additional items/i,
+  );
+  assert.equal(ordersRepo.getLine(order.lines[0].id)?.qty_served, 0);
+});
+
+test("createWalkInBill bills extra items alongside a purchase order that allows them", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    allowExtraItems: true,
+    lines: [{ item_code: "OIL", qty_ordered: 5, rate_at_order: 399 }],
+  });
+  const result = createWalkInBill({
+    cashierId: "cashier1",
+    paymentType: "credit",
+    customerCode: "CUST2",
+    fulfillOrderNo: order.order_no,
+    lines: [
+      { item_code: "OIL", qty: 5, orderLineId: order.lines[0].id },
+      { item_code: "OIL", qty: 1 },
+    ],
+  });
+  assert.equal(result.lines.length, 2);
+  assert.equal(ordersRepo.get(order.order_no)?.status, "completed");
+});
+
+test("createWalkInBill rejects a purchase order billed to another customer or as a cash sale", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 5, rate_at_order: 399 }],
+  });
+  const lines = [{ item_code: "OIL", qty: 1, orderLineId: order.lines[0].id }];
+  assert.throws(
+    () => createWalkInBill({ cashierId: "cashier1", paymentType: "credit", customerCode: "CUST1", lines }),
+    /different customer/i,
+  );
+  assert.throws(
+    () => createWalkInBill({ cashierId: "cashier1", paymentType: "cash", fulfillOrderNo: order.order_no, lines }),
+    /must be Credit/i,
+  );
+});
+
+test("createWalkInBill counts two bill lines against the same order line together", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 3, rate_at_order: 399 }],
+  });
+  const lineId = order.lines[0].id;
+  assert.throws(
+    () =>
+      createWalkInBill({
+        cashierId: "cashier1",
+        paymentType: "credit",
+        customerCode: "CUST2",
+        fulfillOrderNo: order.order_no,
+        lines: [
+          { item_code: "OIL", qty: 2, orderLineId: lineId },
+          { item_code: "OIL", qty: 2, orderLineId: lineId },
+        ],
+      }),
+    /exceed/i,
+  );
+});
+
+test("cancelBill puts the quantity it served back on the purchase order", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST2",
+    lines: [{ item_code: "OIL", qty_ordered: 4, rate_at_order: 399 }],
+  });
+  const lineId = order.lines[0].id;
+  const result = createWalkInBill({
+    cashierId: "cashier1",
+    paymentType: "credit",
+    customerCode: "CUST2",
+    fulfillOrderNo: order.order_no,
+    lines: [{ item_code: "OIL", qty: 4, orderLineId: lineId }],
+  });
+  assert.equal(ordersRepo.get(order.order_no)?.status, "completed");
+
+  cancelBill(result.bill.bill_no, "cashier1");
+  assert.equal(ordersRepo.getLine(lineId)?.qty_served, 0);
+  assert.equal(ordersRepo.get(order.order_no)?.status, "open");
+});

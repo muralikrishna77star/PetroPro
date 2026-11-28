@@ -79,3 +79,27 @@ test("cancel() marks an order cancelled and rejects a second cancellation", () =
   assert.equal(cancelled.status, "cancelled");
   assert.throws(() => ordersRepo.cancel(order.order_no, "CUST1"), /already cancelled/i);
 });
+
+test("create() stores the allow-extra-items choice and the vehicle", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST1",
+    allowExtraItems: true,
+    vehicleNo: "TN01AB1234",
+    lines: [{ item_code: "PET", qty_ordered: 10, rate_at_order: 96.72 }],
+  });
+  assert.equal(order.allow_extra_items, 1);
+  assert.equal(order.vehicle_no, "TN01AB1234");
+});
+
+test("reverseFulfillment() leaves a cancelled order cancelled", () => {
+  const order = ordersRepo.create({
+    customerCode: "CUST1",
+    lines: [{ item_code: "PET", qty_ordered: 10, rate_at_order: 96.72 }],
+  });
+  const lineId = order.lines[0].id;
+  ordersRepo.applyFulfillment(lineId, 4);
+  ordersRepo.cancel(order.order_no, "admin");
+  ordersRepo.reverseFulfillment(lineId, 4);
+  assert.equal(ordersRepo.getLine(lineId)?.qty_served, 0);
+  assert.equal(ordersRepo.get(order.order_no)?.status, "cancelled");
+});

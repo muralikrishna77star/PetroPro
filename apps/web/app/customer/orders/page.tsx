@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Lock } from "lucide-react";
 import { api, customerApi, ApiError, type Item, type Order } from "@/lib/api";
 import { useRequireCustomerSession } from "@/lib/useCustomerSession";
 import { clearCustomerSession } from "@/lib/customerAuth";
 import { Card } from "@/components/Card";
 import { DesignSwitcher } from "@/components/DesignSwitcher";
+import { SectionLabel } from "@/components/SectionLabel";
 import { Combobox } from "@/components/ui/Combobox";
 
 interface DraftLine {
@@ -22,14 +24,24 @@ const STATUS_LABELS: Record<Order["status"], string> = {
   cancelled: "Cancelled",
 };
 
+const QTY_DECIMALS = 3;
+
+/** The customer's Purchase Order screen. Laid out like staff Billing (customer/vehicle header,
+ *  then an Item Code / Name / Qty / Rate / Amount entry table), but the Customer Code is the
+ *  signed-in customer's own and can't be changed. The station bills against the order from
+ *  Billing, picking it from this customer's open orders. */
 export default function CustomerOrdersPage() {
   const session = useRequireCustomerSession();
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
 
+  const [vehicleNo, setVehicleNo] = useState("");
+  const [allowExtraItems, setAllowExtraItems] = useState(false);
   const [lineItemCode, setLineItemCode] = useState("");
+  const lineItemCodeRef = useRef<HTMLInputElement>(null);
   const [lineQty, setLineQty] = useState("");
+  const [lineAmount, setLineAmount] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,14 +74,56 @@ export default function CustomerOrdersPage() {
     return items.find((i) => i.code === code)?.name ?? code;
   }
 
+  function rateFor(itemCode: string): number {
+    return items.find((i) => i.code === itemCode)?.price_retail ?? 0;
+  }
+
+  // Qty and Amount are two views of the same line, as on Billing — "₹5,000 of diesel" works as
+  // well as a litre count.
+  function handleQtyChange(value: string) {
+    setLineQty(value);
+    const rate = rateFor(lineItemCode);
+    setLineAmount(rate > 0 && value ? (Number(value) * rate).toFixed(2) : "");
+  }
+
+  function handleAmountChange(value: string) {
+    setLineAmount(value);
+    const rate = rateFor(lineItemCode);
+    setLineQty(rate > 0 && value ? (Number(value) / rate).toFixed(QTY_DECIMALS) : "");
+  }
+
+  function handleItemChange(code: string) {
+    setLineItemCode(code);
+    const rate = rateFor(code);
+    if (lineQty) setLineAmount(rate > 0 ? (Number(lineQty) * rate).toFixed(2) : "");
+    else if (lineAmount) setLineQty(rate > 0 ? (Number(lineAmount) / rate).toFixed(QTY_DECIMALS) : "");
+  }
+
   function addLine() {
-    if (!lineItemCode || !lineQty || Number(lineQty) <= 0) return;
+    if (!items.some((i) => i.code === lineItemCode) || !lineQty || Number(lineQty) <= 0) return;
     setLines((prev) => [...prev, { item_code: lineItemCode, qty: Number(lineQty) }]);
     setLineQty("");
+    setLineAmount("");
+    lineItemCodeRef.current?.focus();
+    lineItemCodeRef.current?.select();
+  }
+
+  function addLineOnEnter(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    addLine();
   }
 
   function removeLine(index: number) {
     setLines((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function clearForm() {
+    setLines([]);
+    setVehicleNo("");
+    setAllowExtraItems(false);
+    setLineQty("");
+    setLineAmount("");
   }
 
   async function handleSubmit() {
@@ -78,12 +132,16 @@ export default function CustomerOrdersPage() {
     setMessage(null);
     setSubmitting(true);
     try {
-      const order = await customerApi.createOrder(session.token, { lines });
-      setMessage(`Order #${order.order_no} placed.`);
-      setLines([]);
+      const order = await customerApi.createOrder(session.token, {
+        lines,
+        allow_extra_items: allowExtraItems,
+        vehicle_no: vehicleNo.trim() || undefined,
+      });
+      setMessage(`Purchase order #${order.order_no} placed.`);
+      clearForm();
       refreshOrders();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not place order");
+      setError(err instanceof ApiError ? err.message : "Could not place the order");
     } finally {
       setSubmitting(false);
     }
@@ -91,71 +149,120 @@ export default function CustomerOrdersPage() {
 
   async function handleCancel(orderNo: number) {
     if (!session) return;
-    if (!window.confirm("Cancel this order?")) return;
+    if (!window.confirm("Cancel this purchase order?")) return;
     try {
       await customerApi.cancelOrder(session.token, orderNo);
       refreshOrders();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not cancel order");
+      setError(err instanceof ApiError ? err.message : "Could not cancel the order");
     }
   }
 
   if (!session) return null;
 
+  const grandTotal = lines.reduce((sum, l) => sum + rateFor(l.item_code) * l.qty, 0);
+  const selectedItemName = items.find((i) => i.code === lineItemCode)?.name ?? "";
+
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold text-primary">
-            Order Entry <span className="text-sm font-normal text-fg-muted">— {session.name}</span>
+            Purchase Order <span className="text-sm font-normal text-fg-muted">— {session.name}</span>
           </h1>
-          <Link href="/customer/reports" className="text-sm font-medium text-primary hover:underline">My reports</Link>
-          <div className="flex items-center gap-2">
+          <nav aria-label="Customer navigation" className="flex items-center gap-4">
+            <Link href="/customer/reports" className="text-sm font-medium text-primary hover:underline">
+              My reports
+            </Link>
             <DesignSwitcher />
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium"
-            >
+            <button onClick={handleLogout} className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium">
               Sign out
             </button>
-          </div>
+          </nav>
         </div>
 
+        {/* Master: order header — same layout as Billing's, with the customer fixed */}
+        <Card color="orange" className="flex flex-col gap-4">
+          <div>
+            <SectionLabel>Customer Details</SectionLabel>
+            <div className="flex flex-wrap gap-2">
+              <label className="relative flex-1">
+                <span className="sr-only">Customer code</span>
+                <input
+                  readOnly
+                  aria-readonly="true"
+                  tabIndex={-1}
+                  value={session.customerCode}
+                  title="Orders are always placed under your own customer code"
+                  className="w-full cursor-not-allowed rounded-lg border border-border bg-card-hover px-3 py-2 pr-9 font-mono text-sm uppercase text-fg"
+                />
+                <Lock size={14} aria-hidden className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted" />
+              </label>
+              <input
+                placeholder="Vehicle no. (optional)"
+                className="flex-1 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm uppercase"
+                value={vehicleNo}
+                onChange={(e) => setVehicleNo(e.target.value)}
+              />
+            </div>
+            <p className="mt-2 text-sm text-fg-muted">
+              <span className="font-medium text-fg">{session.name}</span> — the order is billed to this account on credit.
+            </p>
+          </div>
+        </Card>
+
+        {/* Detail: order lines */}
         <Card color="orange" className="overflow-x-auto">
-          <h2 className="mb-3 text-lg font-semibold">Place a new order</h2>
-          <table className="w-full table-fixed text-left text-sm">
+          <table className="w-full min-w-[640px] table-fixed text-left text-sm">
             <colgroup>
-              <col className="w-[55%]" />
-              <col className="w-[20%]" />
-              <col className="w-[25%]" />
+              <col className="w-[15%]" />
+              <col className="w-[29%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+              <col className="w-[15%]" />
+              <col className="w-[16%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-border">
-                <th className="py-2 pr-4">Item</th>
+                <th className="py-2 pr-4">Item Code</th>
+                <th className="py-2 pr-4">Item Name</th>
                 <th className="py-2 pr-4">Qty</th>
+                <th className="py-2 pr-4">Rate</th>
+                <th className="py-2 pr-4">Amount</th>
                 <th className="py-2 pr-4" />
               </tr>
             </thead>
             <tbody>
-              {lines.map((line, i) => (
-                <tr key={i} className="border-b border-border">
-                  <td className="py-2 pr-4 font-medium text-fg">{itemName(line.item_code)}</td>
-                  <td className="py-2 pr-4">{line.qty}</td>
-                  <td className="py-2 pr-4">
-                    <button onClick={() => removeLine(i)} className="text-error hover:underline">
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {lines.map((line, i) => {
+                const rate = rateFor(line.item_code);
+                return (
+                  <tr key={i} className="border-b border-border">
+                    <td className="truncate py-2 pr-4 font-mono text-fg">{line.item_code}</td>
+                    <td className="py-2 pr-4 font-medium text-fg">{itemName(line.item_code)}</td>
+                    <td className="py-2 pr-4">{line.qty}</td>
+                    <td className="py-2 pr-4">₹{rate.toFixed(2)}</td>
+                    <td className="py-2 pr-4">₹{(rate * line.qty).toFixed(2)}</td>
+                    <td className="py-2 pr-4">
+                      <button onClick={() => removeLine(i)} className="text-error hover:underline">
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               <tr>
                 <td className="py-2 pr-4">
                   <Combobox
+                    ref={lineItemCodeRef}
                     options={items.map((item) => ({ value: item.code, label: item.name }))}
                     value={lineItemCode}
-                    onChange={setLineItemCode}
-                    placeholder="Item..."
+                    onChange={handleItemChange}
+                    className="w-full"
+                    placeholder="Code..."
                   />
+                </td>
+                <td className="truncate py-2 pr-4 font-medium text-fg">
+                  {selectedItemName || <span className="font-normal text-fg-muted">—</span>}
                 </td>
                 <td className="py-2 pr-4">
                   <input
@@ -163,9 +270,24 @@ export default function CustomerOrdersPage() {
                     min="0"
                     step="0.001"
                     placeholder="Qty"
-                    className="w-20 rounded-lg border border-border px-2 py-1.5 text-sm bg-bg-elevated"
+                    className="w-20 rounded-lg border border-border bg-bg-elevated px-2 py-1.5 text-sm"
                     value={lineQty}
-                    onChange={(e) => setLineQty(e.target.value)}
+                    onChange={(e) => handleQtyChange(e.target.value)}
+                    onKeyDown={addLineOnEnter}
+                  />
+                </td>
+                <td className="py-2 pr-4 text-fg-muted">₹{rateFor(lineItemCode).toFixed(2)}</td>
+                <td className="py-2 pr-4">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Amount"
+                    title="Enter an amount to work out the quantity from the rate"
+                    className="w-24 rounded-lg border border-border bg-bg-elevated px-2 py-1.5 text-sm"
+                    value={lineAmount}
+                    onChange={(e) => handleAmountChange(e.target.value)}
+                    onKeyDown={addLineOnEnter}
                   />
                 </td>
                 <td className="py-2 pr-4">
@@ -175,22 +297,65 @@ export default function CustomerOrdersPage() {
                 </td>
               </tr>
             </tbody>
+            {lines.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-border font-semibold">
+                  <td className="py-2 pr-4" colSpan={4}>
+                    Estimated total
+                  </td>
+                  <td className="py-2 pr-4" colSpan={2}>
+                    ₹{grandTotal.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
+          <p className="mt-2 text-xs text-fg-muted">
+            Rates shown are today&apos;s. Each delivery is billed at the rate on the day it&apos;s supplied.
+          </p>
+
+          <div className="mt-4">
+            <SectionLabel>Billing Options</SectionLabel>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={allowExtraItems}
+                onChange={(e) => setAllowExtraItems(e.target.checked)}
+              />
+              <span>
+                Allow the station to add other essential items when billing this order
+                <span className="block text-xs text-fg-muted">
+                  For example engine oil or coolant the vehicle needs on the day. Leave unticked and the station can bill
+                  only the items listed above.
+                </span>
+              </span>
+            </label>
+          </div>
 
           {error && <p className="mt-3 text-sm text-error">{error}</p>}
           {message && <p className="mt-3 text-sm text-success">{message}</p>}
 
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || lines.length === 0}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {submitting ? "Placing order..." : "Place order"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || lines.length === 0}
+              className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {submitting ? "Placing order..." : "Place purchase order"}
+            </button>
+            <button
+              onClick={clearForm}
+              disabled={submitting}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              Clear
+            </button>
+          </div>
         </Card>
 
         <Card color="zinc" className="overflow-x-auto">
-          <h2 className="mb-3 text-lg font-semibold">My orders</h2>
+          <h2 className="mb-3 text-lg font-semibold">My purchase orders</h2>
           {orders.length === 0 && <p className="text-sm text-fg-muted">No orders yet.</p>}
           <div className="flex flex-col gap-4">
             {orders.map((order) => {
@@ -199,17 +364,21 @@ export default function CustomerOrdersPage() {
                 order.lines.every((l) => l.qty_served === 0);
               return (
                 <div key={order.order_no} className="rounded-lg border border-border p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium">Order #{order.order_no}</span>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="font-medium">PO #{order.order_no}</span>
+                      <span className="ml-2 text-xs text-fg-muted">
+                        {order.created_at.slice(0, 16)}
+                        {order.vehicle_no && ` · ${order.vehicle_no}`}
+                        {order.allow_extra_items ? " · extra items allowed" : " · listed items only"}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="rounded-full border border-border px-2 py-0.5 text-xs">
                         {STATUS_LABELS[order.status]}
                       </span>
                       {canCancel && (
-                        <button
-                          onClick={() => handleCancel(order.order_no)}
-                          className="text-xs text-error hover:underline"
-                        >
+                        <button onClick={() => handleCancel(order.order_no)} className="text-xs text-error hover:underline">
                           Cancel
                         </button>
                       )}

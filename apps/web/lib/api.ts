@@ -719,7 +719,10 @@ export const customerApi = {
 
   listOrders: (token: string) => request<Order[]>("/customer/orders", { token }),
 
-  createOrder: (token: string, body: { lines: { item_code: string; qty: number }[] }) =>
+  createOrder: (
+    token: string,
+    body: { lines: { item_code: string; qty: number }[]; allow_extra_items: boolean; vehicle_no?: string },
+  ) =>
     request<Order>("/customer/orders", { method: "POST", token, body }),
 
   cancelOrder: (token: string, orderNo: number) =>
